@@ -1,0 +1,19 @@
+# Copy the servers you need into .ai/mcp-servers.yaml, then run:
+#   pnpm mcp:gen
+servers:
+  project-tools:
+    command: node
+    args: ['./scripts/mcp/server.mjs']
+    env:
+      LOG_LEVEL: info
+
+  documentation:
+    http:
+      url: https://mcp.example.com/docs
+      headers:
+        X-Client: drakom-ai-dev-kit
+    overrides:
+      antigravity:
+        serverUrl: https://mcp.example.com/docs
+        transport: http
+        timeout: 30000

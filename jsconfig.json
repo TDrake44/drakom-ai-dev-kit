@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "noImplicitAny": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": ["eslint.config.mjs", "scripts/**/*.mjs", "test/**/*.mjs"]
+}

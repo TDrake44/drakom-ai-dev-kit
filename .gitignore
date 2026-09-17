@@ -1,0 +1,7 @@
+node_modules/
+
+# Local AI scratchpads and working assets
+.ai/plans/*
+!.ai/plans/.gitkeep
+.ai/assets/*
+!.ai/assets/.gitkeep

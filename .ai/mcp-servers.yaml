@@ -1,0 +1,39 @@
+# Canonical MCP server registry - the single source of truth for this repo's
+# project-level MCP servers.
+#
+#   pnpm mcp:gen       regenerates the per-tool registries:
+#                      .mcp.json               (Claude Code / GitHub Copilot CLI)
+#                      .vscode/mcp.json        (GitHub Copilot / VS Code)
+#                      .agents/mcp_config.json (Antigravity CLI)
+#                      .codex/config.toml      (OpenAI Codex CLI, project-scoped)
+#   pnpm mcp:check     verifies the generated files match this source (CI-friendly
+#                      exits non-zero on drift).
+#
+# Edit THIS file, never the generated outputs.
+#
+# Schema per server:
+#   command/args/env -> stdio server (the default shape; env values are emitted
+#                      literally and should contain only non-secret settings)
+#   http: { url }    -> native-remote server
+#   overrides.<tool> -> tool-specific replacement definition
+#                      (tools: claude | vscode | antigravity | codex). JSON
+#                      targets receive native fields unchanged; Codex supports
+#                      the command, args, env, url/http, and headers fields.
+#
+# Never store credentials directly in this tracked file. Configure secrets
+# through each target tool's environment or authentication mechanism.
+
+servers: {}
+  # Example stdio server (replace with your project's servers)
+  # context-tools:
+  #   command: node
+  #   args: ['./scripts/mcp/server.mjs']
+  #
+  # Example remote server with tool-specific stdio override
+  # documentation:
+  #   http:
+  #     url: https://mcp.example.com/docs
+  #   overrides:
+  #     antigravity:
+  #       command: npx
+  #       args: ['mcp-remote', 'http://127.0.0.1:3845/sse']
