@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import { load as loadYaml } from 'js-yaml';
 
 import type { TargetInventory } from './inspect-target.js';
+import { checkLiteralCredentials } from './mcp-discovery.js';
+import { generateMcpOperations, validateMcpRegistry } from './mcp-generation.js';
 import type { PackagePayload } from './package-payload.js';
-import { compareVersions, DRAKOM_DIR, serializeState, type InstallState } from './state.js';
+import { compareVersions, DRAKOM_DIR, serializeState, type InstallState, type ManagedMcpServerState } from './state.js';
 
 export { compareVersions, DRAKOM_DIR };
 
@@ -228,21 +230,6 @@ export function buildSyncPlan(
   const state = inventory.state;
   if (!state) {
     throw new Error('Target is not an initialized Drakom installation; run init first.');
-  }
-
-  // MCP registry validity check if mcp-servers.yaml is present in inventory
-  const mcpYaml = inventory.contents[`${DRAKOM_DIR}/mcp-servers.yaml`];
-  if (mcpYaml !== undefined) {
-    try {
-      loadYaml(mcpYaml);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      operations.push({
-        action: 'conflict',
-        path: `${DRAKOM_DIR}/mcp-servers.yaml`,
-        summary: `Invalid MCP registry YAML: ${message}`,
-      });
-    }
   }
 
   // Phase 1: Kit-managed files
@@ -506,6 +493,85 @@ export function buildSyncPlan(
     }
   }
 
+  // Phase 3: MCP generation
+  let nextManagedMcpServers: Record<string, ManagedMcpServerState> = { ...state.managedMcpServers };
+  if (state.features.mcp !== false) {
+    const registryRelPath = `${DRAKOM_DIR}/mcp-servers.yaml`;
+    const registryYaml = inventory.contents[registryRelPath];
+    if (registryYaml === undefined) {
+      operations.push({
+        action: 'conflict',
+        path: registryRelPath,
+        summary: `MCP source registry ${registryRelPath} is missing; restore it before synchronizing.`,
+      });
+    } else {
+      let parsedRegistry: unknown;
+      let hasParseError = false;
+      let parseErrorCoord = '';
+      try {
+        parsedRegistry = loadYaml(registryYaml);
+      } catch (err) {
+        hasParseError = true;
+        if (
+          typeof err === 'object' &&
+          err !== null &&
+          'mark' in err &&
+          typeof (err as { mark?: unknown }).mark === 'object' &&
+          (err as { mark?: { line?: unknown; column?: unknown } }).mark !== null
+        ) {
+          const mark = (err as { mark: { line?: unknown; column?: unknown } }).mark;
+          if (typeof mark.line === 'number' && typeof mark.column === 'number') {
+            parseErrorCoord = ` at line ${mark.line + 1}, column ${mark.column + 1}`;
+          }
+        }
+      }
+
+      if (hasParseError) {
+        operations.push({
+          action: 'conflict',
+          path: registryRelPath,
+          summary: `Invalid MCP registry YAML syntax${parseErrorCoord}. Safe next action: fix syntax in ${registryRelPath}.`,
+        });
+      } else {
+        const validation = validateMcpRegistry(parsedRegistry);
+        if (!validation.valid) {
+          operations.push({
+            action: 'conflict',
+            path: registryRelPath,
+            summary: `Invalid MCP configuration: ${validation.error}. Safe next action: correct schema in ${registryRelPath}.`,
+          });
+        } else {
+          let hasRegistryErrors = false;
+          for (const [serverName, serverDef] of Object.entries(validation.registry.servers)) {
+            const cred = checkLiteralCredentials(serverDef);
+            if (cred.hasCredentials) {
+              operations.push({
+                action: 'conflict',
+                path: registryRelPath,
+                summary: `MCP registry server "${serverName}" contains literal credentials in ${cred.field}. Secrets must never enter YAML or state.`,
+              });
+              hasRegistryErrors = true;
+            }
+          }
+
+          if (!hasRegistryErrors) {
+            try {
+              const mcpGenResult = generateMcpOperations(validation.registry, inventory, state);
+              operations.push(...mcpGenResult.operations);
+              nextManagedMcpServers = mcpGenResult.nextManagedMcpServers;
+            } catch (err) {
+              operations.push({
+                action: 'conflict',
+                path: registryRelPath,
+                summary: `MCP generation failed: ${err instanceof Error ? err.message : String(err)}`,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Phase 4: State updates
   const hasConflicts = operations.some((op) => op.action === 'conflict');
   const updatedManagedFiles: Record<string, { source: string; fingerprint: string }> = { ...state.managedFiles };
@@ -554,6 +620,7 @@ export function buildSyncPlan(
     kitVersion: payload.manifest.kitVersion,
     managedFiles: updatedManagedFiles,
     managedSkillMirrors: updatedSkillMirrors,
+    managedMcpServers: nextManagedMcpServers,
   };
   if (updatedManagedBlocks !== undefined) {
     updatedState.managedBlocks = updatedManagedBlocks;

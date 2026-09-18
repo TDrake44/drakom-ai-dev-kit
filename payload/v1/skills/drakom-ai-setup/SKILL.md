@@ -16,7 +16,7 @@ Inspect only repository-local evidence unless the user explicitly broadens scope
 - documentation, CI configuration, and issue or contribution workflows;
 - root and relevant nested `AGENTS.md` and `CLAUDE.md` files;
 - known agent instruction files, existing rule directories, `.agents/skills/`, and `.claude/skills/`;
-- `.drakom-ai/mcp-servers.yaml`, `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json`, and `.codex/config.toml` when present.
+- `.drakom-ai/mcp-servers.yaml`, `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json`, and `.codex/config.toml` when present. Run `drakom-ai init . --dry-run` to preview initialization operations and inspect any discovered MCP servers or comparison reports.
 
 Do not inspect user-global AI or MCP configuration without explicit permission.
 
@@ -39,6 +39,14 @@ Present a concise recommendation using exactly these decision categories:
 - **Refine:** existing context that is valuable but inaccurate, duplicated, or poorly routed.
 - **Add:** a missing rule, skill, or entry-point link supported by repository evidence.
 - **Omit:** plausible additions that do not justify their maintenance cost.
+
+For discovered MCP configurations, inspect the comparison report and present the 4 explicit choices to the user for each non-identical or unmanaged server:
+1. Import into `.drakom-ai/mcp-servers.yaml`
+2. Import with explicit client overrides
+3. Leave unmanaged
+4. Skip MCP management
+
+Identical servers are adopted safely into `.drakom-ai/mcp-servers.yaml`. Conflicting definitions or servers containing literal credentials must never be resolved automatically; prompt the user to resolve differences or convert secrets to environment variable references (`${VAR}`) before importing.
 
 Ask focused questions only when repository evidence cannot resolve a choice that materially changes the recommendation, including which recurring workflows deserve skills. Do not ask the user to restate facts already present in the repository.
 

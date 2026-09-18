@@ -2,6 +2,7 @@ import { parseCliArgs } from './cli-arguments.js';
 import { applyPlan } from './apply-plan.js';
 import { DRAKOM_DIR } from './constants.js';
 import { inspectTarget } from './inspect-target.js';
+import { discoverMcp, renderMcpComparisonReport } from './mcp-discovery.js';
 import { buildInitPlan, buildSyncPlan, compareVersions } from './operation-plan.js';
 import { loadPackagePayload } from './package-payload.js';
 import { renderPlan } from './render-plan.js';
@@ -24,6 +25,16 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       const payload = await loadPackagePayload();
       const plan = buildInitPlan(inventory, { skipMcp: args.skipMcp }, payload);
       io.stdout.write(renderPlan(plan));
+      if (!args.skipMcp) {
+        const discovered = discoverMcp(inventory);
+        if (
+          discovered.clientFiles.length > 0 ||
+          discovered.servers.size > 0 ||
+          (discovered.fileErrors && Object.keys(discovered.fileErrors).length > 0)
+        ) {
+          io.stdout.write(`\n${renderMcpComparisonReport(discovered)}\n`);
+        }
+      }
       if (args.dryRun || plan.hasConflicts) {
         return plan.hasConflicts ? 2 : 0;
       }
