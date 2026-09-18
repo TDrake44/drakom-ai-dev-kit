@@ -23,16 +23,16 @@
   },
   "managedSkillMirrors": {
     ".claude/skills/dev/SKILL.md": {
-      "fingerprint": "sha256:502197d1b9c628b3e82a2035df6c4711a5992d2e957793518e1266d13ad7bddd"
+      "fingerprint": "sha256:515cefd03ba5964c4efd2079953f767389bbc14c05769605a2c98dd2a18e16af"
     },
     ".claude/skills/document/SKILL.md": {
-      "fingerprint": "sha256:b0633308650f19c71bdc9994b0b4483141b61618b21bdc03f6afe52ec6546be4"
+      "fingerprint": "sha256:0fd691db50396e0f0a472b38fcfd86ef69abfce3fc17ef4164b7777d9c524953"
     },
     ".claude/skills/drakom-ai-setup/SKILL.md": {
       "fingerprint": "sha256:34d2f805982889186df61a05eafaae4364c7000a3066338e92a5c0d30998833b"
     },
     ".claude/skills/plan/SKILL.md": {
-      "fingerprint": "sha256:e9add1febffc486c57ced14b81bce6fc372552d9ef17991378a80139f1e26495"
+      "fingerprint": "sha256:1d989fa6b94eb787b268e0a38283067f877af42330687c9bb3665fd4933ee020"
     },
     ".claude/skills/pr-review/SKILL.md": {
       "fingerprint": "sha256:cb08ee476662556eddd358ff7b1dc362681ee2a062767eee0190d304812fb747"

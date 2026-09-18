@@ -1,5 +1,5 @@
-# Copy the servers you need into .ai/mcp-servers.yaml, then run:
-#   pnpm mcp:gen
+# Copy the servers you need into .drakom-ai/mcp-servers.yaml, then run:
+#   pnpm sync
 servers:
   project-tools:
     command: node

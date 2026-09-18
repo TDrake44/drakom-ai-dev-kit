@@ -32,5 +32,5 @@ other files in that Claude skill directory remain in place.
 ## Authoring Standards
 
 1. **Folder & Name Matching**: The YAML frontmatter `name` must match the directory name exactly (e.g. `plan/SKILL.md` has `name: plan`).
-2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.ai/rules/coding.md`, `.agents/skills/plan/workflow.md`).
+2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.drakom-ai/rules/coding.md`, `.agents/skills/plan/workflow.md`).
 3. **Single-Copy Workflows**: A skill with a procedural recipe co-locates `workflow.md` next to `SKILL.md`. Supporting files are not mirrored to `.claude/skills/`; only `SKILL.md` is mirrored, and it points back to the single canonical `workflow.md`.

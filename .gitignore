@@ -2,7 +2,5 @@ node_modules/
 dist/
 
 # Local AI scratchpads and working assets
-.ai/plans/*
-!.ai/plans/.gitkeep
-.ai/assets/*
-!.ai/assets/.gitkeep
+.drakom-ai/plans/*
+.drakom-ai/assets/*

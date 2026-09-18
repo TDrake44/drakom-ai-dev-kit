@@ -2,7 +2,7 @@
 
 1. **Diff Inspection:**
    - Inspect git diff against `main` or the base branch.
-   - Check against `.ai/rules/coding.md`, `.ai/rules/testing.md`, and `.ai/rules/documentation.md`.
+   - Check against `.drakom-ai/rules/coding.md`, `.drakom-ai/rules/testing.md`, and `.drakom-ai/rules/documentation.md`.
 2. **Severity Classification:**
    - Categorize findings into three explicit levels:
      - **High:** Functional bugs, broken types, missing tests, security flaws, violations of rule file "Prohibited Patterns".

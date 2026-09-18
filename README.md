@@ -84,7 +84,7 @@ pnpm drakom-ai sync . --check
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 1. Universal front door: AGENTS.md + CLAUDE.md                            │
-│ 2. Declarative, on-demand policies: .drakom-ai/rules/ (or .ai/rules/)     │
+│ 2. Declarative, on-demand policies: .drakom-ai/rules/                       │
 │ 3. Procedural workflows: .agents/skills/*/workflow.md                    │
 │ 4. Canonical skills with generated Claude mirrors                        │
 │ 5. One MCP registry generating configuration for supported tools         │

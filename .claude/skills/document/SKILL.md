@@ -8,4 +8,4 @@ description: Documentation audit and synchronization suite keeping user docs, AP
 
 # Document Skill
 
-Read and apply `.ai/rules/documentation.md`. Follow the execution procedure in `.agents/skills/document/workflow.md`.
+Read and apply `.drakom-ai/rules/documentation.md`. Follow the execution procedure in `.agents/skills/document/workflow.md`.

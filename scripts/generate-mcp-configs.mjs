@@ -27,7 +27,9 @@ import { parse as parseToml } from 'smol-toml';
 
 const isCheck = process.argv.includes('--check');
 const rootDir = process.cwd();
-const sourcePath = path.join(rootDir, '.ai', 'mcp-servers.yaml');
+const drakomSourcePath = path.join(rootDir, '.drakom-ai', 'mcp-servers.yaml');
+const legacySourcePath = path.join(rootDir, '.ai', 'mcp-servers.yaml');
+const sourcePath = fs.existsSync(drakomSourcePath) ? drakomSourcePath : legacySourcePath;
 
 if (!fs.existsSync(sourcePath)) {
   console.error(`Missing MCP source file: ${sourcePath}`);
@@ -327,7 +329,7 @@ for (const name of Object.keys(servers)) {
 }
 
 // 4. OpenAI Codex CLI: .codex/config.toml
-let codexToml = '# Auto-generated from .ai/mcp-servers.yaml. Do not edit.\n\n';
+let codexToml = `# Auto-generated from ${path.relative(rootDir, sourcePath).split(path.sep).join('/')}. Do not edit.\n\n`;
 for (const name of Object.keys(servers)) {
   const s = resolveServer(name, 'codex');
   if (!s) continue;
@@ -353,7 +355,7 @@ for (const name of Object.keys(servers)) {
   codexToml += '\n';
 }
 
-const statePath = path.join(rootDir, '.ai', 'mcp-generation-state.json');
+const statePath = path.join(path.dirname(sourcePath), 'mcp-generation-state.json');
 const codexBlockStart = '# BEGIN AI Framework Blueprint MCP servers';
 const codexBlockEnd = '# END AI Framework Blueprint MCP servers';
 

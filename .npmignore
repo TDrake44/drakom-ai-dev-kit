@@ -1,5 +1,5 @@
 node_modules/
 
 # Local AI scratchpads and working assets
-.ai/plans/*
-.ai/assets/*
+.drakom-ai/plans/*
+.drakom-ai/assets/*

@@ -1,4 +1,4 @@
 .env
 .env.*
-.ai/plans/*
-.ai/assets/*
+.drakom-ai/plans/*
+.drakom-ai/assets/*
