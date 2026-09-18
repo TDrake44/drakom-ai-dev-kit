@@ -97,6 +97,12 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
+  const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
+  const rulesReadmeSource = 'templates/rules.README.md';
+  const rulesReadmeContent = requirePayloadFile('rulesReadme');
+  const specsReadmeTarget = `${DRAKOM_DIR}/specs/README.md`;
+  const specsReadmeSource = 'templates/specs.README.md';
+  const specsReadmeContent = requirePayloadFile('specsReadme');
   const assessmentTarget = '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md';
   const assessmentSource = 'skills/drakom-ai-setup/references/assessment-plan-template.md';
   const assessmentContent = requirePayloadFile('assessmentTemplate');
@@ -148,6 +154,8 @@ export function buildInitPlan(
     if (!options.skipMcp) {
       addCreate(`${DRAKOM_DIR}/mcp-servers.yaml`, mcpRegistryContent, 'Create the optional MCP source registry.');
     }
+    addCreate(rulesReadmeTarget, rulesReadmeContent, 'Explain how to add stable project-specific rules.');
+    addCreate(specsReadmeTarget, specsReadmeContent, 'Explain how to store collaborative architecture specifications.');
     addCreate(setupTarget, setupContent, 'Install the kit-managed project assessment skill.');
     addCreate(assessmentTarget, assessmentContent, 'Install the setup skill assessment plan template.');
 
@@ -190,6 +198,8 @@ export function buildInitPlan(
       kitVersion: payload.manifest.kitVersion,
       features: { mcp: !options.skipMcp, skillMirrors: true },
       managedFiles: {
+        [rulesReadmeTarget]: { source: rulesReadmeSource, fingerprint: fingerprint(rulesReadmeContent) },
+        [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
         [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
         [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
       },

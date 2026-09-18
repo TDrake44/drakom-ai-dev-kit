@@ -222,6 +222,8 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
   assert.ok(packedPaths.includes('payload/v1/templates/drakom-ai.gitignore'), 'gitignore template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/mcp-servers.yaml'), 'mcp template missing');
+  assert.ok(packedPaths.includes('payload/v1/templates/rules.README.md'), 'rules README template missing');
+  assert.ok(packedPaths.includes('payload/v1/templates/specs.README.md'), 'specs README template missing');
   assert.ok(packedPaths.includes('scripts/generate-mcp-configs.mjs'), 'mcp generator missing');
   assert.ok(packedPaths.includes('scripts/sync-skill-mirrors.mjs'), 'skills generator missing');
 

@@ -1,129 +1,177 @@
 # Drakom AI Dev Kit
 
-Drakom AI Dev Kit is an opinionated, vendor-neutral starter kit for structuring
-AI-assisted software development. It automates deterministic context scaffolding,
-MCP server synchronization across AI developer tools, and canonical skill mirroring.
+> A portable, tool-agnostic workflow system for high-leverage AI development.
+
+I built this workflow for my own hobby development. Between a full-time job and family life, my time for personal projects is precious. AI assistants make it possible for me to keep building and shipping, but managing setup, context, and prompt drift across tools was eating into my limited coding hours.
+
+I frequently bounce between **Claude Code**, **OpenAI Codex**, **Antigravity**, and **GitHub Copilot** depending on which memberships and quotas I have available at any given time. I didn't want vendor lock-in, but I also refused to manage configurations, rules, and skills in four different places.
+
+**Drakom AI Dev Kit** is the packaged, portable version of the system I landed on:
+- **Instant Portability**: Spawns a lightweight, predictable structure (`plans/`, `specs/`, `assets/`, `rules/`) into any new or existing project with a single command.
+- **Zero Tool Lock-in**: Define agent rules and skills in one canonical place; sync scripts keep your tool-specific configs aligned automatically.
+- **Lightweight & Modular**: Separates scratchpad thinking (`plans/`) from tracked architecture (`specs/`) and task-scoped rules without boilerplate bloat.
+
+Because I use this daily across all my personal projects, it is a living system that I'll continue to refine and polish as my workflows and the AI tooling landscape evolve.
 
 Drakom is an independently maintained open-source project brand.
 
+## What It Does
+
+| Capability | Purpose |
+| --- | --- |
+| Context scaffold | Creates an isolated `.drakom-ai/` namespace plus minimal `AGENTS.md` and `CLAUDE.md` entry points. |
+| Rule governance | Uses `/drakom-ai-setup` (or `$drakom-ai-setup`) to assess a repository before proposing project-specific rules, then requires approval before creating them. |
+| Task routing | Keeps `AGENTS.md` as the concise router from a task type to the relevant on-demand rules and skills. |
+| Canonical skills | Stores portable agent skills in `.agents/skills/` and mirrors them to Claude Code under `.claude/skills/`. |
+| MCP synchronization | Generates supported tool configuration from one `.drakom-ai/mcp-servers.yaml` registry. |
+| Safe updates | Records managed-file fingerprints in `.drakom-ai/state.json` and reports drift or conflicts instead of overwriting local edits. |
+
 ## Quick Start
 
-Choose between a one-time evaluation or ongoing synchronization:
-
-### 1. One-Time Evaluation
-
-Evaluate the kit in a fresh or existing repository without adding a package dependency:
+Use a one-time invocation to evaluate Drakom without adding it to the project:
 
 ```bash
+# Using npx or pnpm dlx
+npx @drakom/ai-dev-kit init .
+# or
 pnpm dlx @drakom/ai-dev-kit init .
 ```
 
-### 2. Ongoing Synchronization (Recommended)
-
-Add `@drakom/ai-dev-kit` as a development dependency to keep project AI context, MCP
-registries, and skill mirrors synchronized over time:
+Or install it as a development dependency for ongoing synchronization:
 
 ```bash
-# Install as a dev dependency
 pnpm add -D @drakom/ai-dev-kit
-
-# Initialize project context scaffolding
 pnpm drakom-ai init .
 ```
 
-After initialization, the CLI instructs:
+When initialization completes, open your preferred AI assistant and run the setup skill:
 
 ```text
-Ask your coding agent to use $drakom-ai-setup to assess this repository.
+/drakom-ai-setup    # Claude Code, Antigravity, GitHub Copilot
+$drakom-ai-setup    # OpenAI Codex CLI
 ```
 
-### 3. Updating and Synchronizing
+The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
 
-When kit updates are released, preview and apply updates:
+## What `init` Creates
 
-```bash
-# Update to latest version
-pnpm update @drakom/ai-dev-kit
+For a fresh repository, `drakom-ai init .` creates:
 
-# Preview managed updates and drift without making changes
-pnpm drakom-ai sync . --dry-run
+```text
+.drakom-ai/
+├── .gitignore
+├── mcp-servers.yaml              # omitted with --skip-mcp
+├── state.json
+├── assets/                       # ignored, initially empty
+├── plans/                        # ignored, initially empty
+├── rules/
+│   └── README.md                 # explains project-specific rules
+└── specs/
+    └── README.md                 # explains tracked architecture specifications
 
-# Apply managed updates and synchronize tool configurations
-pnpm drakom-ai sync .
+.agents/
+└── skills/
+    └── drakom-ai-setup/
+        ├── SKILL.md
+        └── references/
+            └── assessment-plan-template.md
+
+AGENTS.md
+CLAUDE.md
 ```
 
-Verify that repository configurations are clean and up to date:
+`init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
 
-```bash
-pnpm drakom-ai sync . --check
-```
+### Core Structure & Workflow Roles
 
----
+| Directory / File | Tracking | Role in Workflow |
+| --- | --- | --- |
+| `.drakom-ai/plans/` | Local (gitignored) | Scratchpad planning for agent task breakdowns, checklists, and TDD loops before writing code. |
+| `.drakom-ai/specs/` | Tracked (git) | Architecture specifications and RFCs elevated for team review and multi-session continuity. |
+| `.drakom-ai/rules/` | Tracked (git) | Modular coding and testing standards loaded on-demand via `AGENTS.md` (preventing context bloat). |
+| `.drakom-ai/assets/` | Local (gitignored) | Screenshots, mockups, or error logs referenced by agents during tasks. |
+| `.agents/skills/` | Tracked (git) | Canonical, portable agent task procedures mirrored to `.claude/skills/` via `sync`. |
+| `AGENTS.md` / `CLAUDE.md` | Tracked (git) | Front-door context hub and task router across all supported AI assistants. |
 
-## Adoption Behavior
+## How Rules and Skills Evolve
 
-`drakom-ai init` is safe, collision-resistant, and non-destructive:
+`AGENTS.md` is the front door. It should route a task to only the rules needed
+for that task; it is not a place to paste every project policy. `CLAUDE.md`
+imports that shared router so the two entry points stay aligned.
 
-- **Isolated Namespace**: Project context is placed in `.drakom-ai/` rather than a generic folder, avoiding collisions with pre-existing tool configuration.
-- **Managed Assessment Skill**: Installs `.agents/skills/drakom-ai-setup/SKILL.md` to evaluate repository manifests, CI, and tools before recommending rules or workflows.
-- **Interactive Approval for Existing Projects**: When `AGENTS.md` or `CLAUDE.md` already exists, `drakom-ai init` displays a structured operation preview and prompts for explicit approval before appending a minimal, non-destructive routing block.
-- **Unmanaged File Preservation**: Unrelated rules, custom skills, and existing MCP server definitions are preserved byte-for-byte.
-- **Idempotent**: Repeated initialization on an initialized project is a safe no-op.
+When a project needs to add, revise, rename, or retire a rule, run the setup
+skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
 
----
+1. Creates the rule under `.drakom-ai/rules/`.
+2. Adds a task-based link to the `AGENTS.md` Standards Index.
+3. Revises stale routes when a rule is renamed or superseded.
+4. Verifies links, commands, and relevant project checks.
+
+Skills are procedures rather than policy. Author them in `.agents/skills/`; run
+`drakom-ai sync .` to generate their Claude Code mirrors. A project may add,
+replace, or remove its own rules and skills—the kit does not claim ownership of
+them.
+
+## Managed and Project-Owned Content
+
+| Managed by Drakom | Owned by the project |
+| --- | --- |
+| Setup skill installed by `init` | Rules in `.drakom-ai/rules/` |
+| The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
+| Generated Claude skill mirrors | Canonical skills in `.agents/skills/` |
+| Generated MCP client blocks | MCP registry choices and all unmanaged client configuration |
+| Fingerprints in `.drakom-ai/state.json` | Plans, specifications, and team decisions |
+
+Managed content is updated only when its recorded fingerprint still matches.
+If it has local edits, synchronization reports a conflict rather than replacing
+it. Unmanaged content is preserved byte-for-byte.
+
+## MCP Configuration
+
+Declare MCP servers once in `.drakom-ai/mcp-servers.yaml` and synchronize them
+into these repository-local client files:
+
+- `.mcp.json` for Claude Code and GitHub Copilot CLI
+- `.vscode/mcp.json` for VS Code Copilot
+- `.agents/mcp_config.json` for Antigravity CLI
+- `.codex/config.toml` for OpenAI Codex CLI
+
+During initialization, Drakom compares discovered repository-local MCP
+configuration with the registry. It preserves unmanaged definitions and asks
+for an explicit decision before adopting a non-identical server. Use
+`--skip-mcp` if the project should not initialize MCP management.
+
+## CLI Reference
+
+| Command | Effect |
+| --- | --- |
+| `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
+| `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
+| `drakom-ai init [path] --yes` | Apply create-only initialization without a prompt; it refuses structured merges into existing entry points. |
+| `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. |
+| `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
+| `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. |
+| `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |
+
+## Lifecycle
+
+1. Run `init` to establish the safe minimal scaffold.
+2. Run `/drakom-ai-setup` (or `$drakom-ai-setup`) to assess the repository and approve project-owned rules or workflows.
+3. Make changes through the project’s routed rules and canonical skills.
+4. Run `sync` after kit updates or canonical-skill/MCP changes.
+5. Use `sync --check` in CI to detect drift before it reaches contributors.
 
 ## Alternative Adoption Paths
 
-- **[BOOTSTRAP.md](BOOTSTRAP.md)**: A standalone, self-contained architecture blueprint that an AI coding assistant or engineer can follow to manually bootstrap the pattern without the CLI.
-- **GitHub Template Repository**: Clone or create a new GitHub repository from this template for a pre-configured starter project.
+- [BOOTSTRAP.md](BOOTSTRAP.md) is a standalone architecture blueprint for a manual adoption.
+- A GitHub template repository can provide a preconfigured starting point.
 
----
-
-## How It Works: The Five Structural Ideals
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. Universal front door: AGENTS.md + CLAUDE.md                            │
-│ 2. Declarative, on-demand policies: .drakom-ai/rules/                       │
-│ 3. Procedural workflows: .agents/skills/*/workflow.md                    │
-│ 4. Canonical skills with generated Claude mirrors                        │
-│ 5. One MCP registry generating configuration for supported tools         │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Front Door**: `AGENTS.md` provides task routing and key verification commands. `CLAUDE.md` imports `@AGENTS.md` to maintain a single source of truth.
-2. **On-Demand Rules**: Specific policies (e.g. coding standards, testing quality bars) are loaded only when the active task requires them.
-3. **Canonical Skills**: Skills defined in `.agents/skills/` are mirrored automatically into `.claude/skills/` via `drakom-ai sync`.
-4. **Unified MCP Registry**: Configure servers once in `.drakom-ai/mcp-servers.yaml`. `drakom-ai sync` generates configuration for:
-   - Claude Code / GitHub Copilot CLI (`.mcp.json`)
-   - VS Code Copilot (`.vscode/mcp.json`)
-   - Antigravity CLI (`.agents/mcp_config.json`)
-   - OpenAI Codex CLI (`.codex/config.toml`)
-5. **State Tracking**: Tracked state in `.drakom-ai/state.json` records SHA-256 fingerprints to safely update kit-managed files while detecting local modifications and conflicts.
-
----
-
-## Compatibility Window
-
-For existing repositories adopting the kit, the legacy standalone generators remain functional during the compatibility window:
-- `scripts/generate-mcp-configs.mjs` (`pnpm mcp:gen`, `pnpm mcp:check`)
-- `scripts/sync-skill-mirrors.mjs` (`pnpm skills:sync`, `pnpm skills:check`)
-
----
-
-## Development & Testing
+## Development
 
 ```bash
-# Linting
 pnpm lint
-
-# Type checking
 pnpm typecheck
-
-# Full test suite (unit tests and hermetic packed-artifact smoke tests)
 pnpm test
-
-# Workspace dogfooding drift check
 pnpm sync:check
 ```
 

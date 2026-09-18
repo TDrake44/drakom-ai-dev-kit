@@ -63,9 +63,12 @@ Stop and request explicit approval before creating or changing any project-owned
 
 Apply only the approved items while preserving unrelated content. Then:
 
-1. Verify every referenced path exists or is explicitly marked as prospective.
-2. Verify every documented command against the repository's actual package manager and tooling.
-3. Verify every cross-file reference, skill name, and entry-point link resolves.
-4. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
-5. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` when the installed CLI supports managed synchronization. If the installed release does not yet implement sync, report that verification as deferred rather than improvising a replacement updater.
-6. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.
+1. Create each approved rule in `.drakom-ai/rules/`.
+2. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. Do not globally load rules; companion deep-dive references may instead be routed on demand.
+3. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
+4. Verify every referenced path exists or is explicitly marked as prospective.
+5. Verify every documented command against the repository's actual package manager and tooling.
+6. Verify every cross-file reference, skill name, and entry-point link resolves.
+7. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
+8. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` when the installed CLI supports managed synchronization. If the installed release does not yet implement sync, report that verification as deferred rather than improvising a replacement updater.
+9. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.

@@ -5,6 +5,8 @@
     "assessmentTemplate": "skills/drakom-ai-setup/references/assessment-plan-template.md",
     "localIgnore": "templates/drakom-ai.gitignore",
     "mcpRegistry": "templates/mcp-servers.yaml",
-    "setupSkill": "skills/drakom-ai-setup/SKILL.md"
+    "rulesReadme": "templates/rules.README.md",
+    "setupSkill": "skills/drakom-ai-setup/SKILL.md",
+    "specsReadme": "templates/specs.README.md"
   }
 }

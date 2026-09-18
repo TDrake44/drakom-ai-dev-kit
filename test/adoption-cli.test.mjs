@@ -141,6 +141,8 @@ test('builds and renders deterministic fresh-project plans', async () => {
     [
       '.drakom-ai/.gitignore',
       '.drakom-ai/mcp-servers.yaml',
+      '.drakom-ai/rules/README.md',
+      '.drakom-ai/specs/README.md',
       '.agents/skills/drakom-ai-setup/SKILL.md',
       '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
       'AGENTS.md',
@@ -197,6 +199,10 @@ test('packages a complete approval-gated setup workflow and assessment template'
   assert.match(skill, /drakom-ai sync/);
   assert.match(skill, /verify.*path.*command.*reference/is);
   assert.match(skill, /Do not assume.*custom rules.*skills/is);
+  assert.match(skill, /create.*\.drakom-ai\/rules\//is);
+  assert.match(skill, /AGENTS\.md.*Standards Index/is);
+  assert.match(skill, /remove or revise.*stale.*route/is);
+  assert.match(skill, /not.*globally.*load/is);
   assert.doesNotMatch(skill, /legacy|\.ai\//i);
   assert.match(assessment, /## Keep/);
   assert.match(assessment, /## Refine/);
@@ -217,6 +223,14 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   assert.match(first.stdout, /Ask your coding agent to use \$drakom-ai-setup/);
   assert.equal(await readFile(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
   assert.equal(await readFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'utf8'), 'servers: {}\n');
+  assert.match(
+    await readFile(path.join(root, '.drakom-ai', 'rules', 'README.md'), 'utf8'),
+    /project-specific policies.*\$drakom-ai-setup/is,
+  );
+  assert.match(
+    await readFile(path.join(root, '.drakom-ai', 'specs', 'README.md'), 'utf8'),
+    /git-tracked.*specifications/i,
+  );
   await readdir(path.join(root, '.drakom-ai', 'rules'));
   await readdir(path.join(root, '.drakom-ai', 'plans'));
   await readdir(path.join(root, '.drakom-ai', 'specs'));
@@ -224,6 +238,8 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   const state = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
   assert.equal(state.schemaVersion, 1);
   assert.deepEqual(Object.keys(state.managedFiles), [
+    '.drakom-ai/rules/README.md',
+    '.drakom-ai/specs/README.md',
     '.agents/skills/drakom-ai-setup/SKILL.md',
     '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
   ]);
