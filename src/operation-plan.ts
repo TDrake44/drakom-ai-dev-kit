@@ -1,17 +1,33 @@
 import { createHash } from 'node:crypto';
+import { load as loadYaml } from 'js-yaml';
 
 import type { TargetInventory } from './inspect-target.js';
 import type { PackagePayload } from './package-payload.js';
-import { serializeState, type InstallState } from './state.js';
+import { compareVersions, DRAKOM_DIR, serializeState, type InstallState } from './state.js';
+
+export { compareVersions, DRAKOM_DIR };
 
 export const MANAGED_BLOCK = `<!-- drakom-ai:start -->
 ## Drakom AI Development Context
 
-Project-specific AI context is stored under \`.drakom-ai/\`.
+Project-specific AI context is stored under \`${DRAKOM_DIR}/\`.
 Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
 <!-- drakom-ai:end -->`;
 
-export type OperationAction = 'mkdir' | 'create' | 'merge' | 'preserve' | 'conflict' | 'warning';
+export const NOTICE =
+  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
+export const LEGACY_NOTICE =
+  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm run skills:sync" to update. -->';
+
+export type OperationAction =
+  | 'mkdir'
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'merge'
+  | 'preserve'
+  | 'conflict'
+  | 'warning';
 
 export interface Operation {
   action: OperationAction;
@@ -22,7 +38,7 @@ export interface Operation {
 }
 
 export interface OperationPlan {
-  command: 'init';
+  command: 'init' | 'sync';
   root: string;
   targetStatus: TargetInventory['status'];
   operations: Operation[];
@@ -31,6 +47,39 @@ export interface OperationPlan {
 
 export function fingerprint(content: string): string {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`;
+}
+
+export function isGeneratedMirrorContent(content: string): boolean {
+  const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
+  const body = frontmatter ? content.slice(frontmatter.length).replace(/^(?:\r?\n)*/, '') : content;
+  return [NOTICE, LEGACY_NOTICE].some(
+    (marker) => body === marker || body.startsWith(`${marker}\n`) || body.startsWith(`${marker}\r\n`),
+  );
+}
+
+export function createMirrorContent(content: string, noticeMarker: string = NOTICE): string {
+  const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
+  if (!frontmatter) return `${noticeMarker}\n\n${content}`;
+
+  return `${frontmatter}\n${noticeMarker}\n\n${content.slice(frontmatter.length)}`;
+}
+
+export function extractManagedBlock(content: string, identifier: string): string | null {
+  const startMarker = `<!-- ${identifier}:start -->`;
+  const endMarker = `<!-- ${identifier}:end -->`;
+  const startIndex = content.indexOf(startMarker);
+  const endIndex = content.indexOf(endMarker);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    return null;
+  }
+  let block = content.slice(startIndex, endIndex + endMarker.length);
+  const afterEnd = content.slice(endIndex + endMarker.length);
+  if (afterEnd.startsWith('\r\n')) {
+    block += '\r\n';
+  } else if (afterEnd.startsWith('\n')) {
+    block += '\n';
+  }
+  return block;
 }
 
 /** Purely derive an initialization plan from an already-captured inventory. */
@@ -59,13 +108,13 @@ export function buildInitPlan(
   if (inventory.state !== null) {
     operations.push({
       action: 'preserve',
-      path: '.drakom-ai/state.json',
+      path: `${DRAKOM_DIR}/state.json`,
       summary: 'Existing Drakom installation remains unchanged by this preview.',
     });
   } else if (inventory.hasDrakomDirectory) {
     operations.push({
       action: 'conflict',
-      path: '.drakom-ai',
+      path: DRAKOM_DIR,
       summary: 'Directory exists without managed state; review ownership before initialization.',
     });
   }
@@ -88,18 +137,18 @@ export function buildInitPlan(
   };
 
   if (inventory.state === null) {
-    addDirectory('.drakom-ai', 'Create the project context namespace.');
-    addDirectory('.drakom-ai/rules', 'Create the tracked project rules directory.');
-    addDirectory('.drakom-ai/plans', 'Create the ignored local plans directory.');
-    addDirectory('.drakom-ai/specs', 'Create the tracked collaborative specifications directory.');
-    addDirectory('.drakom-ai/assets', 'Create the ignored local assets directory.');
+    addDirectory(DRAKOM_DIR, 'Create the project context namespace.');
+    addDirectory(`${DRAKOM_DIR}/rules`, 'Create the tracked project rules directory.');
+    addDirectory(`${DRAKOM_DIR}/plans`, 'Create the ignored local plans directory.');
+    addDirectory(`${DRAKOM_DIR}/specs`, 'Create the tracked collaborative specifications directory.');
+    addDirectory(`${DRAKOM_DIR}/assets`, 'Create the ignored local assets directory.');
     addCreate(
-      '.drakom-ai/.gitignore',
+      `${DRAKOM_DIR}/.gitignore`,
       localIgnoreContent,
       'Ignore local plans and assets while keeping tracked project context.',
     );
     if (!options.skipMcp) {
-      addCreate('.drakom-ai/mcp-servers.yaml', mcpRegistryContent, 'Create the optional MCP source registry.');
+      addCreate(`${DRAKOM_DIR}/mcp-servers.yaml`, mcpRegistryContent, 'Create the optional MCP source registry.');
     }
     addCreate(setupTarget, setupContent, 'Install the kit-managed project assessment skill.');
     addCreate(assessmentTarget, assessmentContent, 'Install the setup skill assessment plan template.');
@@ -149,9 +198,10 @@ export function buildInitPlan(
       managedBlocks: {
         'AGENTS.md#drakom-ai': { fingerprint: fingerprint(`${MANAGED_BLOCK}\n`) },
       },
+      managedSkillMirrors: {},
       managedMcpServers: {},
     };
-    addCreate('.drakom-ai/state.json', serializeState(state), 'Record managed ownership after all other operations succeed.');
+    addCreate(`${DRAKOM_DIR}/state.json`, serializeState(state), 'Record managed ownership after all other operations succeed.');
   }
 
   operations.push({
@@ -166,5 +216,379 @@ export function buildInitPlan(
     targetStatus: inventory.status,
     operations,
     hasConflicts: operations.some(({ action }) => action === 'conflict'),
+  };
+}
+
+/** Purely derive a synchronization plan from an already-captured inventory. */
+export function buildSyncPlan(
+  inventory: TargetInventory,
+  payload: PackagePayload,
+): OperationPlan {
+  const operations: Operation[] = [];
+  const state = inventory.state;
+  if (!state) {
+    throw new Error('Target is not an initialized Drakom installation; run init first.');
+  }
+
+  // MCP registry validity check if mcp-servers.yaml is present in inventory
+  const mcpYaml = inventory.contents[`${DRAKOM_DIR}/mcp-servers.yaml`];
+  if (mcpYaml !== undefined) {
+    try {
+      loadYaml(mcpYaml);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      operations.push({
+        action: 'conflict',
+        path: `${DRAKOM_DIR}/mcp-servers.yaml`,
+        summary: `Invalid MCP registry YAML: ${message}`,
+      });
+    }
+  }
+
+  // Phase 1: Kit-managed files
+  const payloadSourceToContent = new Map<string, string>();
+  for (const [key, sourceRel] of Object.entries(payload.manifest.files)) {
+    const fileContent = payload.files[key];
+    if (fileContent !== undefined) {
+      payloadSourceToContent.set(sourceRel, fileContent);
+    }
+  }
+
+  for (const [managedPath, entry] of Object.entries(state.managedFiles)) {
+    const currentContent = inventory.contents[managedPath];
+    if (currentContent === undefined) {
+      operations.push({
+        action: 'conflict',
+        path: managedPath,
+        summary: 'Managed file is missing; restore it before synchronizing.',
+      });
+      continue;
+    }
+
+    const currentFp = fingerprint(currentContent);
+    if (currentFp !== entry.fingerprint) {
+      operations.push({
+        action: 'conflict',
+        path: managedPath,
+        summary: 'Managed file was locally modified; resolve changes before synchronizing.',
+      });
+      continue;
+    }
+
+    const payloadContent = payloadSourceToContent.get(entry.source);
+    if (payloadContent !== undefined) {
+      const payloadFp = fingerprint(payloadContent);
+      if (payloadFp !== currentFp) {
+        operations.push({
+          action: 'update',
+          path: managedPath,
+          summary: `Update managed file from kit version ${payload.manifest.kitVersion}.`,
+          content: payloadContent,
+          before: currentContent,
+        });
+      } else {
+        operations.push({
+          action: 'preserve',
+          path: managedPath,
+          summary: 'Kit-managed file is up to date.',
+        });
+      }
+    } else {
+      operations.push({
+        action: 'conflict',
+        path: managedPath,
+        summary: `Managed file source ${entry.source} is missing from package payload; review payload evolution.`,
+      });
+    }
+  }
+
+  // Managed blocks (e.g. AGENTS.md#drakom-ai)
+  if (state.managedBlocks) {
+    for (const [blockKey, entry] of Object.entries(state.managedBlocks)) {
+      const [filePath, identifier] = blockKey.split('#');
+      if (!filePath || !identifier) continue;
+      const fileContent = inventory.contents[filePath];
+      if (fileContent === undefined) {
+        operations.push({
+          action: 'conflict',
+          path: filePath,
+          summary: `Managed block container ${filePath} is missing.`,
+        });
+        continue;
+      }
+
+      const block = extractManagedBlock(fileContent, identifier);
+      if (block === null) {
+        operations.push({
+          action: 'conflict',
+          path: filePath,
+          summary: `Managed block <!-- ${identifier}:start --> was removed; restore it before synchronizing.`,
+        });
+        continue;
+      }
+
+      const blockFp = fingerprint(block);
+      const normalizedBlock = block.replace(/\r\n/g, '\n');
+      const normalizedBlockWithNl = normalizedBlock.endsWith('\n') ? normalizedBlock : `${normalizedBlock}\n`;
+      const isMatch = [blockFp, fingerprint(normalizedBlock), fingerprint(normalizedBlockWithNl)].includes(
+        entry.fingerprint,
+      );
+
+      if (!isMatch) {
+        operations.push({
+          action: 'conflict',
+          path: filePath,
+          summary: `Managed block <!-- ${identifier}:start --> was locally modified; resolve changes before synchronizing.`,
+        });
+      } else {
+        const canonicalBlock = `${MANAGED_BLOCK}\n`;
+        const canonicalFp = fingerprint(canonicalBlock);
+        if (blockFp !== canonicalFp && fingerprint(normalizedBlockWithNl) !== canonicalFp) {
+          const updatedContent = fileContent.replace(block, canonicalBlock);
+          operations.push({
+            action: 'update',
+            path: filePath,
+            summary: `Update managed block in ${filePath} to latest canonical kit version.`,
+            content: updatedContent,
+            before: fileContent,
+          });
+        } else {
+          operations.push({
+            action: 'preserve',
+            path: filePath,
+            summary: 'Managed block is up to date.',
+          });
+        }
+      }
+    }
+  }
+
+  // Phase 2: Claude skill mirrors
+  const canonicalSkillMirrorPaths = new Set<string>();
+  if (state.features.skillMirrors !== false) {
+    const canonicalSkills: Array<{ name: string; path: string; content: string }> = [];
+    for (const skillPath of inventory.skillFiles) {
+      const match = skillPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/);
+      const skillContent = inventory.contents[skillPath];
+      if (match && match[1] && skillContent !== undefined) {
+        const plannedUpdate = operations.find((op) => op.action === 'update' && op.path === skillPath);
+        const effectiveContent = plannedUpdate?.content ?? skillContent;
+        canonicalSkills.push({
+          name: match[1],
+          path: skillPath,
+          content: effectiveContent,
+        });
+      }
+    }
+
+    const canonicalNames = new Set(canonicalSkills.map((s) => s.name));
+
+    for (const skill of canonicalSkills) {
+      const targetDir = `.claude/skills/${skill.name}`;
+      const targetFile = `${targetDir}/SKILL.md`;
+      canonicalSkillMirrorPaths.add(targetFile);
+      const expectedContent = createMirrorContent(skill.content);
+
+      const targetExists = inventory.paths.includes(targetFile);
+      const targetDirExists = inventory.paths.includes(targetDir) || inventory.paths.includes(`${targetDir}/`);
+
+      if (targetDirExists && !targetExists) {
+        operations.push({
+          action: 'conflict',
+          path: targetDir,
+          summary: `Hand-authored Claude skill collides with canonical skill: ${targetDir}`,
+        });
+        continue;
+      }
+
+      if (targetExists) {
+        const currentTargetContent = inventory.contents[targetFile] ?? '';
+        if (!isGeneratedMirrorContent(currentTargetContent)) {
+          operations.push({
+            action: 'conflict',
+            path: targetFile,
+            summary: `Hand-authored Claude skill collides with canonical skill: ${targetFile}`,
+          });
+          continue;
+        }
+
+        const recordedMirror = state.managedSkillMirrors?.[targetFile];
+        const currentTargetFp = fingerprint(currentTargetContent);
+        if (recordedMirror !== undefined) {
+          if (currentTargetFp !== recordedMirror.fingerprint) {
+            operations.push({
+              action: 'conflict',
+              path: targetFile,
+              summary: `Claude skill mirror for ${skill.name} was locally modified; resolve changes before synchronizing.`,
+            });
+            continue;
+          }
+        } else {
+          const legacyExpectedContent = createMirrorContent(skill.content, LEGACY_NOTICE);
+          const isExactMatch =
+            currentTargetContent === expectedContent || currentTargetContent === legacyExpectedContent;
+          if (!isExactMatch) {
+            operations.push({
+              action: 'conflict',
+              path: targetFile,
+              summary: `Claude skill mirror for ${skill.name} is unrecorded and does not match expected content; resolve changes before synchronizing.`,
+            });
+            continue;
+          }
+        }
+
+        if (currentTargetContent !== expectedContent) {
+          operations.push({
+            action: 'update',
+            path: targetFile,
+            summary: `Update Claude skill mirror for ${skill.name}.`,
+            content: expectedContent,
+            before: currentTargetContent,
+          });
+        } else {
+          operations.push({
+            action: 'preserve',
+            path: targetFile,
+            summary: `Claude skill mirror for ${skill.name} is up to date.`,
+          });
+        }
+      } else {
+        operations.push({
+          action: 'create',
+          path: targetFile,
+          summary: `Create Claude skill mirror for ${skill.name}.`,
+          content: expectedContent,
+        });
+      }
+    }
+
+    // Stale mirrors in .claude/skills/
+    for (const skillPath of inventory.skillFiles) {
+      const match = skillPath.match(/^\.claude\/skills\/([^/]+)\/SKILL\.md$/);
+      if (match && match[1]) {
+        const mirrorName = match[1];
+        if (!canonicalNames.has(mirrorName)) {
+          const content = inventory.contents[skillPath] ?? '';
+          if (isGeneratedMirrorContent(content)) {
+            const recordedMirror = state.managedSkillMirrors?.[skillPath];
+            const currentFp = fingerprint(content);
+            if (recordedMirror !== undefined) {
+              if (currentFp !== recordedMirror.fingerprint) {
+                operations.push({
+                  action: 'conflict',
+                  path: skillPath,
+                  summary: `Stale Claude skill mirror for ${mirrorName} was locally modified; resolve changes before deleting.`,
+                });
+              } else {
+                operations.push({
+                  action: 'delete',
+                  path: skillPath,
+                  summary: `Remove stale Claude skill mirror for ${mirrorName}.`,
+                  before: content,
+                });
+              }
+            } else {
+              operations.push({
+                action: 'conflict',
+                path: skillPath,
+                summary: `Stale Claude skill mirror for ${mirrorName} is unrecorded; resolve or remove it manually before synchronizing.`,
+              });
+            }
+          } else {
+            operations.push({
+              action: 'preserve',
+              path: skillPath,
+              summary: `Claude-only hand-authored skill ${mirrorName} preserved.`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Phase 4: State updates
+  const hasConflicts = operations.some((op) => op.action === 'conflict');
+  const updatedManagedFiles: Record<string, { source: string; fingerprint: string }> = { ...state.managedFiles };
+  for (const op of operations) {
+    if (op.action === 'update' && op.path in updatedManagedFiles && op.content) {
+      const existing = updatedManagedFiles[op.path];
+      if (existing) {
+        updatedManagedFiles[op.path] = {
+          ...existing,
+          fingerprint: fingerprint(op.content),
+        };
+      }
+    }
+  }
+
+  const updatedManagedBlocks: Record<string, { fingerprint: string }> | undefined = state.managedBlocks
+    ? { ...state.managedBlocks }
+    : undefined;
+  if (updatedManagedBlocks) {
+    for (const op of operations) {
+      if (op.action === 'update' && op.path === 'AGENTS.md') {
+        updatedManagedBlocks['AGENTS.md#drakom-ai'] = {
+          fingerprint: fingerprint(`${MANAGED_BLOCK}\n`),
+        };
+      }
+    }
+  }
+
+  const updatedSkillMirrors: Record<string, { fingerprint: string }> = {
+    ...(state.managedSkillMirrors ?? {}),
+  };
+  for (const op of operations) {
+    if ((op.action === 'create' || op.action === 'update') && op.path.startsWith('.claude/skills/') && op.content) {
+      updatedSkillMirrors[op.path] = { fingerprint: fingerprint(op.content) };
+    } else if (op.action === 'delete' && op.path.startsWith('.claude/skills/')) {
+      delete updatedSkillMirrors[op.path];
+    } else if (op.action === 'preserve' && canonicalSkillMirrorPaths.has(op.path)) {
+      if (!(op.path in updatedSkillMirrors) && inventory.contents[op.path] !== undefined) {
+        updatedSkillMirrors[op.path] = { fingerprint: fingerprint(inventory.contents[op.path]!) };
+      }
+    }
+  }
+
+  const updatedState: InstallState = {
+    ...state,
+    kitVersion: payload.manifest.kitVersion,
+    managedFiles: updatedManagedFiles,
+    managedSkillMirrors: updatedSkillMirrors,
+  };
+  if (updatedManagedBlocks !== undefined) {
+    updatedState.managedBlocks = updatedManagedBlocks;
+  }
+
+  const newSerializedState = serializeState(updatedState);
+  const currentSerializedState = inventory.contents[`${DRAKOM_DIR}/state.json`] ?? '';
+
+  if (newSerializedState !== currentSerializedState && !hasConflicts) {
+    operations.push({
+      action: 'update',
+      path: `${DRAKOM_DIR}/state.json`,
+      summary: 'Update installation state with latest fingerprints and kit version.',
+      content: newSerializedState,
+      before: currentSerializedState,
+    });
+  } else {
+    operations.push({
+      action: 'preserve',
+      path: `${DRAKOM_DIR}/state.json`,
+      summary: 'Installation state is up to date.',
+    });
+  }
+
+  operations.push({
+    action: 'preserve',
+    path: '*',
+    summary: 'Preserve all existing files not explicitly listed for updates.',
+  });
+
+  return {
+    command: 'sync',
+    root: inventory.root,
+    targetStatus: inventory.status,
+    operations,
+    hasConflicts,
   };
 }

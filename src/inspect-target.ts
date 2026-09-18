@@ -1,11 +1,11 @@
 import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadState, type InstallState } from './state.js';
+import { DRAKOM_DIR, loadState, type InstallState } from './state.js';
 
 const ignoredDirectories = new Set(['.git', 'node_modules']);
 const mcpPaths = new Set([
-  '.drakom-ai/mcp-servers.yaml',
+  `${DRAKOM_DIR}/mcp-servers.yaml`,
   '.mcp.json',
   '.vscode/mcp.json',
   '.agents/mcp_config.json',
@@ -88,10 +88,29 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
   await visit(root, '');
   paths.sort();
   const state = await loadState(root);
+  const stateRelPath = `${DRAKOM_DIR}/state.json`;
+  if (paths.includes(stateRelPath) && contents[stateRelPath] === undefined) {
+    try {
+      contents[stateRelPath] = await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8');
+    } catch {
+      // Ignore
+    }
+  }
+  if (state) {
+    for (const managedPath of Object.keys(state.managedFiles)) {
+      if (paths.includes(managedPath) && contents[managedPath] === undefined) {
+        try {
+          contents[managedPath] = await readFile(path.join(root, managedPath), 'utf8');
+        } catch {
+          // Ignore
+        }
+      }
+    }
+  }
   const contextFiles = paths.filter((value) => !value.endsWith('/') && isContextFile(value));
   const skillFiles = paths.filter((value) => !value.endsWith('/') && isSkillFile(value));
   const existingMcpFiles = paths.filter((value) => mcpPaths.has(value));
-  const hasDrakomDirectory = paths.includes('.drakom-ai/');
+  const hasDrakomDirectory = paths.includes(`${DRAKOM_DIR}/`);
 
   return {
     root,

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { SEMVER_REGEX } from './state.js';
+
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const payloadRoot = path.resolve(moduleDirectory, '..', 'payload', 'v1');
 
@@ -27,6 +29,7 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
     !isRecord(parsed) ||
     parsed.schemaVersion !== 1 ||
     typeof parsed.kitVersion !== 'string' ||
+    !SEMVER_REGEX.test(parsed.kitVersion) ||
     !isRecord(parsed.files)
   ) {
     throw new Error(`Invalid package payload manifest: ${manifestPath}`);

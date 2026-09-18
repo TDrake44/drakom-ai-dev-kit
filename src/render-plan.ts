@@ -3,6 +3,8 @@ import type { OperationAction, OperationPlan } from './operation-plan.js';
 const labels: Record<OperationAction, string> = {
   mkdir: 'MKDIR',
   create: 'CREATE',
+  update: 'UPDATE',
+  delete: 'DELETE',
   merge: 'MERGE',
   preserve: 'PRESERVE',
   conflict: 'CONFLICT',
