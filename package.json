@@ -5,15 +5,20 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "drakom-ai": "dist/cli.js"
+  },
   "engines": {
     "node": ">=20.19.0"
   },
   "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "tsc -p jsconfig.json",
-    "test": "node --test",
+    "build": "tsc -p tsconfig.json",
+    "lint": "pnpm build && eslint .",
+    "lint:fix": "pnpm build && eslint . --fix",
+    "prepack": "pnpm build",
+    "typecheck": "pnpm build && tsc -p jsconfig.json",
+    "test": "pnpm build && node --test",
     "mcp:gen": "node scripts/generate-mcp-configs.mjs",
     "mcp:check": "node scripts/generate-mcp-configs.mjs --check",
     "skills:sync": "node scripts/sync-skill-mirrors.mjs",

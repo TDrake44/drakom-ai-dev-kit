@@ -3,7 +3,7 @@ export default [
     ignores: ['node_modules/**'],
   },
   {
-    files: ['**/*.mjs'],
+    files: ['**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

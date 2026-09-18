@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "kitVersion": "0.1.0",
+  "files": {
+    "assessmentTemplate": "skills/drakom-ai-setup/references/assessment-plan-template.md",
+    "localIgnore": "templates/drakom-ai.gitignore",
+    "mcpRegistry": "templates/mcp-servers.yaml",
+    "setupSkill": "skills/drakom-ai-setup/SKILL.md"
+  }
+}
