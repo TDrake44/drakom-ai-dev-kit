@@ -1,7 +1,7 @@
 # AI Architecture Bootstrapping Guide
 **Instructions for AI Coding Assistants Applying this Architecture to a Target Repository**
 
-> **AI Assistant Directive:** You have been handed this document to apply a standardized, vendor-neutral AI development framework to this repository. Read these instructions completely before taking any action. Adapt file extensions, package managers, and tool commands to match the target repository's stack, but preserve the structural ideals and separation of concerns described below. This document is a standalone architectural guide: it does not contain the Node generator implementations. Do not claim to install those scripts unless their source is supplied in a local checkout or release archive.
+> **AI Assistant Directive:** You have been handed this document to apply a standardized, vendor-neutral AI development framework to this repository. Read these instructions completely before taking any action. Adapt file extensions, package managers, and tool commands to match the target repository's stack, but preserve the structural ideals and separation of concerns described below. Prefer initializing and synchronizing via `@drakom/ai-dev-kit` (`npx @drakom/ai-dev-kit init` / `sync`).
 
 
 ## 1. Architectural Principles
@@ -50,11 +50,7 @@ Ensure the target repository ends up with the following structural layout:
 │       ├── SKILL.md
 │       └── workflow.md
 │
-├── .claude/skills/             -> Optional generated SKILL.md-only Claude mirrors
-│
-├── scripts/                    -> Optional deterministic config generators & drift verifiers
-│   ├── generate-mcp-configs.{mjs|py|ts} -> Emits .mcp.json, .vscode/mcp.json, etc. from .drakom-ai/mcp-servers.yaml
-│   └── sync-skill-mirrors.{mjs|py|ts}   -> Syncs .agents/skills/ -> .claude/skills/ and checks drift
+├── .claude/skills/             -> Optional generated SKILL.md-only Claude mirrors (managed by drakom-ai sync)
 │
 └── .github/
     └── copilot-instructions.md  -> Inlined guidance for github.com Copilot (surfaces that can't read AGENTS.md)
@@ -125,14 +121,13 @@ canonical configuration by default and ignore only local plans and assets:
 !.drakom-ai/assets/.gitkeep
 ```
 
-4. **`.worktreeinclude`**: Create at root to preserve context across git worktrees:
+4. **`.worktreeinclude`**: Create at root to preserve local AI context across git worktrees:
 
 ```text
-.env
-.env.*
 .drakom-ai/plans/*
 .drakom-ai/assets/*
 ```
+*(Supported natively by Claude Code and OpenAI Codex CLI, and used by git worktree helper tools and custom checkout hooks to copy untracked context into new worktrees. Optionally add `.env` or project-specific local files as needed).*
 
 5. **`.drakom-ai/specs/README.md`**: Document the elevation rule (plans in `.drakom-ai/plans/` remain local unless multiple engineers need to collaborate on them, at which point they are committed to `.drakom-ai/specs/`).
 
@@ -195,10 +190,10 @@ Use this step only when a local kit checkout or release archive supplies the
 generator source. If it does not, retain the canonical architecture and manage
 each supported tool’s configuration using that tool’s native process.
 
-Create the optional target directories:
+Create the optional Claude mirror directory if mirroring skills:
 
 ```bash
-mkdir -p .claude/skills scripts
+mkdir -p .claude/skills
 ```
 
 1. **`.drakom-ai/mcp-servers.yaml`**: Create the single source of truth for MCP servers:
@@ -207,37 +202,21 @@ mkdir -p .claude/skills scripts
 servers: {}
 ```
 
-2. Copy `scripts/generate-mcp-configs.mjs` and `scripts/sync-skill-mirrors.mjs`
-   from that supplied source. For the reference Node implementation, install
-   `js-yaml` and `smol-toml` (and `@types/js-yaml` when TypeScript checks JavaScript) using the
-   target project’s package manager. Do not replace its dependency manifest or
-   lockfile.
-3. **`scripts/generate-mcp-configs.mjs`** reads `.drakom-ai/mcp-servers.yaml` and
-   produces `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json`, a
-   managed section of `.codex/config.toml`, and the tracked ownership snapshot
-   `.drakom-ai/mcp-generation-state.json`. Commit the snapshot with the YAML and
-   outputs; it allows CI, fresh clones, and later updates to recognize which MCP
-   entries are managed. Before first use, review and back up existing targets.
-   The script preserves unrelated configuration. An exactly matching same-named
-   JSON MCP entry is accepted during initial adoption; a differing entry stops
-   generation before writes. Conflicting existing Codex server names are rejected;
-   legacy Codex output migrates only when the full file matches the current
-   registry’s legacy output. Resolve the collision in the YAML or rename one
-   entry. Do not put credentials in the registry or state snapshot.
-4. **`scripts/sync-skill-mirrors.mjs`** copies `SKILL.md` files from
-   `.agents/skills/` to `.claude/skills/`, keeps YAML frontmatter valid, and
-   detects drift with `--check`. A same-named hand-authored Claude skill causes
-   synchronization to stop before writes or deletions; rename or reconcile the
-   collision first. Differently named Claude-only skills are preserved.
-5. **Project Task Registry** (e.g. `package.json`, `Makefile`, `Taskfile`):
-   Add only missing task entries; do not overwrite existing names. The pnpm
-   reference uses:
-   * `skills:sync` and `skills:check`
-   * `mcp:gen` and `mcp:check`
-   * `verify:ai` to run both checks
+2. **Synchronize via CLI**: Run `drakom-ai sync .` (or `npx @drakom/ai-dev-kit sync .`).
+   This automatically:
+   * Reads `.drakom-ai/mcp-servers.yaml` and produces `.mcp.json`, `.vscode/mcp.json`,
+     `.agents/mcp_config.json`, and the managed block in `.codex/config.toml`.
+   * Mirrors `.agents/skills/` to `.claude/skills/`, keeping YAML frontmatter intact.
+   * Tracks managed files, blocks, and MCP server fingerprints in `.drakom-ai/state.json`.
+   * Detects conflicts and preserves unmanaged or hand-authored configuration safely.
 
+3. **Project Task Registry** (e.g. `package.json`, `Makefile`, `Taskfile`):
+   Add tasks for synchronization and drift verification:
+   * `sync`: `drakom-ai sync .`
+   * `sync:check` (or `verify:ai`): `drakom-ai sync . --check`
+   * Aliases if desired: `mcp:gen`, `mcp:check`, `skills:sync`, `skills:check`
 
-6. **Git Hooks / CI**: Add `skills:check` and `mcp:check` after dependency
+4. **Git Hooks / CI**: Add `drakom-ai sync . --check` (or `pnpm sync:check`) after dependency
    installation in existing pre-push hooks and pull request CI. Keep the
    project’s own lint, typecheck, and test steps. Use the reference workflow as
    an example; do not replace an existing workflow.
@@ -246,11 +225,9 @@ servers: {}
 
 Once implemented in the target repository, run this validation sequence:
 
-* [ ] If generators were adopted, running skill sync (`pnpm skills:sync` or equivalent) populates `.claude/skills/` without overwriting a project-owned skill,
-* [ ] If generators were adopted, skill check (`pnpm skills:check` or equivalent) exits 0,
-* [ ] If generators were adopted, MCP generation (`pnpm mcp:gen` or equivalent) produces valid registries without replacing unrelated configuration,
-* [ ] If generators were adopted, MCP check (`pnpm mcp:check` or equivalent) exits 0,
-* [ ] If generators were adopted, `.drakom-ai/mcp-generation-state.json` is tracked with the registry and generated outputs,
+* [ ] Running sync (`pnpm sync` or `npx @drakom/ai-dev-kit sync .`) populates `.claude/skills/` and MCP configurations without overwriting project-owned settings,
+* [ ] Sync drift check (`pnpm sync:check` or `npx @drakom/ai-dev-kit sync . --check`) exits 0,
+* [ ] `.drakom-ai/state.json` is tracked with the kit configuration,
 * [ ] `AGENTS.md` accurately references valid paths in `.drakom-ai/rules/`,
 * [ ] `.drakom-ai/mcp-servers.yaml`, `.drakom-ai/rules/`, and `.drakom-ai/specs/` are tracked;
   `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored,

@@ -78,6 +78,7 @@ For a fresh repository, `drakom-ai init .` creates:
 
 AGENTS.md
 CLAUDE.md
+.worktreeinclude
 ```
 
 `init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
@@ -92,6 +93,7 @@ CLAUDE.md
 | `.drakom-ai/assets/` | Local (gitignored) | Screenshots, mockups, or error logs referenced by agents during tasks. |
 | `.agents/skills/` | Tracked (git) | Canonical, portable agent task procedures mirrored to `.claude/skills/` via `sync`. |
 | `AGENTS.md` / `CLAUDE.md` | Tracked (git) | Front-door context hub and task router across all supported AI assistants. |
+| `.worktreeinclude` | Tracked (git) | Preserves local gitignored AI context (`.drakom-ai/plans/*`, `.drakom-ai/assets/*`) across git worktrees. |
 
 ## How Rules and Skills Evolve
 
@@ -120,7 +122,7 @@ them.
 | The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
 | Generated Claude skill mirrors | Canonical skills in `.agents/skills/` |
 | Generated MCP client blocks | MCP registry choices and all unmanaged client configuration |
-| Fingerprints in `.drakom-ai/state.json` | Plans, specifications, and team decisions |
+| Fingerprints in `.drakom-ai/state.json` | Plans, specifications, `.worktreeinclude`, and team decisions |
 
 Managed content is updated only when its recorded fingerprint still matches.
 If it has local edits, synchronization reports a conflict rather than replacing
@@ -140,6 +142,16 @@ During initialization, Drakom compares discovered repository-local MCP
 configuration with the registry. It preserves unmanaged definitions and asks
 for an explicit decision before adopting a non-identical server. Use
 `--skip-mcp` if the project should not initialize MCP management.
+
+## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
+
+When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI tasks, or branch-isolated workspaces), Git only checks out tracked files. Because `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored to keep scratchpad work local, fresh worktrees naturally start without that active context.
+
+`drakom-ai init` scaffolds a project-owned `.worktreeinclude` file at the repository root:
+
+- **Native Tool Support**: Recognized natively by **Claude Code** and **OpenAI Codex CLI** to automatically copy specified gitignored files into newly created worktree directories.
+- **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), custom checkout hooks, and Antigravity workspace runners.
+- **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom drift warnings.
 
 ## CLI Reference
 

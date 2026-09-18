@@ -9,8 +9,7 @@
   "type": "module",
   "files": [
     "dist",
-    "payload",
-    "scripts"
+    "payload"
   ],
   "bin": {
     "drakom-ai": "dist/cli.js"
@@ -25,7 +24,7 @@
     "lint:fix": "pnpm build && eslint . --fix",
     "prepack": "pnpm build",
     "typecheck": "pnpm build && tsc -p jsconfig.json",
-    "test:unit": "node --test test/adoption-cli.test.mjs test/mcp-adoption.test.mjs test/generate-mcp-configs.test.mjs test/sync-skill-mirrors.test.mjs",
+    "test:unit": "node --test test/adoption-cli.test.mjs test/mcp-adoption.test.mjs",
     "test:smoke": "node --test test/pack-smoke.test.mjs",
     "test": "pnpm build && pnpm run test:unit && pnpm run test:smoke",
     "sync": "pnpm build && node dist/cli.js sync .",
@@ -33,7 +32,7 @@
     "mcp:gen": "pnpm run sync",
     "mcp:check": "pnpm run sync:check",
     "skills:sync": "pnpm run sync",
-    "skills:check": "node scripts/sync-skill-mirrors.mjs --check",
+    "skills:check": "pnpm run sync:check",
     "verify:ai": "pnpm run sync:check"
   },
   "dependencies": {

@@ -11,5 +11,5 @@
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["eslint.config.mjs", "scripts/**/*.mjs", "test/**/*.mjs"]
+  "include": ["eslint.config.mjs", "test/**/*.mjs"]
 }

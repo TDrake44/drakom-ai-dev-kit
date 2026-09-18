@@ -19,6 +19,13 @@ Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
 export const NOTICE =
   '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
 
+export const WORKTREEINCLUDE_ENTRIES = [
+  `${DRAKOM_DIR}/plans/*`,
+  `${DRAKOM_DIR}/assets/*`,
+];
+
+export const DEFAULT_WORKTREEINCLUDE = `${WORKTREEINCLUDE_ENTRIES.join('\n')}\n`;
+
 export type OperationAction =
   | 'mkdir'
   | 'create'
@@ -80,6 +87,54 @@ export function extractManagedBlock(content: string, identifier: string): string
   return block;
 }
 
+function planWorktreeInclude(
+  inventory: TargetInventory,
+  operations: Operation[],
+  addCreate: (targetPath: string, content: string, summary: string) => void,
+): void {
+  const worktreePath = '.worktreeinclude';
+  const worktreeContent = inventory.contents[worktreePath];
+  if (inventory.paths.includes(`${worktreePath}/`)) {
+    operations.push({
+      action: 'conflict',
+      path: worktreePath,
+      summary: 'Directory exists at .worktreeinclude; review ownership before initialization.',
+    });
+  } else if (worktreeContent === undefined) {
+    addCreate(
+      worktreePath,
+      DEFAULT_WORKTREEINCLUDE,
+      'Create the worktree include manifest to preserve local context.',
+    );
+  } else {
+    const existingLines = worktreeContent
+      .split(/\r?\n/)
+      .map((line) => line.trim());
+    const missingLines = WORKTREEINCLUDE_ENTRIES.filter(
+      (required) =>
+        !existingLines.includes(required) &&
+        !existingLines.includes(required.replace(/\/\*$/, '')),
+    );
+    if (missingLines.length === 0) {
+      operations.push({
+        action: 'preserve',
+        path: worktreePath,
+        summary: 'Existing .worktreeinclude already contains Drakom directories.',
+      });
+    } else {
+      const trimmed = worktreeContent.trimEnd();
+      const content = trimmed.length === 0 ? `${missingLines.join('\n')}\n` : `${trimmed}\n${missingLines.join('\n')}\n`;
+      operations.push({
+        action: 'merge',
+        path: worktreePath,
+        summary: 'Append local Drakom directories to existing .worktreeinclude manifest.',
+        content,
+        before: worktreeContent,
+      });
+    }
+  }
+}
+
 /** Purely derive an initialization plan from an already-captured inventory. */
 export function buildInitPlan(
   inventory: TargetInventory,
@@ -109,20 +164,6 @@ export function buildInitPlan(
   const localIgnoreContent = requirePayloadFile('localIgnore');
   const mcpRegistryContent = requirePayloadFile('mcpRegistry');
 
-  if (inventory.state !== null) {
-    operations.push({
-      action: 'preserve',
-      path: `${DRAKOM_DIR}/state.json`,
-      summary: 'Existing Drakom installation remains unchanged by this preview.',
-    });
-  } else if (inventory.hasDrakomDirectory) {
-    operations.push({
-      action: 'conflict',
-      path: DRAKOM_DIR,
-      summary: 'Directory exists without managed state; review ownership before initialization.',
-    });
-  }
-
   const inventoryHasPath = (targetPath: string): boolean =>
     inventory.paths.includes(targetPath) || inventory.paths.includes(`${targetPath}/`);
 
@@ -139,6 +180,21 @@ export function buildInitPlan(
       operations.push({ action: 'create', path: targetPath, summary, content });
     }
   };
+
+  if (inventory.state !== null) {
+    operations.push({
+      action: 'preserve',
+      path: `${DRAKOM_DIR}/state.json`,
+      summary: 'Existing Drakom installation remains unchanged by this preview.',
+    });
+    planWorktreeInclude(inventory, operations, addCreate);
+  } else if (inventory.hasDrakomDirectory) {
+    operations.push({
+      action: 'conflict',
+      path: DRAKOM_DIR,
+      summary: 'Directory exists without managed state; review ownership before initialization.',
+    });
+  }
 
   if (inventory.state === null) {
     addDirectory(DRAKOM_DIR, 'Create the project context namespace.');
@@ -192,6 +248,8 @@ export function buildInitPlan(
         before: claudeContent,
       });
     }
+
+    planWorktreeInclude(inventory, operations, addCreate);
 
     const state: InstallState = {
       schemaVersion: 1,

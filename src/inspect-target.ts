@@ -78,7 +78,11 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
         await visit(absolutePath, relativePath);
       } else if (
         entry.isFile() &&
-        (isContextFile(relativePath) || isSkillFile(relativePath) || mcpPaths.has(relativePath) || relativePath === '.gitignore')
+        (isContextFile(relativePath) ||
+          isSkillFile(relativePath) ||
+          mcpPaths.has(relativePath) ||
+          relativePath === '.gitignore' ||
+          relativePath === '.worktreeinclude')
       ) {
         contents[relativePath] = await readFile(absolutePath, 'utf8');
       }

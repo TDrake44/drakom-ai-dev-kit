@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { DRAKOM_DIR } from '../dist/constants.js';
 import { inspectTarget } from '../dist/inspect-target.js';
 import {
   discoverMcp,
@@ -260,7 +261,7 @@ test('renderMcpComparisonReport presents import choices: import, import with ove
   const discovered = discoverMcp(inventory);
   const report = renderMcpComparisonReport(discovered);
 
-  assert.match(report, /Import into \.drakom-ai\/mcp-servers\.yaml/);
+  assert.match(report, new RegExp(`Import into ${DRAKOM_DIR}/mcp-servers\\.yaml`));
   assert.match(report, /Import with explicit client overrides/);
   assert.match(report, /Leave unmanaged/);
   assert.match(report, /Skip MCP management/);
@@ -324,7 +325,7 @@ test('sync generates managed MCP entries into all supported client targets and u
 
   await writeFixture(
     root,
-    '.drakom-ai/mcp-servers.yaml',
+    `${DRAKOM_DIR}/mcp-servers.yaml`,
     `servers:
   local-tools:
     command: node
@@ -407,9 +408,9 @@ test('sync cleanly adopts identical existing unmanaged servers without destructi
     'utf8',
   );
 
-  // Now the server is added to .drakom-ai/mcp-servers.yaml
+  // Now the server is added to ${DRAKOM_DIR}/mcp-servers.yaml
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   fetch-tool:
     command: uvx
@@ -467,7 +468,7 @@ command = "personal-codex"
   );
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   managed-server:
     command: node
@@ -494,7 +495,7 @@ test('sync detects conflict and refuses all writes when a generated entry is man
   const root = await createInitializedMcpFixture();
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   tools:
     command: node
@@ -536,7 +537,7 @@ test('sync stops before any mutation on same-name conflict with an existing unma
   );
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   my-tool:
     command: newly-defined-tool
@@ -555,7 +556,7 @@ test('sync stops before any mutation on same-name conflict with an existing unma
 test('sync updates target files when registry source changes and targets were not manually edited', async () => {
   const root = await createInitializedMcpFixture();
 
-  const mcpYaml = path.join(root, '.drakom-ai', 'mcp-servers.yaml');
+  const mcpYaml = path.join(root, DRAKOM_DIR, 'mcp-servers.yaml');
   await writeFile(
     mcpYaml,
     `servers:
@@ -590,7 +591,7 @@ test('sync updates target files when registry source changes and targets were no
 test('sync safely removes deleted servers from targets while preserving unmanaged entries', async () => {
   const root = await createInitializedMcpFixture();
 
-  const mcpYaml = path.join(root, '.drakom-ai', 'mcp-servers.yaml');
+  const mcpYaml = path.join(root, DRAKOM_DIR, 'mcp-servers.yaml');
   await writeFile(
     mcpYaml,
     `servers:
@@ -638,7 +639,7 @@ test('sync --dry-run and sync --check verify MCP drift without modifying filesys
   const root = await createInitializedMcpFixture();
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   dry-tool:
     command: node
@@ -665,7 +666,7 @@ test('MCP credential detection catches literal secrets inside client overrides a
   const root = await createInitializedMcpFixture();
 
   const rawSecret = 'sk-live-override-secret-key-999';
-  const mcpYaml = path.join(root, '.drakom-ai', 'mcp-servers.yaml');
+  const mcpYaml = path.join(root, DRAKOM_DIR, 'mcp-servers.yaml');
   await writeFile(
     mcpYaml,
     `servers:
@@ -683,7 +684,7 @@ test('MCP credential detection catches literal secrets inside client overrides a
   const syncResult = runMcpCli(root, 'sync');
 
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.drakom-ai\/mcp-servers\.yaml.*literal credentials in overrides\.codex\.env\.API_KEY/i);
+  assert.match(syncResult.stdout, new RegExp(`CONFLICT.*${DRAKOM_DIR}/mcp-servers\\.yaml.*literal credentials in overrides\\.codex\\.env\\.API_KEY`, 'i'));
   assert.doesNotMatch(syncResult.stdout, new RegExp(rawSecret));
   assert.doesNotMatch(syncResult.stderr, new RegExp(rawSecret));
   assert.deepEqual(await snapshot(root), before);
@@ -693,7 +694,7 @@ test('sync detects conflict when a managed Codex entry is manually edited inside
   const root = await createInitializedMcpFixture();
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   tools:
     command: node
@@ -736,9 +737,9 @@ args = ["mcp-server-fetch"]
     'utf8',
   );
 
-  // Add identical definition to .drakom-ai/mcp-servers.yaml
+  // Add identical definition to ${DRAKOM_DIR}/mcp-servers.yaml
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   fetch:
     command: uvx
@@ -785,8 +786,8 @@ args = ["legacy-server.js"]
 `;
   await writeFile(path.join(root, '.codex', 'config.toml'), initialCodex, 'utf8');
 
-  // Ensure .drakom-ai/mcp-servers.yaml has no generated servers
-  await writeFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
+  // Ensure ${DRAKOM_DIR}/mcp-servers.yaml has no generated servers
+  await writeFile(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
   const stateBefore = await loadState(root);
   assert.deepEqual(stateBefore?.managedMcpServers, {});
 
@@ -831,13 +832,13 @@ test('sync strictly validates MCP registry schema and rejects invalid shapes bef
   for (const { source, error } of invalidConfigs) {
     const root = await createInitializedMcpFixture();
 
-    await writeFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), source, 'utf8');
+    await writeFile(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'), source, 'utf8');
     const before = await snapshot(root);
 
     const result = runMcpCli(root, 'sync');
 
     assert.notEqual(result.status, 0, `Expected error for:\n${source}`);
-    assert.match(result.stdout, /CONFLICT.*\.drakom-ai\/mcp-servers\.yaml/);
+    assert.match(result.stdout, new RegExp(`CONFLICT.*${DRAKOM_DIR}/mcp-servers\\.yaml`));
     assert.match(result.stdout, error);
     assert.deepEqual(await snapshot(root), before);
   }
@@ -903,7 +904,7 @@ test('init outputs MCP comparison report when unmanaged client files are discove
   assert.equal(dryRun.status, 0, dryRun.stderr);
   assert.match(dryRun.stdout, /Drakom AI MCP Comparison Report/);
   assert.match(dryRun.stdout, /existing-tool/);
-  assert.match(dryRun.stdout, /Import into \.drakom-ai\/mcp-servers\.yaml/);
+  assert.match(dryRun.stdout, new RegExp(`Import into ${DRAKOM_DIR}/mcp-servers\\.yaml`));
 });
 
 test('init --yes preserves unmanaged MCP servers and does not take over ownership into mcp-servers.yaml without approval', async () => {
@@ -925,7 +926,7 @@ test('init --yes preserves unmanaged MCP servers and does not take over ownershi
   assert.equal(initResult.status, 0, initResult.stderr);
 
   // Check initial mcp-servers.yaml does NOT take over ownership (remains empty default template)
-  const yamlContent = await readFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'utf8');
+  const yamlContent = await readFile(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'), 'utf8');
   assert.doesNotMatch(yamlContent, /unmanaged-tool/);
   assert.match(yamlContent, /servers:\s*\{\}/);
 
@@ -966,28 +967,28 @@ test('sync reports conflict when mcp-servers.yaml is missing in an initialized p
   const root = await createInitializedMcpFixture();
 
   const { rm } = await import('node:fs/promises');
-  await rm(path.join(root, '.drakom-ai', 'mcp-servers.yaml'));
+  await rm(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'));
 
   const syncResult = runMcpCli(root, 'sync');
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.drakom-ai\/mcp-servers\.yaml.*missing/i);
+  assert.match(syncResult.stdout, new RegExp(`CONFLICT.*${DRAKOM_DIR}/mcp-servers\\.yaml.*missing`, 'i'));
 });
 
 test('sync reports conflict on malformed YAML syntax in mcp-servers.yaml', async () => {
   const root = await createInitializedMcpFixture();
 
-  await writeFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'servers: [unclosed\n', 'utf8');
+  await writeFile(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'), 'servers: [unclosed\n', 'utf8');
 
   const syncResult = runMcpCli(root, 'sync');
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.drakom-ai\/mcp-servers\.yaml.*invalid.*yaml syntax at line \d+, column \d+/i);
+  assert.match(syncResult.stdout, new RegExp(`CONFLICT.*${DRAKOM_DIR}/mcp-servers\\.yaml.*invalid.*yaml syntax at line \\d+, column \\d+`, 'i'));
 });
 
 test('sync reports all servers with literal credentials in a single pass', async () => {
   const root = await createInitializedMcpFixture();
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   server-one:
     command: node
@@ -1013,7 +1014,7 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
   const root = await createInitializedMcpFixture();
 
   await writeFile(
-    path.join(root, '.drakom-ai', 'mcp-servers.yaml'),
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
     `servers:
   stdio-tool:
     command: npx
@@ -1155,7 +1156,7 @@ test('buildSyncPlan Phase 3 catches defensive throw during MCP generation', asyn
   const root = await createInitializedMcpFixture();
 
   const inventory = await inspectTarget(root);
-  inventory.contents['.drakom-ai/mcp-servers.yaml'] = 'servers:\n  test:\n    command: "node"\n';
+  inventory.contents[`${DRAKOM_DIR}/mcp-servers.yaml`] = 'servers:\n  test:\n    command: "node"\n';
   Object.defineProperty(inventory.contents, '.codex/config.toml', {
     get() {
       throw new Error('Simulated generator failure');
@@ -1168,7 +1169,7 @@ test('buildSyncPlan Phase 3 catches defensive throw during MCP generation', asyn
   const plan = buildSyncPlan(inventory, payload);
   assert.equal(plan.hasConflicts, true);
   const conflictOp = plan.operations.find(
-    (op) => op.path === '.drakom-ai/mcp-servers.yaml' && op.action === 'conflict',
+    (op) => op.path === `${DRAKOM_DIR}/mcp-servers.yaml` && op.action === 'conflict',
   );
   assert.ok(conflictOp);
   assert.match(conflictOp.summary, /MCP generation failed: Simulated generator failure/);

@@ -99,7 +99,7 @@ test('inventories existing AI context and MCP targets', async () => {
 
 test('loads valid state and rejects malformed or future state with an actionable path', async () => {
   const root = await createFixture();
-  const stateDirectory = path.join(root, '.drakom-ai');
+  const stateDirectory = path.join(root, DRAKOM_DIR);
   await mkdir(stateDirectory);
   await writeFile(
     path.join(stateDirectory, 'state.json'),
@@ -116,7 +116,7 @@ test('loads valid state and rejects malformed or future state with an actionable
   assert.equal((await loadState(root))?.schemaVersion, 1);
 
   await writeFile(path.join(stateDirectory, 'state.json'), '{', 'utf8');
-  await assert.rejects(loadState(root), /\.drakom-ai\/state\.json.*valid JSON/);
+  await assert.rejects(loadState(root), new RegExp(`${DRAKOM_DIR}/state\\.json.*valid JSON`));
 
   await writeFile(
     path.join(stateDirectory, 'state.json'),
@@ -139,15 +139,16 @@ test('builds and renders deterministic fresh-project plans', async () => {
   assert.deepEqual(
     firstPlan.operations.filter((operation) => operation.action === 'create').map(({ path: value }) => value),
     [
-      '.drakom-ai/.gitignore',
-      '.drakom-ai/mcp-servers.yaml',
-      '.drakom-ai/rules/README.md',
-      '.drakom-ai/specs/README.md',
+      `${DRAKOM_DIR}/.gitignore`,
+      `${DRAKOM_DIR}/mcp-servers.yaml`,
+      `${DRAKOM_DIR}/rules/README.md`,
+      `${DRAKOM_DIR}/specs/README.md`,
       '.agents/skills/drakom-ai-setup/SKILL.md',
       '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
       'AGENTS.md',
       'CLAUDE.md',
-      '.drakom-ai/state.json',
+      '.worktreeinclude',
+      `${DRAKOM_DIR}/state.json`,
     ],
   );
   assert.match(renderPlan(firstPlan), /CREATE .*drakom-ai-setup\/SKILL\.md/);
@@ -195,11 +196,11 @@ test('packages a complete approval-gated setup workflow and assessment template'
   assert.match(skill, /stable policy.*rule/is);
   assert.match(skill, /recurring multi-step workflow.*skill/is);
   assert.match(skill, /explicit approval/i);
-  assert.match(skill, /\.drakom-ai\/plans\//);
+  assert.match(skill, new RegExp(`${DRAKOM_DIR}/plans/`));
   assert.match(skill, /drakom-ai sync/);
   assert.match(skill, /verify.*path.*command.*reference/is);
   assert.match(skill, /Do not assume.*custom rules.*skills/is);
-  assert.match(skill, /create.*\.drakom-ai\/rules\//is);
+  assert.match(skill, new RegExp(`create.*${DRAKOM_DIR}/rules/`, 'is'));
   assert.match(skill, /AGENTS\.md.*Standards Index/is);
   assert.match(skill, /remove or revise.*stale.*route/is);
   assert.match(skill, /not.*globally.*load/is);
@@ -222,24 +223,28 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   assert.equal(first.status, 0, first.stderr);
   assert.match(first.stdout, /Ask your coding agent to use \$drakom-ai-setup/);
   assert.equal(await readFile(path.join(root, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
-  assert.equal(await readFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'utf8'), 'servers: {}\n');
+  assert.equal(
+    await readFile(path.join(root, '.worktreeinclude'), 'utf8'),
+    `${DRAKOM_DIR}/plans/*\n${DRAKOM_DIR}/assets/*\n`,
+  );
+  assert.equal(await readFile(path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'), 'utf8'), 'servers: {}\n');
   assert.match(
-    await readFile(path.join(root, '.drakom-ai', 'rules', 'README.md'), 'utf8'),
+    await readFile(path.join(root, DRAKOM_DIR, 'rules', 'README.md'), 'utf8'),
     /project-specific policies.*\$drakom-ai-setup/is,
   );
   assert.match(
-    await readFile(path.join(root, '.drakom-ai', 'specs', 'README.md'), 'utf8'),
+    await readFile(path.join(root, DRAKOM_DIR, 'specs', 'README.md'), 'utf8'),
     /git-tracked.*specifications/i,
   );
-  await readdir(path.join(root, '.drakom-ai', 'rules'));
-  await readdir(path.join(root, '.drakom-ai', 'plans'));
-  await readdir(path.join(root, '.drakom-ai', 'specs'));
-  await readdir(path.join(root, '.drakom-ai', 'assets'));
-  const state = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
+  await readdir(path.join(root, DRAKOM_DIR, 'rules'));
+  await readdir(path.join(root, DRAKOM_DIR, 'plans'));
+  await readdir(path.join(root, DRAKOM_DIR, 'specs'));
+  await readdir(path.join(root, DRAKOM_DIR, 'assets'));
+  const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
   assert.equal(state.schemaVersion, 1);
   assert.deepEqual(Object.keys(state.managedFiles), [
-    '.drakom-ai/rules/README.md',
-    '.drakom-ai/specs/README.md',
+    `${DRAKOM_DIR}/rules/README.md`,
+    `${DRAKOM_DIR}/specs/README.md`,
     '.agents/skills/drakom-ai-setup/SKILL.md',
     '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
   ]);
@@ -264,8 +269,8 @@ test('init --skip-mcp omits the registry and records the disabled feature', asyn
 
   assert.equal(result.status, 0, result.stderr);
   const installed = await snapshot(root);
-  assert.equal(installed['.drakom-ai/mcp-servers.yaml'], undefined);
-  const state = JSON.parse(installed['.drakom-ai/state.json']);
+  assert.equal(installed[`${DRAKOM_DIR}/mcp-servers.yaml`], undefined);
+  const state = JSON.parse(installed[`${DRAKOM_DIR}/state.json`]);
   assert.equal(state.features.mcp, false);
 });
 
@@ -301,6 +306,97 @@ test('interactive init preserves and extends existing entry points exactly as pr
     await readFile(path.join(root, 'CLAUDE.md'), 'utf8'),
     '# Claude-only note\n\n@AGENTS.md\n',
   );
+});
+
+test('init appends local AI context to existing .worktreeinclude', async () => {
+  const root = await createFixture();
+  await writeFile(path.join(root, '.worktreeinclude'), '.env\n.data/*\n', 'utf8');
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    input: 'y\n',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    await readFile(path.join(root, '.worktreeinclude'), 'utf8'),
+    `.env\n.data/*\n${DRAKOM_DIR}/plans/*\n${DRAKOM_DIR}/assets/*\n`,
+  );
+});
+
+test('init preserves existing .worktreeinclude when local AI context is already present', async () => {
+  const root = await createFixture();
+  const existing = `.env\n${DRAKOM_DIR}/plans/*\n${DRAKOM_DIR}/assets/*\n`;
+  await writeFile(path.join(root, '.worktreeinclude'), existing, 'utf8');
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /PRESERVE \.worktreeinclude/);
+});
+
+test('init appends only missing local AI context entry to .worktreeinclude', async () => {
+  const root = await createFixture();
+  await writeFile(path.join(root, '.worktreeinclude'), `.env\n${DRAKOM_DIR}/plans/*\n`, 'utf8');
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    input: 'y\n',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    await readFile(path.join(root, '.worktreeinclude'), 'utf8'),
+    `.env\n${DRAKOM_DIR}/plans/*\n${DRAKOM_DIR}/assets/*\n`,
+  );
+});
+
+test('init reports conflict when .worktreeinclude is a directory', async () => {
+  const root = await createFixture();
+  await mkdir(path.join(root, '.worktreeinclude'), { recursive: true });
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /CONFLICT \.worktreeinclude/);
+});
+
+test('init on an initialized repository scaffolds missing .worktreeinclude', async () => {
+  const root = await createFixture();
+  const initResult = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(initResult.status, 0);
+
+  const { unlink } = await import('node:fs/promises');
+  await unlink(path.join(root, '.worktreeinclude'));
+
+  const adoptResult = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(adoptResult.status, 0);
+  assert.match(adoptResult.stdout, /CREATE\s+\.worktreeinclude/);
+  assert.equal(
+    await readFile(path.join(root, '.worktreeinclude'), 'utf8'),
+    `${DRAKOM_DIR}/plans/*\n${DRAKOM_DIR}/assets/*\n`,
+  );
+
+  const thirdResult = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(thirdResult.status, 0);
+  assert.match(thirdResult.stdout, /already initialized; no changes made/);
 });
 
 test('preflight conflicts prevent every initialization mutation', async () => {
@@ -395,7 +491,7 @@ test('sync updates unchanged managed files and records state last with updated f
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   const setupSkillPath = path.join(root, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md');
 
@@ -502,7 +598,7 @@ test('sync handles Claude skill mirrors, preserves Claude-only skills, and remov
     'utf8',
   );
 
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   const crypto = await import('node:crypto');
   state.managedSkillMirrors = {
@@ -563,7 +659,7 @@ test('sync rejects projects created with a newer kitVersion than the CLI', async
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   state.kitVersion = '99.0.0';
   await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
@@ -672,7 +768,7 @@ test('sync reports conflict and refuses state update when managed file source is
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   const crypto = await import('node:crypto');
   const obsoleteContent = '# Obsolete\n';
@@ -726,7 +822,7 @@ test('sync upgrades unchanged managed AGENTS.md block while preserving surroundi
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
   const agentsPath = path.join(root, 'AGENTS.md');
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
 
   const oldBlock = `<!-- drakom-ai:start -->
@@ -808,7 +904,7 @@ test('sync cleanly adopts an unrecorded Claude skill mirror when its content mat
   const expectedMirrorContent = `${frontmatter}\n${notice}\n\n${canonicalContent.slice(frontmatter.length)}`;
   await writeFile(path.join(mirrorDir, 'SKILL.md'), expectedMirrorContent, 'utf8');
 
-  const stateBefore = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
+  const stateBefore = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
   assert.equal(stateBefore.managedSkillMirrors?.['.claude/skills/tester/SKILL.md'], undefined);
 
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
@@ -817,7 +913,7 @@ test('sync cleanly adopts an unrecorded Claude skill mirror when its content mat
   });
 
   assert.equal(syncResult.status, 0, syncResult.stderr);
-  const stateAfter = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
+  const stateAfter = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
   const crypto = await import('node:crypto');
   const expectedFp = `sha256:${crypto.createHash('sha256').update(expectedMirrorContent).digest('hex')}`;
   assert.equal(stateAfter.managedSkillMirrors?.['.claude/skills/tester/SKILL.md']?.fingerprint, expectedFp);
@@ -851,7 +947,7 @@ test('sync rejects invalid SemVer kitVersion in state', async () => {
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
-  const statePath = path.join(root, '.drakom-ai', 'state.json');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   state.kitVersion = '1.0';
   await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');

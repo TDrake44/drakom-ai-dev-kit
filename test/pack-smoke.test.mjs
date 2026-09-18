@@ -9,6 +9,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { DRAKOM_DIR } from '../dist/constants.js';
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OFFLINE_REGISTRY = 'http://127.0.0.1:9';
 
@@ -224,12 +226,11 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('payload/v1/templates/mcp-servers.yaml'), 'mcp template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/rules.README.md'), 'rules README template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/specs.README.md'), 'specs README template missing');
-  assert.ok(packedPaths.includes('scripts/generate-mcp-configs.mjs'), 'mcp generator missing');
-  assert.ok(packedPaths.includes('scripts/sync-skill-mirrors.mjs'), 'skills generator missing');
 
   // Must EXCLUDE development-only and source files:
   for (const item of packedPaths) {
     assert.equal(item.startsWith('src/'), false, `Source file ${item} must not be packed`);
+    assert.equal(item.startsWith('scripts/'), false, `Script file ${item} must not be packed`);
     assert.equal(item.startsWith('test/'), false, `Test file ${item} must not be packed`);
     assert.equal(item.startsWith('.github/'), false, `CI file ${item} must not be packed`);
     assert.equal(item.startsWith('.ai/'), false, `.ai file ${item} must not be packed`);
@@ -345,9 +346,9 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     assert.equal(initRes.status, 0, initRes.stderr);
     assert.match(initRes.stdout, /Ask your coding agent to use \$drakom-ai-setup/);
     assert.equal(await readFile(path.join(consumer, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
-    assert.equal(await readFile(path.join(consumer, '.drakom-ai', 'mcp-servers.yaml'), 'utf8'), 'servers: {}\n');
+    assert.equal(await readFile(path.join(consumer, DRAKOM_DIR, 'mcp-servers.yaml'), 'utf8'), 'servers: {}\n');
 
-    const state = JSON.parse(await readFile(path.join(consumer, '.drakom-ai', 'state.json'), 'utf8'));
+    const state = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
     assert.equal(state.schemaVersion, 1);
     assert.equal(state.kitVersion, '0.1.0');
     assert.ok(state.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md']);
@@ -485,7 +486,7 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const oldAssessmentFp = sha256(oldAssessmentContent);
 
     // Setup v0.0.9 state and managed files
-    await mkdir(path.join(consumer, '.drakom-ai'), { recursive: true });
+    await mkdir(path.join(consumer, DRAKOM_DIR), { recursive: true });
     await mkdir(path.join(consumer, '.agents', 'skills', 'drakom-ai-setup', 'references'), { recursive: true });
 
     await writeFile(
@@ -498,8 +499,8 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
       oldAssessmentContent,
       'utf8',
     );
-    await writeFile(path.join(consumer, '.drakom-ai', 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
-    await writeFile(path.join(consumer, '.drakom-ai', '.gitignore'), 'plans/*\nassets/*\n', 'utf8');
+    await writeFile(path.join(consumer, DRAKOM_DIR, 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
+    await writeFile(path.join(consumer, DRAKOM_DIR, '.gitignore'), 'plans/*\nassets/*\n', 'utf8');
     await writeFile(path.join(consumer, 'AGENTS.md'), '<!-- drakom-ai:start -->\n## Drakom AI\n<!-- drakom-ai:end -->\n', 'utf8');
     await writeFile(path.join(consumer, 'CLAUDE.md'), '@AGENTS.md\n', 'utf8');
 
@@ -520,7 +521,7 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
       managedBlocks: {},
       managedMcpServers: {},
     };
-    await writeFile(path.join(consumer, '.drakom-ai', 'state.json'), JSON.stringify(v009State, null, 2), 'utf8');
+    await writeFile(path.join(consumer, DRAKOM_DIR, 'state.json'), JSON.stringify(v009State, null, 2), 'utf8');
 
     // 1. sync --check detects drift because v0.0.9 is older than CLI payload v0.1.0
     const checkRes = runDrakom(['sync', '.', '--check']);
@@ -547,7 +548,7 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     assert.match(newSkillContent, /languages, manifests, package managers/i);
 
     // State updated to v0.1.0 and new fingerprint recorded
-    const updatedState = JSON.parse(await readFile(path.join(consumer, '.drakom-ai', 'state.json'), 'utf8'));
+    const updatedState = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
     assert.equal(updatedState.kitVersion, '0.1.0');
     assert.equal(updatedState.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md'].fingerprint, sha256(newSkillContent));
 
