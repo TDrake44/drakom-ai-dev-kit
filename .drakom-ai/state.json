@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kitVersion": "0.1.0",
+  "features": {
+    "mcp": true,
+    "skillMirrors": true
+  },
+  "managedFiles": {
+    ".agents/skills/drakom-ai-setup/SKILL.md": {
+      "source": "skills/drakom-ai-setup/SKILL.md",
+      "fingerprint": "sha256:e38ef1002406b2bc963c9a799070bf148ccb1fdde36280b6bb53731a9a151ba4"
+    },
+    ".agents/skills/drakom-ai-setup/references/assessment-plan-template.md": {
+      "source": "skills/drakom-ai-setup/references/assessment-plan-template.md",
+      "fingerprint": "sha256:2b97038729db7066736680a451b84442d3725bea6b777f617ccdfbd49b7bf37f"
+    }
+  },
+  "managedMcpServers": {},
+  "managedBlocks": {
+    "AGENTS.md#drakom-ai": {
+      "fingerprint": "sha256:8457fae8a5c90b639529da4799771c559abb1fbc963903928873f09387163c0e"
+    }
+  },
+  "managedSkillMirrors": {
+    ".claude/skills/dev/SKILL.md": {
+      "fingerprint": "sha256:502197d1b9c628b3e82a2035df6c4711a5992d2e957793518e1266d13ad7bddd"
+    },
+    ".claude/skills/document/SKILL.md": {
+      "fingerprint": "sha256:b0633308650f19c71bdc9994b0b4483141b61618b21bdc03f6afe52ec6546be4"
+    },
+    ".claude/skills/drakom-ai-setup/SKILL.md": {
+      "fingerprint": "sha256:34d2f805982889186df61a05eafaae4364c7000a3066338e92a5c0d30998833b"
+    },
+    ".claude/skills/plan/SKILL.md": {
+      "fingerprint": "sha256:e9add1febffc486c57ced14b81bce6fc372552d9ef17991378a80139f1e26495"
+    },
+    ".claude/skills/pr-review/SKILL.md": {
+      "fingerprint": "sha256:cb08ee476662556eddd358ff7b1dc362681ee2a062767eee0190d304812fb747"
+    }
+  }
+}

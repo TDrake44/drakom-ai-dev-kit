@@ -767,6 +767,54 @@ args = ["mcp-server-fetch"]
   assert.ok(state?.managedMcpServers.fetch);
 });
 
+test('sync preserves legacy Codex blueprint block byte-for-byte when no servers are managed by Drakom AI', async () => {
+  const root = await createInitializedMcpFixture();
+  // Synchronize initial setup skill mirror so fixture is in a clean, drift-free state
+  const initialSync = runMcpCli(root, 'sync');
+  assert.equal(initialSync.status, 0, initialSync.stderr);
+
+  await mkdir(path.join(root, '.codex'), { recursive: true });
+  const initialCodex = `# Global Codex configuration
+model = "o3-mini"
+
+# BEGIN AI Framework Blueprint MCP servers
+[mcp_servers.legacy_blueprint_server]
+command = "node"
+args = ["legacy-server.js"]
+# END AI Framework Blueprint MCP servers
+`;
+  await writeFile(path.join(root, '.codex', 'config.toml'), initialCodex, 'utf8');
+
+  // Ensure .drakom-ai/mcp-servers.yaml has no generated servers
+  await writeFile(path.join(root, '.drakom-ai', 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
+  const stateBefore = await loadState(root);
+  assert.deepEqual(stateBefore?.managedMcpServers, {});
+
+  // 1. sync --check exits successfully without reporting drift
+  const checkResult = runMcpCli(root, 'sync', ['--check']);
+  assert.equal(checkResult.status, 0, checkResult.stderr);
+  assert.match(checkResult.stdout, /PRESERVE \.codex\/config\.toml/);
+  assert.doesNotMatch(checkResult.stdout, /Drift detected/);
+
+  // 2. sync exits cleanly and leaves legacy block and file byte-for-byte unchanged
+  const syncResult = runMcpCli(root, 'sync');
+  assert.equal(syncResult.status, 0, syncResult.stderr);
+  assert.match(syncResult.stdout, /PRESERVE \.codex\/config\.toml/);
+
+  const codexAfter = await readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+  assert.equal(codexAfter, initialCodex, 'Legacy Codex config must remain byte-for-byte identical');
+
+  // 3. Verify unrelated configuration and legacy block contents are intact
+  assert.match(codexAfter, /model = "o3-mini"/);
+  assert.match(codexAfter, /BEGIN AI Framework Blueprint MCP servers/);
+  assert.match(codexAfter, /\[mcp_servers\.legacy_blueprint_server\]/);
+  assert.match(codexAfter, /END AI Framework Blueprint MCP servers/);
+
+  // 4. Managed state remains empty
+  const stateAfter = await loadState(root);
+  assert.deepEqual(stateAfter?.managedMcpServers, {});
+});
+
 test('sync strictly validates MCP registry schema and rejects invalid shapes before generation', async () => {
   const invalidConfigs = [
     { source: 'servers:\n  bad:\n    args: [42]\n', error: /command or http/i },

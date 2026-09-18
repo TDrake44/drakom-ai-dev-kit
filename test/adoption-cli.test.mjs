@@ -473,7 +473,7 @@ test('sync handles Claude skill mirrors, preserves Claude-only skills, and remov
 
   const staleDir = path.join(root, '.claude', 'skills', 'old-skill');
   await mkdir(staleDir, { recursive: true });
-  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
+  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
   const staleContent = `${notice}\n\n# Old Skill\n`;
   await writeFile(
     path.join(staleDir, 'SKILL.md'),
@@ -755,7 +755,7 @@ test('sync reports conflict and makes zero writes when an unrecorded Claude skil
     'utf8',
   );
 
-  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
+  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
   const mirrorDir = path.join(root, '.claude', 'skills', 'tester');
   await mkdir(mirrorDir, { recursive: true });
   await writeFile(
@@ -784,7 +784,7 @@ test('sync cleanly adopts an unrecorded Claude skill mirror when its content mat
   const canonicalContent = '---\nname: tester\n---\n\n# Canonical Tester\n';
   await writeFile(path.join(canonicalDir, 'SKILL.md'), canonicalContent, 'utf8');
 
-  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
+  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
   const mirrorDir = path.join(root, '.claude', 'skills', 'tester');
   await mkdir(mirrorDir, { recursive: true });
   const frontmatter = canonicalContent.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
@@ -811,7 +811,7 @@ test('sync reports conflict and makes zero writes when a stale Claude skill mirr
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
-  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
+  const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
   const staleDir = path.join(root, '.claude', 'skills', 'stale-skill');
   await mkdir(staleDir, { recursive: true });
   await writeFile(
@@ -885,75 +885,4 @@ test('SemVer compareVersions adheres to SemVer 2.0.0 precedence', () => {
   assert.throws(() => compareVersions('1.0.0', '1.0.0-01'), /Invalid SemVer/);
   assert.throws(() => compareVersions('v1.0.0', '1.0.0'), /Invalid SemVer/);
   assert.throws(() => compareVersions('1.0.0.0', '1.0.0'), /Invalid SemVer/);
-});
-
-test('sync cleanly adopts and migrates an unrecorded Claude skill mirror that uses legacy notice', async () => {
-  const root = await createFixture();
-  spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
-
-  const canonicalDir = path.join(root, '.agents', 'skills', 'tester');
-  await mkdir(canonicalDir, { recursive: true });
-  const canonicalContent = '---\nname: tester\n---\n\n# Canonical Tester\n';
-  await writeFile(path.join(canonicalDir, 'SKILL.md'), canonicalContent, 'utf8');
-
-  const legacyNotice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm run skills:sync" to update. -->';
-  const mirrorDir = path.join(root, '.claude', 'skills', 'tester');
-  await mkdir(mirrorDir, { recursive: true });
-  const frontmatter = canonicalContent.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
-  assert(frontmatter);
-  const legacyMirrorContent = `${frontmatter}\n${legacyNotice}\n\n${canonicalContent.slice(frontmatter.length)}`;
-  await writeFile(path.join(mirrorDir, 'SKILL.md'), legacyMirrorContent, 'utf8');
-
-  const stateBefore = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
-  assert.equal(stateBefore.managedSkillMirrors?.['.claude/skills/tester/SKILL.md'], undefined);
-
-  const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  });
-
-  assert.equal(syncResult.status, 0, syncResult.stderr);
-
-  // Verifies that the mirror on disk has been migrated to the modern notice
-  const modernMirror = await readFile(path.join(mirrorDir, 'SKILL.md'), 'utf8');
-  assert.match(modernMirror, /Run "pnpm skills:sync"/);
-  assert.doesNotMatch(modernMirror, /Run "pnpm run skills:sync"/);
-
-  // Verifies that state records the migrated mirror fingerprint
-  const stateAfter = JSON.parse(await readFile(path.join(root, '.drakom-ai', 'state.json'), 'utf8'));
-  const crypto = await import('node:crypto');
-  const expectedFp = `sha256:${crypto.createHash('sha256').update(modernMirror).digest('hex')}`;
-  assert.equal(stateAfter.managedSkillMirrors?.['.claude/skills/tester/SKILL.md']?.fingerprint, expectedFp);
-});
-
-test('sync reports conflict and makes zero writes when an unrecorded legacy Claude skill mirror has local edits', async () => {
-  const root = await createFixture();
-  spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
-
-  const canonicalDir = path.join(root, '.agents', 'skills', 'tester');
-  await mkdir(canonicalDir, { recursive: true });
-  await writeFile(
-    path.join(canonicalDir, 'SKILL.md'),
-    '---\nname: tester\n---\n\n# Canonical Tester\n',
-    'utf8',
-  );
-
-  const legacyNotice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm run skills:sync" to update. -->';
-  const mirrorDir = path.join(root, '.claude', 'skills', 'tester');
-  await mkdir(mirrorDir, { recursive: true });
-  await writeFile(
-    path.join(mirrorDir, 'SKILL.md'),
-    `---\nname: tester\n---\n${legacyNotice}\n\n# Locally edited legacy unrecorded mirror\n`,
-    'utf8',
-  );
-
-  const before = await snapshot(root);
-  const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-  });
-
-  assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/tester\/SKILL\.md.*unrecorded and does not match expected content/i);
-  assert.deepEqual(await snapshot(root), before);
 });

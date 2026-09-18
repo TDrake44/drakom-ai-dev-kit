@@ -5,8 +5,7 @@ const isCheck = process.argv.includes('--check');
 const rootDir = process.cwd();
 const skillsSourceDir = path.join(rootDir, '.agents', 'skills');
 const claudeSkillsDir = path.join(rootDir, '.claude', 'skills');
-const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
-const legacyNotice = notice.replace('pnpm skills:sync', 'pnpm run skills:sync');
+const notice = '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
 
 if (!fs.existsSync(skillsSourceDir)) {
   console.error(`Missing skills directory: ${skillsSourceDir}`);
@@ -32,7 +31,7 @@ const canonicalSkills = skillDirs
 function isGeneratedMirrorContent(content) {
   const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
   const body = frontmatter ? content.slice(frontmatter.length).replace(/^(?:\r?\n)*/, '') : content;
-  return [notice, legacyNotice].some((marker) => body === marker || body.startsWith(`${marker}\n`) || body.startsWith(`${marker}\r\n`));
+  return body === notice || body.startsWith(`${notice}\n`) || body.startsWith(`${notice}\r\n`);
 }
 
 /** @param {string} content */
@@ -106,6 +105,6 @@ if (fs.existsSync(claudeSkillsDir)) {
 }
 
 if (isCheck && hasDrift) {
-  console.error('\nSkill mirror drift detected. Run "pnpm skills:sync" to synchronize mirrors.');
+  console.error('\nSkill mirror drift detected. Run "drakom-ai sync ." through your package runner to synchronize mirrors.');
   process.exit(1);
 }

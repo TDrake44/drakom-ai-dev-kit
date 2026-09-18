@@ -3,7 +3,7 @@ name: dev
 description: Implementation driver executing features and bug fixes using Test-Driven Development loops against established plans and rules.
 ---
 
-<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->
+<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->
 
 
 # Dev Skill

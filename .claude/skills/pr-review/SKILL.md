@@ -3,7 +3,7 @@ name: pr-review
 description: Code review and quality gate verifying local changes against repository rules and safety constraints.
 ---
 
-<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->
+<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->
 
 
 # PR Review Skill

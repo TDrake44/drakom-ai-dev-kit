@@ -1,10 +1,17 @@
 {
-  "name": "drakom-ai-dev-kit",
+  "name": "@drakom/ai-dev-kit",
   "version": "0.1.0",
   "description": "An opinionated, vendor-neutral starter kit for structured AI-assisted development",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "type": "module",
+  "files": [
+    "dist",
+    "payload",
+    "scripts"
+  ],
   "bin": {
     "drakom-ai": "dist/cli.js"
   },
@@ -13,25 +20,31 @@
   },
   "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"import('node:fs/promises').then(f=>f.chmod('dist/cli.js',0o755))\"",
     "lint": "pnpm build && eslint .",
     "lint:fix": "pnpm build && eslint . --fix",
     "prepack": "pnpm build",
     "typecheck": "pnpm build && tsc -p jsconfig.json",
-    "test": "pnpm build && node --test",
+    "test:unit": "node --test test/adoption-cli.test.mjs test/mcp-adoption.test.mjs test/generate-mcp-configs.test.mjs test/sync-skill-mirrors.test.mjs",
+    "test:smoke": "node --test test/pack-smoke.test.mjs",
+    "test": "pnpm build && pnpm run test:unit && pnpm run test:smoke",
+    "sync": "pnpm build && node dist/cli.js sync .",
+    "sync:check": "pnpm build && node dist/cli.js sync . --check",
     "mcp:gen": "node scripts/generate-mcp-configs.mjs",
     "mcp:check": "node scripts/generate-mcp-configs.mjs --check",
     "skills:sync": "node scripts/sync-skill-mirrors.mjs",
     "skills:check": "node scripts/sync-skill-mirrors.mjs --check",
     "verify:ai": "pnpm run mcp:check && pnpm run skills:check"
   },
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "smol-toml": "^1.8.0"
+  },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.43",
     "@types/punycode": "^2.1.4",
     "eslint": "^10.10.0",
-    "js-yaml": "^4.1.0",
-    "smol-toml": "^1.8.0",
     "typescript": "^7.0.2"
   }
 }

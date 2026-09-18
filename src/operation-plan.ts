@@ -17,9 +17,7 @@ Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
 <!-- drakom-ai:end -->`;
 
 export const NOTICE =
-  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->';
-export const LEGACY_NOTICE =
-  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm run skills:sync" to update. -->';
+  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->';
 
 export type OperationAction =
   | 'mkdir'
@@ -54,9 +52,7 @@ export function fingerprint(content: string): string {
 export function isGeneratedMirrorContent(content: string): boolean {
   const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
   const body = frontmatter ? content.slice(frontmatter.length).replace(/^(?:\r?\n)*/, '') : content;
-  return [NOTICE, LEGACY_NOTICE].some(
-    (marker) => body === marker || body.startsWith(`${marker}\n`) || body.startsWith(`${marker}\r\n`),
-  );
+  return body === NOTICE || body.startsWith(`${NOTICE}\n`) || body.startsWith(`${NOTICE}\r\n`);
 }
 
 export function createMirrorContent(content: string, noticeMarker: string = NOTICE): string {
@@ -411,9 +407,7 @@ export function buildSyncPlan(
             continue;
           }
         } else {
-          const legacyExpectedContent = createMirrorContent(skill.content, LEGACY_NOTICE);
-          const isExactMatch =
-            currentTargetContent === expectedContent || currentTargetContent === legacyExpectedContent;
+          const isExactMatch = currentTargetContent === expectedContent;
           if (!isExactMatch) {
             operations.push({
               action: 'conflict',

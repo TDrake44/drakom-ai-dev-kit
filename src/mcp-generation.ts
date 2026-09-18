@@ -392,9 +392,23 @@ function prepareCodexTarget(
     return { operations, targetFingerprints };
   }
 
-  // If there are no servers to generate and file didn't exist or has no block, don't generate
-  if (Object.keys(generatedServers).length === 0 && !extracted && !targetExists) {
-    return { operations, targetFingerprints };
+  // If there are no servers to generate and no previously managed servers:
+  // - If target doesn't exist, do not create it.
+  // - If target exists without a managed block, or only has a legacy blueprint block, leave it preserved.
+  if (
+    Object.keys(generatedServers).length === 0 &&
+    Object.keys(state.managedMcpServers).length === 0
+  ) {
+    if (!targetExists || !extracted || extracted.startMarker === LEGACY_CODEX_BLOCK_START) {
+      if (targetExists) {
+        operations.push({
+          action: 'preserve',
+          path: targetPath,
+          summary: `MCP client configuration ${targetPath} is up to date.`,
+        });
+      }
+      return { operations, targetFingerprints };
+    }
   }
 
   let generatedBlockBody = '';

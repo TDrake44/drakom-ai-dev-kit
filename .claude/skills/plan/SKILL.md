@@ -3,7 +3,7 @@ name: plan
 description: Intake ticket or prompt, inspect codebase, and draft a structured plan without modifying implementation code.
 ---
 
-<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->
+<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->
 
 
 # Plan Skill

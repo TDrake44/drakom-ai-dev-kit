@@ -23,8 +23,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm build
+
       - name: Verify AI tool configurations
         run: pnpm verify:ai
+
+      - name: Verify packaged CLI synchronization
+        run: pnpm sync:check
 
       - name: Lint
         run: pnpm lint

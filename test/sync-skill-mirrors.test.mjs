@@ -9,9 +9,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scriptPath = path.join(repositoryRoot, 'scripts', 'sync-skill-mirrors.mjs');
 const generatedNotice =
-  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm skills:sync" to update. -->\n\n';
-const legacyGeneratedNotice =
-  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "pnpm run skills:sync" to update. -->\n\n';
+  '<!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->\n\n';
 
 async function createFixture() {
   const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-skills-'));
@@ -43,24 +41,12 @@ test('creates mirrors with YAML frontmatter first and detects subsequent drift',
   const mirror = await readFile(mirrorPath, 'utf8');
   assert.match(mirror, /^---\nname: review\ndescription: Review changes\.\n---\n/);
   assert.match(mirror, /---\n\n<!-- GENERATED MIRROR/);
+  assert.match(mirror, /Run "drakom-ai sync \."/);
   await writeFile(mirrorPath, mirror.replace('# Review', '# Changed review'), 'utf8');
 
   const result = runSync(fixtureRoot, '--check');
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Skill mirror out of sync/);
-});
-
-test('migrates legacy generated notices that use pnpm run wording', async () => {
-  const fixtureRoot = await createFixture();
-  const mirrorPath = path.join(fixtureRoot, '.claude', 'skills', 'review', 'SKILL.md');
-  await mkdir(path.dirname(mirrorPath), { recursive: true });
-  await writeFile(mirrorPath, `${legacyGeneratedNotice}# Old review\n`, 'utf8');
-
-  const result = runSync(fixtureRoot);
-  assert.equal(result.status, 0, result.stderr);
-  const mirror = await readFile(mirrorPath, 'utf8');
-  assert.match(mirror, /^---\nname: review/);
-  assert.match(mirror, /Run "pnpm skills:sync"/);
 });
 
 test('refuses a hand-authored same-name skill before making any mutations', async () => {
