@@ -53,6 +53,7 @@ test('CI uses the supported Node 24 LTS toolchain and exposes the sole verify ga
     'the legacy duplicate verify workflow must be removed',
   );
   assert.ok(job, 'CI must expose the required verify job');
+  assert.equal(workflow.permissions.contents, 'read');
   assert.equal(
     'version' in (findStep(workflow, 'Setup pnpm').with ?? {}),
     false,
