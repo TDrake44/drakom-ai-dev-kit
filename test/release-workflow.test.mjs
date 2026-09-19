@@ -53,7 +53,11 @@ test('CI uses the supported Node 24 LTS toolchain and exposes the sole verify ga
     'the legacy duplicate verify workflow must be removed',
   );
   assert.ok(job, 'CI must expose the required verify job');
-  assert.equal(findStep(workflow, 'Setup pnpm').with?.version, 10);
+  assert.equal(
+    'version' in (findStep(workflow, 'Setup pnpm').with ?? {}),
+    false,
+    'pnpm/action-setup must use the packageManager version from package.json',
+  );
   assert.equal(findStep(workflow, 'Setup Node.js 24').with?.['node-version'], 24);
 });
 
@@ -63,7 +67,11 @@ test('release uses Changesets v3 automation and npm OIDC trusted publishing', as
   const step = findStep(workflow, 'Create Draft Release Pull Request or Publish');
 
   assert.equal(job.if, "vars.RELEASE_AUTOMATION_ENABLED == 'true'");
-  assert.equal(findStep(workflow, 'Setup pnpm').with?.version, 10);
+  assert.equal(
+    'version' in (findStep(workflow, 'Setup pnpm').with ?? {}),
+    false,
+    'pnpm/action-setup must use the packageManager version from package.json',
+  );
   assert.equal(findStep(workflow, 'Setup Node.js 24').with?.['node-version'], 24);
   assert.equal(step.uses, 'changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51');
   assert.equal(step.with?.['publish-script'], 'pnpm changeset publish');
