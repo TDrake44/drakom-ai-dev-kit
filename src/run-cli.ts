@@ -1,4 +1,5 @@
 import { parseCliArgs } from './cli-arguments.js';
+import { renderCliHelp } from './cli-help.js';
 import { applyPlan } from './apply-plan.js';
 import { DRAKOM_DIR } from './constants.js';
 import { inspectTarget } from './inspect-target.js';
@@ -20,6 +21,11 @@ export interface CliIo {
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
   try {
     const args = parseCliArgs(argv);
+    if (args.command === 'help') {
+      io.stdout.write(renderCliHelp(args.topic));
+      return 0;
+    }
+
     if (args.command === 'init') {
       const inventory = await inspectTarget(args.targetPath);
       const payload = await loadPackagePayload();

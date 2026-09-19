@@ -597,6 +597,17 @@ test('npm install installs packed artifact and provides additional runtime cover
     const binPath = path.join(consumer, 'node_modules', '.bin', 'drakom-ai');
     await access(binPath);
 
+    const helpRes = spawnSync(binPath, ['--help'], {
+      cwd: consumer,
+      env: {
+        ...process.env,
+        npm_config_cache: harness.npmCacheDir,
+      },
+      encoding: 'utf8',
+    });
+    assert.equal(helpRes.status, 0, helpRes.stderr);
+    assert.match(helpRes.stdout, /Usage: drakom-ai <command>/);
+
     const initRes = spawnSync(binPath, ['init', '.', '--yes'], {
       cwd: consumer,
       env: {
