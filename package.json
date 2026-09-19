@@ -1,6 +1,6 @@
 {
   "name": "@drakom/ai-dev-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An opinionated, vendor-neutral starter kit for structured AI-assisted development",
   "publishConfig": {
     "access": "public"
