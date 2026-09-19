@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- 4e193b6: Add global and command-specific CLI help output.
+
 All notable changes to this project are documented in this file.
 
 ## [0.1.0] - 2026-09-19
