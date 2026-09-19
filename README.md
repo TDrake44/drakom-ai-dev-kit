@@ -1,5 +1,10 @@
 # Drakom AI Dev Kit
 
+[![npm version](https://img.shields.io/npm/v/@drakom/ai-dev-kit?style=flat-square&color=cb3837)](https://www.npmjs.com/package/@drakom/ai-dev-kit)
+[![npm downloads](https://img.shields.io/npm/dm/@drakom/ai-dev-kit?style=flat-square)](https://www.npmjs.com/package/@drakom/ai-dev-kit)
+[![CI](https://img.shields.io/github/actions/workflow/status/TDrake44/drakom-ai-dev-kit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/TDrake44/drakom-ai-dev-kit/actions)
+[![license](https://img.shields.io/npm/l/@drakom/ai-dev-kit?style=flat-square)](LICENSE)
+
 > A portable, tool-agnostic workflow system for high-leverage AI development.
 
 I built this workflow for my own hobby development. Between a full-time job and family life, my time for personal projects is precious. AI assistants make it possible for me to keep building and shipping, but managing setup, context, and prompt drift across tools was eating into my limited coding hours.
@@ -189,7 +194,8 @@ pnpm sync:check
 
 ## Requirements
 
-- Node.js >= 20.19.0
+- Package users: Node.js >= 24.
+- Contributors and release automation require Node.js 24 LTS. Use `.nvmrc` with a compatible version manager; Changesets v3 requires Node.js >= 22.11.0.
 - pnpm >= 10.15.0
 
 ## License
