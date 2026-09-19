@@ -88,14 +88,14 @@ test('workflows use immutable third-party action revisions', async () => {
   const release = await readWorkflow('release.yml');
 
   assert.deepEqual(actionReferences(ci), [
-    'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
-    'pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa',
-    'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413',
+    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
   ]);
   assert.deepEqual(actionReferences(release), [
-    'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
-    'pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa',
-    'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+    'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    'pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413',
+    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020',
     'changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51',
   ]);
 });
