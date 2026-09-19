@@ -162,6 +162,9 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 
 | Command | Effect |
 | --- | --- |
+| `drakom-ai --help` | Show command usage and available subcommands. |
+| `drakom-ai init --help` | Show initialization options without inspecting or changing the target. |
+| `drakom-ai sync --help` | Show synchronization options without inspecting or changing the target. |
 | `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
 | `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
 | `drakom-ai init [path] --yes` | Apply create-only initialization without a prompt; it refuses structured merges into existing entry points. |

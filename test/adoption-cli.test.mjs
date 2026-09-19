@@ -12,6 +12,7 @@ import { inspectTarget } from '../dist/inspect-target.js';
 import { buildInitPlan } from '../dist/operation-plan.js';
 import { loadPackagePayload } from '../dist/package-payload.js';
 import { renderPlan } from '../dist/render-plan.js';
+import { runCli } from '../dist/run-cli.js';
 import { compareVersions, loadState } from '../dist/state.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -76,6 +77,46 @@ test('parses the documented init and sync command surfaces', () => {
   assert.throws(() => parseCliArgs(['init', '--check']), /--check.*sync/);
   assert.throws(() => parseCliArgs(['sync', '--yes']), /--yes.*init/);
   assert.throws(() => parseCliArgs(['unknown']), /Expected "init" or "sync"/);
+});
+
+test('parses global and command-specific help without requiring a target path', () => {
+  assert.deepEqual(parseCliArgs(['--help']), { command: 'help', topic: 'global' });
+  assert.deepEqual(parseCliArgs(['-h']), { command: 'help', topic: 'global' });
+  assert.deepEqual(parseCliArgs(['init', '--help']), { command: 'help', topic: 'init' });
+  assert.deepEqual(parseCliArgs(['sync', '-h']), { command: 'help', topic: 'sync' });
+  assert.deepEqual(parseCliArgs(['init', '.', '--help']), { command: 'help', topic: 'init' });
+});
+
+test('renders help successfully before inspecting targets or prompting', async () => {
+  /** @type {string[]} */
+  const stdout = [];
+  /** @type {string[]} */
+  const stderr = [];
+  const result = await runCli(['init', '\0', '--help'], {
+    stdout: { write: (content) => (stdout.push(content), true) },
+    stderr: { write: (content) => (stderr.push(content), true) },
+    confirm: async () => {
+      throw new Error('help must not prompt');
+    },
+  });
+
+  assert.equal(result, 0);
+  assert.equal(stderr.join(''), '');
+  assert.match(stdout.join(''), /Usage: drakom-ai init \[path\]/);
+  assert.match(stdout.join(''), /--skip-mcp/);
+});
+
+test('the compiled executable prints global help and exits successfully', () => {
+  const result = spawnSync(process.execPath, [cliPath, '--help'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Usage: drakom-ai <command>/);
+  assert.match(result.stdout, /init/);
+  assert.match(result.stdout, /sync/);
+  assert.equal(result.stderr, '');
 });
 
 test('inventories existing AI context and MCP targets', async () => {
