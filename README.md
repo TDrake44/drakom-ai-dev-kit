@@ -33,7 +33,7 @@ Drakom is an independently maintained open-source project brand.
 
 ## Quick Start
 
-Use a one-time invocation to evaluate Drakom without adding it to the project:
+Use a one-time invocation to evaluate Drakom AI Dev Kit without adding it to the project:
 
 ```bash
 # Using npx or pnpm dlx
@@ -121,7 +121,7 @@ them.
 
 ## Managed and Project-Owned Content
 
-| Managed by Drakom | Owned by the project |
+| Managed by Drakom AI Dev Kit | Owned by the project |
 | --- | --- |
 | Setup skill installed by `init` | Rules in `.drakom-ai/rules/` |
 | The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
@@ -143,7 +143,7 @@ into these repository-local client files:
 - `.agents/mcp_config.json` for Antigravity CLI
 - `.codex/config.toml` for OpenAI Codex CLI
 
-During initialization, Drakom compares discovered repository-local MCP
+During initialization, Drakom AI Dev Kit compares discovered repository-local MCP
 configuration with the registry. It preserves unmanaged definitions and asks
 for an explicit decision before adopting a non-identical server. Use
 `--skip-mcp` if the project should not initialize MCP management.
@@ -156,7 +156,7 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 
 - **Native Tool Support**: Recognized natively by **Claude Code** and **OpenAI Codex CLI** to automatically copy specified gitignored files into newly created worktree directories.
 - **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), custom checkout hooks, and Antigravity workspace runners.
-- **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom drift warnings.
+- **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom AI Dev Kit drift warnings.
 
 ## CLI Reference
 
