@@ -1,6 +1,6 @@
 {
   "name": "@drakom/ai-dev-kit",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "An opinionated, vendor-neutral starter kit for structured AI-assisted development",
   "publishConfig": {
     "access": "public"
@@ -43,7 +43,7 @@
     "lint:fix": "pnpm build && eslint . --fix",
     "prepack": "pnpm build",
     "changeset": "changeset",
-    "version-packages": "changeset version && node scripts/sync-payload-version.mjs",
+    "version-packages": "changeset version && node scripts/sync-payload-version.mjs && pnpm sync",
     "typecheck": "pnpm build && tsc -p jsconfig.json",
     "test:unit": "node --test test/adoption-cli.test.mjs test/mcp-adoption.test.mjs test/release-workflow.test.mjs",
     "test:smoke": "node --test test/pack-smoke.test.mjs",

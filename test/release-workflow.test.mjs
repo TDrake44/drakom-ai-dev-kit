@@ -91,12 +91,14 @@ test('release uses Changesets v3 automation and npm OIDC trusted publishing', as
 test('release versioning keeps the packaged payload version aligned with the package', async () => {
   const packageManifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
   const payloadManifest = JSON.parse(await readFile(new URL('payload/v1/payload.json', root), 'utf8'));
+  const installState = JSON.parse(await readFile(new URL('.drakom-ai/state.json', root), 'utf8'));
   const workflow = await readWorkflow('release.yml');
   const step = findStep(workflow, 'Create Draft Release Pull Request or Publish');
 
   assert.equal(payloadManifest.kitVersion, packageManifest.version);
+  assert.equal(installState.kitVersion, packageManifest.version);
   assert.equal(step.with?.['version-script'], 'pnpm version-packages');
-  assert.equal(packageManifest.scripts['version-packages'], 'changeset version && node scripts/sync-payload-version.mjs');
+  assert.equal(packageManifest.scripts['version-packages'], 'changeset version && node scripts/sync-payload-version.mjs && pnpm sync');
 
   const fixture = await mkdtemp(path.join(os.tmpdir(), 'drakom-version-'));
   try {

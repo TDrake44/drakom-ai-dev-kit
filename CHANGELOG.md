@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- 7fc1e3e: Offer an optional local `plan-audit` skill during initialization and in existing projects. Clarify the setup, development, and PR review skills. Keep the packaged kit version aligned with package releases so older CLIs cannot overwrite newer managed content.
+
 ## 0.1.1
 
 ### Patch Changes
