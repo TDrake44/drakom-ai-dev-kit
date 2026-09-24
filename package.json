@@ -43,7 +43,7 @@
     "lint:fix": "pnpm build && eslint . --fix",
     "prepack": "pnpm build",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-payload-version.mjs",
     "typecheck": "pnpm build && tsc -p jsconfig.json",
     "test:unit": "node --test test/adoption-cli.test.mjs test/mcp-adoption.test.mjs test/release-workflow.test.mjs",
     "test:smoke": "node --test test/pack-smoke.test.mjs",

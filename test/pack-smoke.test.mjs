@@ -14,6 +14,11 @@ import { DRAKOM_DIR } from '../dist/constants.js';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OFFLINE_REGISTRY = 'http://127.0.0.1:9';
 
+async function packageVersion() {
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+  return manifest.version;
+}
+
 /** @param {string} content */
 function sha256(content) {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`;
@@ -222,6 +227,7 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('dist/run-cli.js'), 'dist/run-cli.js missing');
   assert.ok(packedPaths.includes('payload/v1/payload.json'), 'payload manifest missing');
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
+  assert.ok(packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'), 'optional plan audit skill missing');
   assert.ok(packedPaths.includes('payload/v1/templates/drakom-ai.gitignore'), 'gitignore template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/mcp-servers.yaml'), 'mcp template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/rules.README.md'), 'rules README template missing');
@@ -350,12 +356,28 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
 
     const state = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
     assert.equal(state.schemaVersion, 1);
-    assert.equal(state.kitVersion, '0.1.0');
+    assert.equal(state.kitVersion, await packageVersion());
     assert.ok(state.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md']);
 
     // 4. Repeated initialization is idempotent
     const repeatInit = runDrakom(['init', '.', '--yes']);
     assert.equal(repeatInit.status, 0, repeatInit.stderr);
+
+    const optionalProject = path.join(consumer, 'optional-project');
+    await mkdir(optionalProject, { recursive: true });
+    const optionalInit = runDrakom(['init', optionalProject, '--yes', '--with-plan-audit']);
+    assert.equal(optionalInit.status, 0, optionalInit.stderr);
+    assert.match(optionalInit.stdout, /Ask your coding agent to use \$plan-audit/);
+    assert.match(
+      await readFile(path.join(optionalProject, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+      /classify\s+each plan/i,
+    );
+    const optionalSync = runDrakom(['sync', optionalProject]);
+    assert.equal(optionalSync.status, 0, optionalSync.stderr);
+    assert.match(
+      await readFile(path.join(optionalProject, '.claude', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+      /GENERATED MIRROR/,
+    );
 
     // 5. Before initial sync, sync --check reports drift because Claude mirror needs initial sync
     const initialCheck = runDrakom(['sync', '.', '--check']);
@@ -523,14 +545,14 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     };
     await writeFile(path.join(consumer, DRAKOM_DIR, 'state.json'), JSON.stringify(v009State, null, 2), 'utf8');
 
-    // 1. sync --check detects drift because v0.0.9 is older than CLI payload v0.1.0
+    // 1. sync --check detects drift because v0.0.9 is older than the current CLI payload.
     const checkRes = runDrakom(['sync', '.', '--check']);
     assert.notEqual(checkRes.status, 0, 'sync --check must report drift when prior version is installed');
 
     // 2. sync --dry-run previews updates
     const dryRes = runDrakom(['sync', '.', '--dry-run']);
     assert.equal(dryRes.status, 0, dryRes.stderr);
-    assert.match(dryRes.stdout, /Update managed file from kit version 0\.1\.0\./);
+    assert.ok(dryRes.stdout.includes(`Update managed file from kit version ${await packageVersion()}.`));
 
     // Old content still in place after dry-run
     assert.equal(
@@ -542,14 +564,14 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const syncRes = runDrakom(['sync', '.']);
     assert.equal(syncRes.status, 0, syncRes.stderr);
 
-    // Updated content matches current payload v0.1.0, not old content
+    // Updated content matches the current payload, not old content.
     const newSkillContent = await readFile(path.join(consumer, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'), 'utf8');
     assert.notEqual(newSkillContent, oldSkillContent);
     assert.match(newSkillContent, /languages, manifests, package managers/i);
 
-    // State updated to v0.1.0 and new fingerprint recorded
+    // State updated to the current version with a new fingerprint.
     const updatedState = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
-    assert.equal(updatedState.kitVersion, '0.1.0');
+    assert.equal(updatedState.kitVersion, await packageVersion());
     assert.equal(updatedState.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md'].fingerprint, sha256(newSkillContent));
 
     // Post-update sync --check passes clean

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
 const root = new URL('..', import.meta.url);
@@ -82,6 +86,35 @@ test('release uses Changesets v3 automation and npm OIDC trusted publishing', as
   assert.equal(step.with?.['push-git-tags'], true);
   assert.equal(workflow.permissions['id-token'], 'write');
   assert.equal('env' in step, false, 'trusted publishing must not use a long-lived npm token');
+});
+
+test('release versioning keeps the packaged payload version aligned with the package', async () => {
+  const packageManifest = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
+  const payloadManifest = JSON.parse(await readFile(new URL('payload/v1/payload.json', root), 'utf8'));
+  const workflow = await readWorkflow('release.yml');
+  const step = findStep(workflow, 'Create Draft Release Pull Request or Publish');
+
+  assert.equal(payloadManifest.kitVersion, packageManifest.version);
+  assert.equal(step.with?.['version-script'], 'pnpm version-packages');
+  assert.equal(packageManifest.scripts['version-packages'], 'changeset version && node scripts/sync-payload-version.mjs');
+
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'drakom-version-'));
+  try {
+    await mkdir(path.join(fixture, 'payload', 'v1'), { recursive: true });
+    await writeFile(path.join(fixture, 'package.json'), JSON.stringify({ version: '0.2.0' }));
+    await writeFile(path.join(fixture, 'payload', 'v1', 'payload.json'), JSON.stringify({ kitVersion: '0.1.0' }));
+
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('scripts/sync-payload-version.mjs', root))], {
+      cwd: fixture,
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const updated = JSON.parse(await readFile(path.join(fixture, 'payload', 'v1', 'payload.json'), 'utf8'));
+    assert.equal(updated.kitVersion, '0.2.0');
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test('workflows use immutable third-party action revisions', async () => {
