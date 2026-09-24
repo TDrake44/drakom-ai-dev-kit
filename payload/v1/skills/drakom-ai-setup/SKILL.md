@@ -50,7 +50,7 @@ Identical servers are adopted safely into `.drakom-ai/mcp-servers.yaml`. Conflic
 
 Ask focused questions only when repository evidence cannot resolve a choice that materially changes the recommendation, including which recurring workflows deserve skills. Do not ask the user to restate facts already present in the repository.
 
-Draft the adoption plan under `.drakom-ai/plans/` using [references/assessment-plan-template.md](references/assessment-plan-template.md). Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
+Draft the adoption plan under `.drakom-ai/plans/` using the template at the repository-root path `.agents/skills/drakom-ai-setup/references/assessment-plan-template.md`. Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
 
 ## Approval Gate
 

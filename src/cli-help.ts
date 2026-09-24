@@ -15,8 +15,9 @@ Preview and interactively approve project initialization. The default path is .
 
 Options:
   --dry-run   Render the initialization plan without making changes.
-  --yes       Apply create-only initialization without prompting.
+  --yes       Apply safe initialization without prompting; refuse structured merges.
   --skip-mcp  Initialize without MCP registry management.
+  --with-plan-audit  Install the optional local plan audit skill.
   -h, --help  Show this help message.
 `;
 

@@ -16,6 +16,7 @@ export interface CliIo {
   stdout: TextWriter;
   stderr: TextWriter;
   confirm?: () => Promise<boolean>;
+  selectPlanAudit?: () => Promise<boolean>;
 }
 
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
@@ -29,7 +30,29 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     if (args.command === 'init') {
       const inventory = await inspectTarget(args.targetPath);
       const payload = await loadPackagePayload();
-      const plan = buildInitPlan(inventory, { skipMcp: args.skipMcp }, payload);
+      if (
+        args.withPlanAudit &&
+        inventory.state !== null &&
+        compareVersions(inventory.state.kitVersion, payload.manifest.kitVersion) > 0
+      ) {
+        throw new Error(
+          `Target was initialized with kitVersion ${inventory.state.kitVersion}, which is newer than CLI kitVersion ${payload.manifest.kitVersion}; upgrade drakom-ai.`,
+        );
+      }
+      let withPlanAudit = args.withPlanAudit;
+      if (
+        !withPlanAudit &&
+        !args.yes &&
+        !args.dryRun &&
+        inventory.state === null &&
+        !inventory.hasDrakomDirectory &&
+        !inventory.paths.includes('.agents/skills/plan-audit/SKILL.md') &&
+        !inventory.paths.includes('.agents/skills/plan-audit/') &&
+        io.selectPlanAudit !== undefined
+      ) {
+        withPlanAudit = await io.selectPlanAudit();
+      }
+      const plan = buildInitPlan(inventory, { skipMcp: args.skipMcp, withPlanAudit }, payload);
       io.stdout.write(renderPlan(plan));
       if (!args.skipMcp) {
         const discovered = discoverMcp(inventory);
@@ -46,14 +69,14 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       }
 
       const mutations = plan.operations.filter(({ action }) =>
-        action === 'mkdir' || action === 'create' || action === 'merge',
+        action === 'mkdir' || action === 'create' || action === 'update' || action === 'merge',
       );
       if (mutations.length === 0) {
         io.stdout.write('Installation is already initialized; no changes made.\n');
         return 0;
       }
       if (args.yes && mutations.some(({ action }) => action === 'merge')) {
-        io.stderr.write('--yes authorizes create-only initialization; rerun interactively to approve structured merges.\n');
+        io.stderr.write('--yes cannot approve structured merges; rerun interactively to review them.\n');
         return 2;
       }
       if (!args.yes) {
@@ -64,8 +87,13 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       }
 
       const result = await applyPlan(plan);
-      io.stdout.write(`Applied ${result.created.length} creates and ${result.merged.length} structured merges.\n`);
+      io.stdout.write(
+        `Applied ${result.created.length} creates, ${result.updated.length} updates, and ${result.merged.length} structured merges.\n`,
+      );
       io.stdout.write('Ask your coding agent to use $drakom-ai-setup to assess this repository.\n');
+      if (withPlanAudit) {
+        io.stdout.write('Ask your coding agent to use $plan-audit to review local plans.\n');
+      }
       return 0;
     }
 

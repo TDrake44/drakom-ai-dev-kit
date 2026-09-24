@@ -67,6 +67,15 @@ test('parses the documented init and sync command surfaces', () => {
     dryRun: true,
     yes: true,
     skipMcp: true,
+    withPlanAudit: false,
+  });
+  assert.deepEqual(parseCliArgs(['init', '--with-plan-audit']), {
+    command: 'init',
+    targetPath: '.',
+    dryRun: false,
+    yes: false,
+    skipMcp: false,
+    withPlanAudit: true,
   });
   assert.deepEqual(parseCliArgs(['sync', '--check']), {
     command: 'sync',
@@ -194,6 +203,22 @@ test('builds and renders deterministic fresh-project plans', async () => {
   );
   assert.match(renderPlan(firstPlan), /CREATE .*drakom-ai-setup\/SKILL\.md/);
   assert.match(renderPlan(firstPlan), /PRESERVE .*existing files/i);
+  assert.equal(firstPlan.operations.some(({ path: value }) => value === '.agents/skills/plan-audit/SKILL.md'), false);
+});
+
+test('opt-in plan audit is included and recorded as kit-managed', async () => {
+  const root = await createFixture();
+  const inventory = await inspectTarget(root);
+  const payload = await loadPackagePayload();
+
+  assert.match(payload.files.planAuditSkill, /Audit or clean up/);
+  const plan = buildInitPlan(inventory, { skipMcp: false, withPlanAudit: true }, payload);
+  const skillOperation = plan.operations.find(({ path: value }) => value === '.agents/skills/plan-audit/SKILL.md');
+  const stateOperation = plan.operations.find(({ path: value }) => value === `${DRAKOM_DIR}/state.json`);
+
+  assert.equal(skillOperation?.action, 'create');
+  assert.match(skillOperation?.content ?? '', /uncertain plans still matter before deleting/i);
+  assert.match(stateOperation?.content ?? '', /plan-audit\/SKILL\.md/);
 });
 
 test('init --dry-run is deterministic and makes zero filesystem changes', async () => {
@@ -231,7 +256,14 @@ test('packages a complete approval-gated setup workflow and assessment template'
   const payload = await loadPackagePayload();
   const skill = payload.files.setupSkill;
   const assessment = payload.files.assessmentTemplate;
+  const sourceSetupSkill = await readFile(
+    path.join(repositoryRoot, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'),
+    'utf8',
+  );
+  const sourcePlanAuditSkill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8');
 
+  assert.equal(skill, sourceSetupSkill);
+  assert.equal(payload.files.planAuditSkill, sourcePlanAuditSkill);
   assert.match(skill, /languages, manifests, package managers/i);
   assert.match(skill, /keep.*refine.*add.*omit/is);
   assert.match(skill, /stable policy.*rule/is);
@@ -246,6 +278,7 @@ test('packages a complete approval-gated setup workflow and assessment template'
   assert.match(skill, /remove or revise.*stale.*route/is);
   assert.match(skill, /not.*globally.*load/is);
   assert.doesNotMatch(skill, /legacy|\.ai\//i);
+  assert.match(payload.manifest.files.planAuditSkill, /skills\/plan-audit\/SKILL\.md$/);
   assert.match(assessment, /## Keep/);
   assert.match(assessment, /## Refine/);
   assert.match(assessment, /## Add/);
@@ -300,6 +333,113 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   assert.deepEqual(await snapshot(root), afterFirst);
 });
 
+test('init asks before installing the optional plan-audit skill', async () => {
+  const root = await createFixture();
+  /** @type {string[]} */
+  const stdout = [];
+  let selected = 0;
+  const result = await runCli(['init', root], {
+    stdout: { write: (content) => (stdout.push(content), true) },
+    stderr: { write: () => true },
+    selectPlanAudit: async () => (selected += 1, true),
+    confirm: async () => true,
+  });
+
+  assert.equal(result, 0);
+  assert.equal(selected, 1);
+  assert.match(stdout.join(''), /\.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(
+    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    /classify\s+each plan/i,
+  );
+});
+
+test('init --yes --with-plan-audit installs the optional skill without prompting for selection', async () => {
+  const root = await createFixture();
+  const result = spawnSync(process.execPath, [cliPath, 'init', root, '--yes', '--with-plan-audit'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /\.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(
+    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    /classify\s+each plan/i,
+  );
+});
+
+test('init --yes --with-plan-audit adds the managed skill to an initialized project', async () => {
+  const root = await createFixture();
+  const initial = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(initial.status, 0, initial.stderr);
+
+  const optIn = spawnSync(process.execPath, [cliPath, 'init', root, '--yes', '--with-plan-audit'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(optIn.status, 0, optIn.stderr);
+  assert.match(optIn.stdout, /CREATE\s+\.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(optIn.stdout, /Ask your coding agent to use \$plan-audit/);
+  assert.match(
+    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    /classify\s+each plan/i,
+  );
+  const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
+  assert.ok(state.managedFiles['.agents/skills/plan-audit/SKILL.md']);
+});
+
+test('initialized plan-audit opt-in refuses to take ownership of an unmanaged skill', async () => {
+  const root = await createFixture();
+  const initial = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(initial.status, 0, initial.stderr);
+  const skillDirectory = path.join(root, '.agents', 'skills', 'plan-audit');
+  const skillPath = path.join(skillDirectory, 'SKILL.md');
+  await mkdir(skillDirectory, { recursive: true });
+  await writeFile(skillPath, '# Project-owned plan audit\n', 'utf8');
+
+  const optIn = spawnSync(process.execPath, [cliPath, 'init', root, '--yes', '--with-plan-audit'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.notEqual(optIn.status, 0);
+  assert.match(optIn.stdout, /CONFLICT \.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.equal(await readFile(skillPath, 'utf8'), '# Project-owned plan audit\n');
+  const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
+  assert.equal(state.managedFiles['.agents/skills/plan-audit/SKILL.md'], undefined);
+});
+
+test('initialized plan-audit opt-in rejects state created by a newer kit version', async () => {
+  const root = await createFixture();
+  const initial = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(initial.status, 0, initial.stderr);
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.kitVersion = '999.0.0';
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+
+  const optIn = spawnSync(process.execPath, [cliPath, 'init', root, '--yes', '--with-plan-audit'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.notEqual(optIn.status, 0);
+  assert.match(optIn.stderr, /newer than CLI kitVersion.*upgrade/i);
+  assert.equal(await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8').catch(() => null), null);
+  assert.equal(JSON.parse(await readFile(statePath, 'utf8')).kitVersion, '999.0.0');
+});
+
 test('init --skip-mcp omits the registry and records the disabled feature', async () => {
   const root = await createFixture();
 
@@ -326,7 +466,7 @@ test('init --yes refuses structured merges and makes zero changes', async () => 
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /--yes.*create-only.*interactive/i);
+  assert.match(result.stderr, /--yes.*cannot approve.*structured merges.*interactive/i);
   assert.deepEqual(await snapshot(root), before);
 });
 

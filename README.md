@@ -56,6 +56,13 @@ When initialization completes, open your preferred AI assistant and run the setu
 $drakom-ai-setup    # OpenAI Codex CLI
 ```
 
+Interactive initialization also offers the optional `plan-audit` skill for
+reviewing or cleaning up local `.drakom-ai/plans/`. To install it without the
+interactive choice, pass `--with-plan-audit`; it is omitted by default from
+`--yes` runs. The same flag can add the skill safely to an existing initialized
+project. The skill is recorded as kit-managed and its Claude mirror is generated
+by `drakom-ai sync`.
+
 The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
 
 ## What `init` Creates
@@ -123,9 +130,9 @@ them.
 
 | Managed by Drakom AI Dev Kit | Owned by the project |
 | --- | --- |
-| Setup skill installed by `init` | Rules in `.drakom-ai/rules/` |
+| Setup skill and optional plan-audit skill installed by `init` | Rules in `.drakom-ai/rules/` |
 | The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
-| Generated Claude skill mirrors | Canonical skills in `.agents/skills/` |
+| Generated Claude skill mirrors | Project-authored canonical skills in `.agents/skills/` |
 | Generated MCP client blocks | MCP registry choices and all unmanaged client configuration |
 | Fingerprints in `.drakom-ai/state.json` | Plans, specifications, `.worktreeinclude`, and team decisions |
 
@@ -167,8 +174,9 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 | `drakom-ai sync --help` | Show synchronization options without inspecting or changing the target. |
 | `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
 | `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
-| `drakom-ai init [path] --yes` | Apply create-only initialization without a prompt; it refuses structured merges into existing entry points. |
+| `drakom-ai init [path] --yes` | Apply safe initialization without a prompt; it refuses structured merges into existing entry points. |
 | `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. |
+| `drakom-ai init [path] --with-plan-audit` | Install the optional local plan audit skill, including in an initialized project. |
 | `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
 | `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. |
 | `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |

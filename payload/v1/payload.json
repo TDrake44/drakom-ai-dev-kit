@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "kitVersion": "0.1.0",
+  "kitVersion": "0.1.1",
   "files": {
     "assessmentTemplate": "skills/drakom-ai-setup/references/assessment-plan-template.md",
     "localIgnore": "templates/drakom-ai.gitignore",
     "mcpRegistry": "templates/mcp-servers.yaml",
+    "planAuditSkill": "skills/plan-audit/SKILL.md",
     "rulesReadme": "templates/rules.README.md",
     "setupSkill": "skills/drakom-ai-setup/SKILL.md",
     "specsReadme": "templates/specs.README.md"

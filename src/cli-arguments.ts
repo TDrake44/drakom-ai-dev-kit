@@ -1,7 +1,14 @@
 export type HelpTopic = 'global' | 'init' | 'sync';
 
 export type CliArguments =
-  | { command: 'init'; targetPath: string; dryRun: boolean; yes: boolean; skipMcp: boolean }
+  | {
+      command: 'init';
+      targetPath: string;
+      dryRun: boolean;
+      yes: boolean;
+      skipMcp: boolean;
+      withPlanAudit: boolean;
+    }
   | { command: 'sync'; targetPath: string; dryRun: boolean; check: boolean }
   | { command: 'help'; topic: HelpTopic };
 
@@ -41,7 +48,8 @@ export function parseCliArgs(argv: string[]): CliArguments {
   }
 
   const commonFlags = new Set(['--dry-run']);
-  const commandFlags = command === 'init' ? new Set(['--yes', '--skip-mcp']) : new Set(['--check']);
+  const commandFlags =
+    command === 'init' ? new Set(['--yes', '--skip-mcp', '--with-plan-audit']) : new Set(['--check']);
   for (const flag of flags) {
     if (!commonFlags.has(flag) && !commandFlags.has(flag)) {
       const otherCommand = flag === '--check' ? 'sync' : 'init';
@@ -56,6 +64,7 @@ export function parseCliArgs(argv: string[]): CliArguments {
       dryRun: flags.has('--dry-run'),
       yes: flags.has('--yes'),
       skipMcp: flags.has('--skip-mcp'),
+      withPlanAudit: flags.has('--with-plan-audit'),
     };
   }
 

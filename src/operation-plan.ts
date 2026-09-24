@@ -138,7 +138,7 @@ function planWorktreeInclude(
 /** Purely derive an initialization plan from an already-captured inventory. */
 export function buildInitPlan(
   inventory: TargetInventory,
-  options: { skipMcp: boolean },
+  options: { skipMcp: boolean; withPlanAudit?: boolean },
   payload: PackagePayload,
 ): OperationPlan {
   const operations: Operation[] = [];
@@ -152,6 +152,9 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
+  const planAuditTarget = '.agents/skills/plan-audit/SKILL.md';
+  const planAuditSource = 'skills/plan-audit/SKILL.md';
+  const planAuditContent = options.withPlanAudit ? requirePayloadFile('planAuditSkill') : undefined;
   const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
   const rulesReadmeSource = 'templates/rules.README.md';
   const rulesReadmeContent = requirePayloadFile('rulesReadme');
@@ -163,6 +166,7 @@ export function buildInitPlan(
   const assessmentContent = requirePayloadFile('assessmentTemplate');
   const localIgnoreContent = requirePayloadFile('localIgnore');
   const mcpRegistryContent = requirePayloadFile('mcpRegistry');
+  const stateTarget = `${DRAKOM_DIR}/state.json`;
 
   const inventoryHasPath = (targetPath: string): boolean =>
     inventory.paths.includes(targetPath) || inventory.paths.includes(`${targetPath}/`);
@@ -182,12 +186,73 @@ export function buildInitPlan(
   };
 
   if (inventory.state !== null) {
-    operations.push({
-      action: 'preserve',
-      path: `${DRAKOM_DIR}/state.json`,
-      summary: 'Existing Drakom installation remains unchanged by this preview.',
-    });
     planWorktreeInclude(inventory, operations, addCreate);
+    const managedPlanAudit = inventory.state.managedFiles[planAuditTarget];
+    if (planAuditContent === undefined) {
+      operations.push({
+        action: 'preserve',
+        path: stateTarget,
+        summary: 'Existing Drakom installation remains unchanged by this preview.',
+      });
+    } else if (managedPlanAudit !== undefined) {
+      if (inventoryHasPath(planAuditTarget)) {
+        operations.push({
+          action: 'preserve',
+          path: planAuditTarget,
+          summary: 'Optional plan audit skill is already kit-managed.',
+        });
+        operations.push({
+          action: 'preserve',
+          path: stateTarget,
+          summary: 'Existing Drakom installation already records the optional plan audit skill.',
+        });
+      } else {
+        operations.push({
+          action: 'conflict',
+          path: planAuditTarget,
+          summary: 'Kit-managed optional plan audit skill is missing; run sync to diagnose the installation.',
+        });
+        operations.push({
+          action: 'preserve',
+          path: stateTarget,
+          summary: 'Preserve installation state until the missing managed skill is resolved.',
+        });
+      }
+    } else if (inventoryHasPath(planAuditTarget)) {
+      operations.push({
+        action: 'conflict',
+        path: planAuditTarget,
+        summary: 'Unmanaged optional plan audit skill already exists; review ownership before installation.',
+      });
+      operations.push({
+        action: 'preserve',
+        path: stateTarget,
+        summary: 'Preserve installation state because the optional skill has an ownership conflict.',
+      });
+    } else {
+      addCreate(planAuditTarget, planAuditContent, 'Install the optional local plan audit skill.');
+      const currentStateContent = inventory.contents[stateTarget];
+      if (currentStateContent === undefined) {
+        throw new Error(`Initialized target is missing readable state at ${stateTarget}.`);
+      }
+      const nextState: InstallState = {
+        ...inventory.state,
+        managedFiles: {
+          ...inventory.state.managedFiles,
+          [planAuditTarget]: {
+            source: planAuditSource,
+            fingerprint: fingerprint(planAuditContent),
+          },
+        },
+      };
+      operations.push({
+        action: 'update',
+        path: stateTarget,
+        summary: 'Record kit ownership of the optional plan audit skill.',
+        content: serializeState(nextState),
+        before: currentStateContent,
+      });
+    }
   } else if (inventory.hasDrakomDirectory) {
     operations.push({
       action: 'conflict',
@@ -214,6 +279,9 @@ export function buildInitPlan(
     addCreate(specsReadmeTarget, specsReadmeContent, 'Explain how to store collaborative architecture specifications.');
     addCreate(setupTarget, setupContent, 'Install the kit-managed project assessment skill.');
     addCreate(assessmentTarget, assessmentContent, 'Install the setup skill assessment plan template.');
+    if (planAuditContent !== undefined) {
+      addCreate(planAuditTarget, planAuditContent, 'Install the optional local plan audit skill.');
+    }
 
     const agentsContent = inventory.contents['AGENTS.md'];
     if (agentsContent === undefined) {
@@ -260,6 +328,9 @@ export function buildInitPlan(
         [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
         [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
         [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
+        ...(planAuditContent === undefined
+          ? {}
+          : { [planAuditTarget]: { source: planAuditSource, fingerprint: fingerprint(planAuditContent) } }),
       },
       managedBlocks: {
         'AGENTS.md#drakom-ai': { fingerprint: fingerprint(`${MANAGED_BLOCK}\n`) },
@@ -267,7 +338,7 @@ export function buildInitPlan(
       managedSkillMirrors: {},
       managedMcpServers: {},
     };
-    addCreate(`${DRAKOM_DIR}/state.json`, serializeState(state), 'Record managed ownership after all other operations succeed.');
+    addCreate(stateTarget, serializeState(state), 'Record managed ownership after all other operations succeed.');
   }
 
   operations.push({
