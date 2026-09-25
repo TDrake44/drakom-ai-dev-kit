@@ -83,10 +83,12 @@ For a fresh repository, `drakom-ai init .` creates:
 
 .agents/
 └── skills/
-    └── drakom-ai-setup/
-        ├── SKILL.md
-        └── references/
-            └── assessment-plan-template.md
+    ├── drakom-ai-setup/
+    │   ├── SKILL.md
+    │   └── references/
+    │       └── assessment-plan-template.md
+    └── plan-audit/                 # optional; selected during init or via --with-plan-audit
+        └── SKILL.md
 
 AGENTS.md
 CLAUDE.md
