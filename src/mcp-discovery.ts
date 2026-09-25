@@ -1,9 +1,10 @@
-import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
+import { load as loadYaml } from 'js-yaml';
 import { parse as parseToml } from 'smol-toml';
 import { isDeepStrictEqual } from 'node:util';
 
 import type { TargetInventory } from './inspect-target.js';
 import { DRAKOM_DIR } from './constants.js';
+import { validateMcpRegistry } from './mcp-registry.js';
 import type {
   BaseServerConfig,
   ClientOverrideConfig,
@@ -11,13 +12,13 @@ import type {
   DiscoveredServerClientEntry,
   DiscoveredServerSummary,
   McpClassification,
-  McpImportChoice,
   McpRegistry,
   NormalizedHttpServer,
   NormalizedServer,
   NormalizedStdioServer,
   StringMap,
 } from './mcp-types.js';
+import { isRecord } from './util.js';
 
 type NormalizationResult = {
   normalized?: NormalizedServer;
@@ -50,10 +51,6 @@ interface ClientFileSpec {
   normalization: ClientNormalization;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function isStringMap(value: unknown): value is StringMap {
   return (
     isRecord(value) &&
@@ -67,8 +64,9 @@ const SENSITIVE_KEY_REGEX =
 const SENSITIVE_HEADER_REGEX =
   /^(authorization|api-key|x-api-key|token|auth|x-auth-token)$/i;
 
-const VARIABLE_REF_REGEX = /^\$\{?[A-Za-z0-9_]+\}?$/;
-const BEARER_VAR_REGEX = /^Bearer\s+\$\{?[A-Za-z0-9_]+\}?$/i;
+// Also accepts VS Code's `${env:VAR}` and `${input:id}` syntax as non-literal.
+const VARIABLE_REF_REGEX = /^\$\{?(?:env:|input:)?[A-Za-z0-9_-]+\}?$/;
+const AUTH_VAR_REGEX = /^(?:Bearer|Token)\s+\$\{?(?:env:|input:)?[A-Za-z0-9_-]+\}?$/i;
 
 const TOKEN_PATTERN_REGEX =
   /(?:sk-[a-zA-Z0-9_-]{10,}|ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9_-]{20,}|xox[baprs]-[a-zA-Z0-9_-]{10,})/;
@@ -106,7 +104,7 @@ export function checkLiteralCredentials(
     for (const [key, val] of Object.entries(headers)) {
       if (typeof val === 'string' && val.length > 0) {
         if (SENSITIVE_HEADER_REGEX.test(key)) {
-          if (!VARIABLE_REF_REGEX.test(val) && !BEARER_VAR_REGEX.test(val)) {
+          if (!VARIABLE_REF_REGEX.test(val) && !AUTH_VAR_REGEX.test(val)) {
             return { hasCredentials: true, field: `${prefix}headers.${key}` };
           }
         }
@@ -152,7 +150,7 @@ export function checkLiteralCredentials(
       const arg = raw.args[i];
       if (typeof arg === 'string') {
         const match = arg.match(/(?:token|secret|password|api[_-]?key)=([^\s]+)/i);
-        if (match && match[1] && !VARIABLE_REF_REGEX.test(match[1])) {
+        if (match?.[1] && !VARIABLE_REF_REGEX.test(match[1])) {
           return { hasCredentials: true, field: `${prefix}args[${i}]` };
         }
         if (TOKEN_PATTERN_REGEX.test(arg) && !VARIABLE_REF_REGEX.test(arg)) {
@@ -528,11 +526,11 @@ export function discoverMcp(inventory: TargetInventory): DiscoveredMcpConfigurat
 
   if (registryContent !== undefined) {
     try {
-      const parsed = loadYaml(registryContent);
-      if (isRecord(parsed) && isRecord(parsed.servers)) {
-        registry = { servers: parsed.servers as Record<string, BaseServerConfig> };
+      const validation = validateMcpRegistry(loadYaml(registryContent));
+      if (validation.valid) {
+        registry = validation.registry;
       } else {
-        registryError = 'Registry must contain a "servers" mapping';
+        registryError = validation.error;
       }
     } catch {
       registryError = 'Syntax error parsing YAML';
@@ -572,6 +570,14 @@ export function renderMcpComparisonReport(discovered: DiscoveredMcpConfiguration
     '',
   ];
 
+  if (discovered.registryError) {
+    lines.push('## Registry Errors', '');
+    lines.push(
+      `- **${DRAKOM_DIR}/mcp-servers.yaml**: ${discovered.registryError}. Safe next action: correct the registry file.`,
+    );
+    lines.push('');
+  }
+
   if (discovered.fileErrors && Object.keys(discovered.fileErrors).length > 0) {
     lines.push('## Configuration Errors', '');
     lines.push('The following client configuration files contained syntax or structural errors:');
@@ -588,6 +594,7 @@ export function renderMcpComparisonReport(discovered: DiscoveredMcpConfiguration
   }
 
   lines.push('## Discovered MCP Servers', '');
+  lines.push('Run the drakom-ai-setup skill to decide how to handle each server below.', '');
 
   for (const [name, summary] of discovered.servers) {
     const sources = summary.entries.map((e) => e.filePath).join(', ');
@@ -595,7 +602,7 @@ export function renderMcpComparisonReport(discovered: DiscoveredMcpConfiguration
     lines.push(`- **Sources:** ${sources}`);
     lines.push(`- **Classification:** ${summary.classification}`);
     lines.push(`- **Status:** ${summary.explanation}`);
-    lines.push('- **Available Import Choices:**');
+    lines.push('- **Choices:**');
     lines.push(`  1. Import into ${DRAKOM_DIR}/mcp-servers.yaml`);
     lines.push('  2. Import with explicit client overrides');
     lines.push('  3. Leave unmanaged');
@@ -605,60 +612,4 @@ export function renderMcpComparisonReport(discovered: DiscoveredMcpConfiguration
   }
 
   return lines.join('\n');
-}
-
-export function applyMcpImport(
-  existingRegistryYaml: string,
-  decisions: Record<string, McpImportChoice>,
-  discovered: DiscoveredMcpConfiguration,
-): string {
-  let parsed: unknown;
-  try {
-    parsed = loadYaml(existingRegistryYaml) || {};
-  } catch (err) {
-    throw new Error(`Invalid registry YAML: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  const registryRecord: Record<string, unknown> = isRecord(parsed) ? parsed : {};
-  if (!isRecord(registryRecord.servers)) {
-    registryRecord.servers = {};
-  }
-  const servers = registryRecord.servers as Record<string, unknown>;
-
-  for (const [name, choice] of Object.entries(decisions)) {
-    if (choice === 'leave_unmanaged' || choice === 'skip') {
-      continue;
-    }
-
-    const serverSummary = discovered.servers.get(name);
-    if (!serverSummary) {
-      throw new Error(`Server "${name}" was not found in discovered MCP configuration.`);
-    }
-
-    if (serverSummary.classification === 'literal_credentials') {
-      throw new Error(
-        `Cannot import server "${name}": contains literal credentials. Replace literal secrets with environment variable references like \${VAR} before importing.`,
-      );
-    }
-
-    if (serverSummary.classification === 'unsupported') {
-      throw new Error(
-        `Cannot import server "${name}": server definition is unsupported or not losslessly representable.`,
-      );
-    }
-
-    if (serverSummary.classification === 'conflicting') {
-      throw new Error(
-        `Cannot import server "${name}": definitions conflict across client files. Resolve conflicting definitions manually before importing.`,
-      );
-    }
-
-    if (!serverSummary.consolidatedDefinition) {
-      throw new Error(`Server "${name}" has no consolidated definition available.`);
-    }
-
-    servers[name] = serverSummary.consolidatedDefinition;
-  }
-
-  return dumpYaml(parsed, { indent: 2, lineWidth: -1 });
 }

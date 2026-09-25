@@ -1,8 +1,5 @@
 import type { BaseServerConfig, ClientOverrideConfig, HttpConfig, McpClient, McpRegistry, StringMap } from './mcp-types.js';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './util.js';
 
 const SERVER_KEYS = new Set(['command', 'args', 'env', 'http', 'overrides']);
 const OVERRIDE_KEYS = new Set([

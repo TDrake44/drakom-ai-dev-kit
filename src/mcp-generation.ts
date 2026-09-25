@@ -9,6 +9,7 @@ import type {
 } from './mcp-types.js';
 import type { Operation } from './operation-plan.js';
 import type { InstallState, ManagedMcpServerState } from './state.js';
+import { isRecord } from './util.js';
 import {
   fingerprintObject,
   generateAntigravityServer,
@@ -19,7 +20,6 @@ import {
 } from './mcp-renderers.js';
 
 export {
-  fingerprint,
   fingerprintObject,
   generateAntigravityServer,
   generateClaudeServer,
@@ -33,10 +33,6 @@ export const CODEX_BLOCK_START = '# BEGIN Drakom AI Development Context MCP serv
 export const CODEX_BLOCK_END = '# END Drakom AI Development Context MCP servers';
 export const LEGACY_CODEX_BLOCK_START = '# BEGIN AI Framework Blueprint MCP servers';
 export const LEGACY_CODEX_BLOCK_END = '# END AI Framework Blueprint MCP servers';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 interface JsonTargetPreparation {
   operations: Operation[];
@@ -97,11 +93,13 @@ function prepareJsonTarget(
     const prevFp = serverState.targetFingerprints[targetPath];
     if (prevFp !== undefined) {
       if (!(serverName in currentServers)) {
-        operations.push({
-          action: 'conflict',
-          path: targetPath,
-          summary: `Cannot safely update ${targetPath}: managed MCP server "${serverName}" was removed or edited manually. Safe next action: restore server in ${targetPath} or update ${DRAKOM_DIR}/mcp-servers.yaml.`,
-        });
+        if (serverName in generatedServers) {
+          operations.push({
+            action: 'conflict',
+            path: targetPath,
+            summary: `Cannot safely update ${targetPath}: managed MCP server "${serverName}" was removed or edited manually. Safe next action: restore server in ${targetPath} or update ${DRAKOM_DIR}/mcp-servers.yaml.`,
+          });
+        }
       } else {
         const actualFp = fingerprintObject(currentServers[serverName]);
         if (actualFp !== prevFp) {
@@ -247,6 +245,15 @@ interface CodexTargetPreparation {
   targetFingerprints: Record<string, string>;
 }
 
+function renderCodexSnippet(serverName: string, serverDef: BaseServerConfig): string {
+  try {
+    return generateCodexServerSnippet(serverName, serverDef);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`MCP server "${serverName}": ${detail}`);
+  }
+}
+
 function prepareCodexTarget(
   generatedServers: Record<string, BaseServerConfig>,
   inventory: TargetInventory,
@@ -348,7 +355,7 @@ function prepareCodexTarget(
     for (const [serverName, serverDef] of Object.entries(generatedServers)) {
       const prevFp = state.managedMcpServers[serverName]?.targetFingerprints[targetPath];
       if (Object.hasOwn(unmanagedServers, serverName) && prevFp === undefined) {
-        const expectedSnippet = generateCodexServerSnippet(serverName, serverDef);
+        const expectedSnippet = renderCodexSnippet(serverName, serverDef);
         let parsedExpectedServer: Record<string, unknown> | null = null;
         try {
           const parsedSnippet = parseToml(expectedSnippet);
@@ -375,7 +382,7 @@ function prepareCodexTarget(
   }
 
   for (const [name, serverDef] of Object.entries(generatedServers)) {
-    const snippet = generateCodexServerSnippet(name, serverDef);
+    const snippet = renderCodexSnippet(name, serverDef);
     let parsedSnippetServer: Record<string, unknown> = {};
     try {
       const p = parseToml(snippet);
@@ -413,7 +420,7 @@ function prepareCodexTarget(
 
   let generatedBlockBody = '';
   for (const [name, serverDef] of Object.entries(generatedServers)) {
-    generatedBlockBody += `${generateCodexServerSnippet(name, serverDef)}\n`;
+    generatedBlockBody += `${renderCodexSnippet(name, serverDef)}\n`;
   }
 
   const block = `${CODEX_BLOCK_START}\n${generatedBlockBody}${CODEX_BLOCK_END}\n`;
@@ -479,10 +486,15 @@ export function generateMcpOperations(
   const codexServers: Record<string, BaseServerConfig> = {};
 
   for (const [name, server] of Object.entries(servers)) {
-    claudeServers[name] = generateClaudeServer(server);
-    vscodeServers[name] = generateVscodeServer(server);
-    agyServers[name] = generateAntigravityServer(server);
-    codexServers[name] = server;
+    try {
+      claudeServers[name] = generateClaudeServer(server);
+      vscodeServers[name] = generateVscodeServer(server);
+      agyServers[name] = generateAntigravityServer(server);
+      codexServers[name] = server;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`MCP server "${name}": ${detail}`);
+    }
   }
 
   const claudePrep = prepareJsonTarget('.mcp.json', 'mcpServers', claudeServers, inventory, state);

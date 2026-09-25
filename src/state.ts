@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { DRAKOM_DIR } from './constants.js';
+import { isRecord } from './util.js';
 
 export { DRAKOM_DIR };
 
@@ -85,10 +86,6 @@ export function compareVersions(left: string, right: string): number {
   }
 
   return 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isRelativePath(value: string): boolean {
@@ -209,7 +206,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
 
 export async function loadState(root: string): Promise<InstallState | null> {
   const statePath = path.join(root, DRAKOM_DIR, 'state.json');
-  let source;
+  let source: string;
   try {
     source = await readFile(statePath, 'utf8');
   } catch (error) {

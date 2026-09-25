@@ -150,10 +150,19 @@ into these repository-local client files:
 - `.agents/mcp_config.json` for Antigravity CLI
 - `.codex/config.toml` for OpenAI Codex CLI
 
+Variable references in commands, arguments, URLs, environment values, and
+headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
+receives `${env:VAR}`. Codex maps whole environment and header references to
+its environment-backed fields; other references require a Codex override.
+Antigravity requires client-specific values for references it cannot expand.
+Sync reports a conflict when a reference cannot be represented safely.
+
 During initialization, Drakom AI Dev Kit compares discovered repository-local MCP
-configuration with the registry. It preserves unmanaged definitions and asks
-for an explicit decision before adopting a non-identical server. Use
-`--skip-mcp` if the project should not initialize MCP management.
+configuration with the registry and reports what it found, preserving unmanaged
+definitions rather than adopting them automatically. Run the `drakom-ai-setup`
+skill to walk through the reported decisions (import, import with overrides,
+leave unmanaged, or skip) for each discovered server. Use `--skip-mcp` if the
+project should not initialize MCP management.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
 
