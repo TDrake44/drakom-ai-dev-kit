@@ -22,4 +22,4 @@
    - For each finding, provide a concise title, a file and line reference, the concrete impact, and the required remediation.
    - Put findings before the verification summary and overall assessment.
 5. **Mandatory Hard Human Approval Gate:**
-   - Under no circumstances post PR comments, create review reviews on remote Git hosts, or commit fixes automatically without human review and confirmation.
+   - Under no circumstances post PR comments, create reviews on remote Git hosts, or commit fixes automatically without human review and confirmation.

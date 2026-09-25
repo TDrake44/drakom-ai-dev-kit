@@ -39,8 +39,8 @@
   "packageManager": "pnpm@10.15.0",
   "scripts": {
     "build": "tsc -p tsconfig.json && node -e \"import('node:fs/promises').then(f=>f.chmod('dist/cli.js',0o755))\"",
-    "lint": "pnpm build && eslint .",
-    "lint:fix": "pnpm build && eslint . --fix",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
     "prepack": "pnpm build",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-payload-version.mjs && pnpm sync",
@@ -49,23 +49,18 @@
     "test:smoke": "node --test test/pack-smoke.test.mjs",
     "test": "pnpm build && pnpm run test:unit && pnpm run test:smoke",
     "sync": "pnpm build && node dist/cli.js sync .",
-    "sync:check": "pnpm build && node dist/cli.js sync . --check",
-    "mcp:gen": "pnpm run sync",
-    "mcp:check": "pnpm run sync:check",
-    "skills:sync": "pnpm run sync",
-    "skills:check": "pnpm run sync:check",
-    "verify:ai": "pnpm run sync:check"
+    "sync:check": "pnpm build && node dist/cli.js sync . --check"
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
     "smol-toml": "^1.8.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.14",
     "@changesets/cli": "^3.0.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
     "@types/punycode": "^2.1.4",
-    "eslint": "^10.10.0",
     "typescript": "^7.0.2"
   }
 }

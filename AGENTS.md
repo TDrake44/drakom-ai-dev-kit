@@ -8,7 +8,7 @@ The authoritative standards and rules live in the **.drakom-ai/** directory.
 
 ## 1. Standards Index (Task Routing)
 
-**CRITICAL**: Do NOT load all rules at session start. Load only the rule files relevant to the active task:
+Load only the rule files relevant to the active task, not all of them at session start — unrelated rules crowd the context and dilute the ones that apply:
 
 | Task Involves | Load |
 | :--- | :--- |
@@ -38,7 +38,7 @@ this table and the Standards Index synchronized with the files that remain.
 
 Always run these commands before considering work complete. Never report a failing run as passing:
 
-The reference implementation uses ESLint, TypeScript `checkJs`, and Node's
+The reference implementation uses Biome, TypeScript `checkJs`, and Node's
 built-in test runner. Replace these commands with the target project's native
 tooling when bootstrapping the architecture elsewhere.
 

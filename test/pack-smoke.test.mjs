@@ -14,6 +14,21 @@ import { DRAKOM_DIR } from '../dist/constants.js';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OFFLINE_REGISTRY = 'http://127.0.0.1:9';
 
+// The harness points XDG_CACHE_HOME at a temp dir, so corepack needs its real home to find the pinned pnpm offline.
+const corepackHome =
+  process.env.COREPACK_HOME ??
+  path.join(
+    process.env.XDG_CACHE_HOME ??
+      (process.platform === 'win32' ? (process.env.LOCALAPPDATA ?? os.homedir()) : path.join(os.homedir(), '.cache')),
+    'node',
+    'corepack',
+  );
+
+async function pinnedPackageManager() {
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+  return String(manifest.packageManager);
+}
+
 async function packageVersion() {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
   return manifest.version;
@@ -168,7 +183,26 @@ class SmokeHarness {
       npm_config_cache: this.npmCacheDir,
       XDG_CACHE_HOME: this.pnpmCacheDir,
       PNPM_HOME: this.pnpmHomeDir,
+      COREPACK_HOME: corepackHome,
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0',
+      npm_config_manage_package_manager_versions: 'false',
     };
+  }
+
+  /**
+   * Pin the repository's pnpm in a consumer directory and fail fast if a different pnpm would run offline.
+   * @param {string} root
+   * @param {Record<string, unknown>} pkg
+   */
+  async writePinnedPackageJson(root, pkg) {
+    const packageManager = await pinnedPackageManager();
+    await writeFile(path.join(root, 'package.json'), JSON.stringify({ ...pkg, packageManager }, null, 2), 'utf8');
+    const res = spawnSync('pnpm', ['--version'], { cwd: root, env: this.pnpmEnv(), encoding: 'utf8', timeout: 30_000 });
+    assert.equal(
+      `pnpm@${res.stdout?.trim()}`,
+      packageManager,
+      `Smoke tests need ${packageManager} available offline; got ${res.stdout?.trim() || res.error?.message || res.stderr}`,
+    );
   }
 
   pnpmConfigArgs() {
@@ -189,11 +223,7 @@ class SmokeHarness {
    */
   async createPnpmConsumer() {
     const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-consumer-pnpm-'));
-    const pkg = {
-      name: 'consumer-pnpm',
-      private: true,
-    };
-    await writeFile(path.join(root, 'package.json'), JSON.stringify(pkg, null, 2), 'utf8');
+    await this.writePinnedPackageJson(root, { name: 'consumer-pnpm', private: true });
     await writeFile(
       path.join(root, '.npmrc'),
       `cache-dir=${this.pnpmCacheDir}\nstore-dir=${this.pnpmStoreDir}\npnpmfile=${this.hookPath}\noffline=true\nregistry=${OFFLINE_REGISTRY}\n`,
@@ -246,7 +276,7 @@ test('packed artifact contains only required publishable runtime files and metad
     assert.equal(item.startsWith('.codex/'), false, `.codex file ${item} must not be packed`);
     assert.notEqual(item, 'tsconfig.json');
     assert.notEqual(item, 'jsconfig.json');
-    assert.notEqual(item, 'eslint.config.mjs');
+    assert.notEqual(item, 'biome.json');
     assert.notEqual(item, 'BOOTSTRAP.md');
   }
 
@@ -279,6 +309,7 @@ test('pnpm dlx executes the packed artifact with zero network access', async () 
       `cache-dir=${harness.pnpmCacheDir}\nstore-dir=${harness.pnpmStoreDir}\npnpmfile=${harness.hookPath}\noffline=true\nregistry=${OFFLINE_REGISTRY}\n`,
       'utf8',
     );
+    await harness.writePinnedPackageJson(target, { name: 'dlx-target', private: true });
     const res = spawnSync(
       'pnpm',
       [
@@ -301,7 +332,7 @@ test('pnpm dlx executes the packed artifact with zero network access', async () 
     assert.match(res.stdout, /Result: ready; no changes made\./);
     const files = await readdir(target);
     assert.equal(
-      files.filter((f) => f !== '.npmrc').length,
+      files.filter((f) => f !== '.npmrc' && f !== 'package.json').length,
       0,
       'dry-run must make zero filesystem mutations',
     );

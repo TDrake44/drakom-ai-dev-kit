@@ -13,4 +13,4 @@ Applies to READMEs, docstrings, architectural specifications, and inline comment
 - **No Bloated Setups**: Avoid redundant conversational narrative in instruction documents.
 
 ## 4. Verification
-Run doc review and markdown linting sweeps.
+No markdown linter is configured. Check every command in changed docs against `package.json` scripts, and every referenced path against the working tree.
