@@ -31,6 +31,43 @@ test('exports DRAKOM_DIR constant representing the project-specific AI context d
   assert.equal(DRAKOM_DIR, '.drakom-ai');
 });
 
+test('inspectTarget treats a directory containing only .git/ as fresh', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  await mkdir(path.join(root, '.git'));
+  await writeFile(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf8');
+
+  const inventory = await inspectTarget(root);
+  assert.equal(inventory.status, 'fresh');
+});
+
+test('inspectTarget still reads skills whose names match build-output directories', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  await mkdir(path.join(root, '.agents', 'skills', 'build'), { recursive: true });
+  await writeFile(path.join(root, '.agents', 'skills', 'build', 'SKILL.md'), '---\nname: build\n---\n', 'utf8');
+
+  const inventory = await inspectTarget(root);
+
+  assert.ok(inventory.skillFiles.includes('.agents/skills/build/SKILL.md'));
+});
+
+test('inspectTarget lists heavy directories as a single entry without recursing into them', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  await mkdir(path.join(root, 'node_modules', 'some-pkg'), { recursive: true });
+  await writeFile(path.join(root, 'node_modules', 'some-pkg', 'index.js'), '', 'utf8');
+  await mkdir(path.join(root, 'dist'));
+  await writeFile(path.join(root, 'dist', 'out.js'), '', 'utf8');
+  await mkdir(path.join(root, '.venv'));
+  await writeFile(path.join(root, '.venv', 'pyvenv.cfg'), '', 'utf8');
+
+  const inventory = await inspectTarget(root);
+  assert.ok(inventory.pathSet.has('node_modules/'));
+  assert.ok(inventory.pathSet.has('dist/'));
+  assert.ok(inventory.pathSet.has('.venv/'));
+  assert.equal(inventory.pathSet.has('node_modules/some-pkg/'), false);
+  assert.equal(inventory.pathSet.has('dist/out.js'), false);
+  assert.equal(inventory.pathSet.has('.venv/pyvenv.cfg'), false);
+});
+
 async function createFixture() {
   return mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
 }
@@ -102,8 +139,8 @@ test('renders help successfully before inspecting targets or prompting', async (
   /** @type {string[]} */
   const stderr = [];
   const result = await runCli(['init', '\0', '--help'], {
-    stdout: { write: (content) => (stdout.push(content), true) },
-    stderr: { write: (content) => (stderr.push(content), true) },
+    stdout: { write: (content) => { stdout.push(content); return true; } },
+    stderr: { write: (content) => { stderr.push(content); return true; } },
     confirm: async () => {
       throw new Error('help must not prompt');
     },
@@ -339,9 +376,9 @@ test('init asks before installing the optional plan-audit skill', async () => {
   const stdout = [];
   let selected = 0;
   const result = await runCli(['init', root], {
-    stdout: { write: (content) => (stdout.push(content), true) },
+    stdout: { write: (content) => { stdout.push(content); return true; } },
     stderr: { write: () => true },
-    selectPlanAudit: async () => (selected += 1, true),
+    selectPlanAudit: async () => { selected += 1; return true; },
     confirm: async () => true,
   });
 
@@ -682,7 +719,7 @@ test('sync updates unchanged managed files and records state last with updated f
   const oldFp = `sha256:${crypto.createHash('sha256').update(oldContent).digest('hex')}`;
   state.kitVersion = '0.0.9';
   state.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md'].fingerprint = oldFp;
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
     cwd: repositoryRoot,
@@ -787,7 +824,7 @@ test('sync handles Claude skill mirrors, preserves Claude-only skills, and remov
       fingerprint: `sha256:${crypto.createHash('sha256').update(staleContent).digest('hex')}`,
     },
   };
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
     cwd: repositoryRoot,
@@ -843,7 +880,7 @@ test('sync rejects projects created with a newer kitVersion than the CLI', async
   const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   state.kitVersion = '99.0.0';
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
     cwd: repositoryRoot,
@@ -871,7 +908,7 @@ test('sync stops all writes when a generated Claude skill mirror was locally mod
 
   const mirrorPath = path.join(root, '.claude', 'skills', 'tester', 'SKILL.md');
   const mirrorContent = await readFile(mirrorPath, 'utf8');
-  await writeFile(mirrorPath, mirrorContent + '\n# Local edit\n', 'utf8');
+  await writeFile(mirrorPath, `${mirrorContent}\n# Local edit\n`, 'utf8');
 
   const before = await snapshot(root);
   const sync2 = spawnSync(process.execPath, [cliPath, 'sync', root], {
@@ -905,7 +942,7 @@ test('sync stops all writes when a stale Claude skill mirror was locally modifie
 
   const mirrorPath = path.join(root, '.claude', 'skills', 'tester', 'SKILL.md');
   const mirrorContent = await readFile(mirrorPath, 'utf8');
-  await writeFile(mirrorPath, mirrorContent + '\n# Local modification to stale mirror\n', 'utf8');
+  await writeFile(mirrorPath, `${mirrorContent}\n# Local modification to stale mirror\n`, 'utf8');
 
   const before = await snapshot(root);
   const sync2 = spawnSync(process.execPath, [cliPath, 'sync', root], {
@@ -962,7 +999,7 @@ test('sync reports conflict and refuses state update when managed file source is
     fingerprint: obsoleteFp,
   };
   state.kitVersion = '0.0.9';
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const before = await snapshot(root);
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
@@ -1015,7 +1052,7 @@ Old instruction body.
   const crypto = await import('node:crypto');
   const oldBlockFp = `sha256:${crypto.createHash('sha256').update(oldBlock).digest('hex')}`;
   state.managedBlocks['AGENTS.md#drakom-ai'] = { fingerprint: oldBlockFp };
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const agentsContent = `# User Policy Header\n\n${oldBlock}\n## User Policy Footer\n`;
   await writeFile(agentsPath, agentsContent, 'utf8');
@@ -1131,7 +1168,7 @@ test('sync rejects invalid SemVer kitVersion in state', async () => {
   const statePath = path.join(root, DRAKOM_DIR, 'state.json');
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   state.kitVersion = '1.0';
-  await writeFile(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
     cwd: repositoryRoot,

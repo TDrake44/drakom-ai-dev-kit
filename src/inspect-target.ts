@@ -1,9 +1,30 @@
 import { lstat, readFile, readdir } from 'node:fs/promises';
+import type { Stats } from 'node:fs';
 import path from 'node:path';
 
 import { DRAKOM_DIR, loadState, type InstallState } from './state.js';
 
 const ignoredDirectories = new Set(['.git', 'node_modules']);
+// Build outputs are skipped for speed, but not inside AI context roots, where a skill may be named "build".
+const buildOutputDirectories = new Set([
+  '.venv',
+  'venv',
+  'target',
+  'build',
+  'dist',
+  '.next',
+  '.turbo',
+  '.cache',
+  'coverage',
+  '__pycache__',
+  'vendor',
+]);
+const contextRoots = [`${DRAKOM_DIR}/`, '.agents/', '.claude/'];
+
+function isSkippedDirectory(name: string, relativePath: string): boolean {
+  if (ignoredDirectories.has(name)) return true;
+  return buildOutputDirectories.has(name) && !contextRoots.some((root) => relativePath.startsWith(root));
+}
 const mcpPaths = new Set([
   `${DRAKOM_DIR}/mcp-servers.yaml`,
   '.mcp.json',
@@ -16,6 +37,7 @@ export interface TargetInventory {
   root: string;
   status: 'fresh' | 'existing' | 'initialized';
   paths: string[];
+  pathSet: Set<string>;
   contextFiles: string[];
   skillFiles: string[];
   mcpFiles: string[];
@@ -49,7 +71,7 @@ function isSkillFile(relativePath: string): boolean {
  */
 export async function inspectTarget(targetPath: string): Promise<TargetInventory> {
   const root = path.resolve(targetPath);
-  let targetStat;
+  let targetStat: Stats;
   try {
     targetStat = await lstat(root);
   } catch (error) {
@@ -74,7 +96,7 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
         : entry.name;
       const absolutePath = path.join(directory, entry.name);
       paths.push(entry.isDirectory() ? `${relativePath}/` : relativePath);
-      if (entry.isDirectory() && !ignoredDirectories.has(entry.name)) {
+      if (entry.isDirectory() && !isSkippedDirectory(entry.name, relativePath)) {
         await visit(absolutePath, relativePath);
       } else if (
         entry.isFile() &&
@@ -114,12 +136,16 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
   const contextFiles = paths.filter((value) => !value.endsWith('/') && isContextFile(value));
   const skillFiles = paths.filter((value) => !value.endsWith('/') && isSkillFile(value));
   const existingMcpFiles = paths.filter((value) => mcpPaths.has(value));
-  const hasDrakomDirectory = paths.includes(`${DRAKOM_DIR}/`);
+  const pathSet = new Set(paths);
+  const hasDrakomDirectory = pathSet.has(`${DRAKOM_DIR}/`);
+  const isEffectivelyEmpty =
+    paths.length === 0 || (paths.length === 1 && (paths[0] === '.git/' || paths[0] === '.git'));
 
   return {
     root,
-    status: state ? 'initialized' : paths.length === 0 ? 'fresh' : 'existing',
+    status: state ? 'initialized' : isEffectivelyEmpty ? 'fresh' : 'existing',
     paths,
+    pathSet,
     contextFiles,
     skillFiles,
     mcpFiles: existingMcpFiles,

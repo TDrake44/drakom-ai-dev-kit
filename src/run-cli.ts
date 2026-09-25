@@ -19,6 +19,14 @@ export interface CliIo {
   selectPlanAudit?: () => Promise<boolean>;
 }
 
+function assertTargetNotNewerThanCli(targetKitVersion: string, cliKitVersion: string): void {
+  if (compareVersions(targetKitVersion, cliKitVersion) > 0) {
+    throw new Error(
+      `Target was initialized with kitVersion ${targetKitVersion}, which is newer than CLI kitVersion ${cliKitVersion}; upgrade drakom-ai.`,
+    );
+  }
+}
+
 export async function runCli(argv: string[], io: CliIo): Promise<number> {
   try {
     const args = parseCliArgs(argv);
@@ -30,14 +38,8 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     if (args.command === 'init') {
       const inventory = await inspectTarget(args.targetPath);
       const payload = await loadPackagePayload();
-      if (
-        args.withPlanAudit &&
-        inventory.state !== null &&
-        compareVersions(inventory.state.kitVersion, payload.manifest.kitVersion) > 0
-      ) {
-        throw new Error(
-          `Target was initialized with kitVersion ${inventory.state.kitVersion}, which is newer than CLI kitVersion ${payload.manifest.kitVersion}; upgrade drakom-ai.`,
-        );
+      if (args.withPlanAudit && inventory.state !== null) {
+        assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
       }
       let withPlanAudit = args.withPlanAudit;
       if (
@@ -46,8 +48,8 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         !args.dryRun &&
         inventory.state === null &&
         !inventory.hasDrakomDirectory &&
-        !inventory.paths.includes('.agents/skills/plan-audit/SKILL.md') &&
-        !inventory.paths.includes('.agents/skills/plan-audit/') &&
+        !inventory.pathSet.has('.agents/skills/plan-audit/SKILL.md') &&
+        !inventory.pathSet.has('.agents/skills/plan-audit/') &&
         io.selectPlanAudit !== undefined
       ) {
         withPlanAudit = await io.selectPlanAudit();
@@ -106,11 +108,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       throw new Error('Target is not an initialized Drakom installation; run init first.');
     }
     const payload = await loadPackagePayload();
-    if (compareVersions(inventory.state.kitVersion, payload.manifest.kitVersion) > 0) {
-      throw new Error(
-        `Target was initialized with kitVersion ${inventory.state.kitVersion}, which is newer than CLI kitVersion ${payload.manifest.kitVersion}; upgrade drakom-ai.`,
-      );
-    }
+    assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
     const plan = buildSyncPlan(inventory, payload);
     io.stdout.write(renderPlan(plan));
 
