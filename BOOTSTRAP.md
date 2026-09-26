@@ -108,6 +108,7 @@ mkdir -p .agents/skills/document
    * **Key Commands**: The real lint, typecheck, test, and AI verification commands.
    * **Skill Suite Table**: Brief descriptions of the skills actually included
      in the target repository. The four starter skills below are optional.
+   * **Conventions**: Core architectural invariants, Conventional Commits format, and conventional branch naming (`fix/*`, `feat/*`, etc.).
 
 
 3. **`.gitignore`**: Do not ignore `.drakom-ai/` broadly. Track its
