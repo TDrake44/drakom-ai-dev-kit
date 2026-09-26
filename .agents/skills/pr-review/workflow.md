@@ -17,6 +17,7 @@
      - **Low:** Minor styling suggestions, non-critical readability improvements.
 4. **Inline Review Format:**
    - Begin the response with `Reviewer: <model family> <variant> (<model identifier>)` when the runtime exposes both, for example `Reviewer: GPT-6 Sol (gpt-6-sol)`. If the variant or identifier is unavailable, use the most specific model name the runtime provides; never guess the variant.
+   - On the next line, write `Review status: Approve`, `Review status: Request changes`, or `Review status: Comment`. Choose the status from the findings and verification: request changes for blocking findings, comment when the review is inconclusive or has only non-blocking feedback, and approve when verification is sufficient and no blocking findings remain.
    - Present findings directly in the response under separate `High`, `Medium`, and `Low` sections, in that order.
    - Include every priority section even when it has no findings; write `None.` for an empty section.
    - For each finding, provide a concise title, a file and line reference, the concrete impact, and the required remediation.
