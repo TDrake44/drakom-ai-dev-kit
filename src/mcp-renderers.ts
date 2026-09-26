@@ -1,5 +1,6 @@
 import type { BaseServerConfig, ClientOverrideConfig, McpClient, StringMap } from './mcp-types.js';
 import { fingerprint, isRecord } from './util.js';
+import { INPUT_REF_REGEX, VAR_REF_REGEX, VAR_REFS_REGEX } from './mcp-variables.js';
 
 export function sortKeys<T>(obj: T): T {
   if (!isRecord(obj)) return obj;
@@ -66,10 +67,7 @@ function resolveServerConfig(server: BaseServerConfig, client: McpClient): Clien
   return result;
 }
 
-const VAR_REF_REGEX = /^\$(?:\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$/;
-const VAR_REFS_REGEX = /\$(?:\{(?:env:)?([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
 const BEARER_PREFIX_REGEX = /^(Bearer\s+)(.+)$/i;
-const INPUT_REF_REGEX = /\$\{input:[^}]*\}/;
 
 function varRefName(value: string): string | undefined {
   const match = value.match(VAR_REF_REGEX);

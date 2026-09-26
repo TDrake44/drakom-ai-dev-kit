@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { TargetInventory } from './inspect-target.js';
 import { DRAKOM_DIR } from './constants.js';
 import { validateMcpRegistry } from './mcp-registry.js';
+import { isVariableReference } from './mcp-variables.js';
 import type {
   BaseServerConfig,
   ClientOverrideConfig,
@@ -64,9 +65,12 @@ const SENSITIVE_KEY_REGEX =
 const SENSITIVE_HEADER_REGEX =
   /^(authorization|api-key|x-api-key|token|auth|x-auth-token)$/i;
 
-// Also accepts VS Code's `${env:VAR}` and `${input:id}` syntax as non-literal.
-const VARIABLE_REF_REGEX = /^\$\{?(?:env:|input:)?[A-Za-z0-9_-]+\}?$/;
-const AUTH_VAR_REGEX = /^(?:Bearer|Token)\s+\$\{?(?:env:|input:)?[A-Za-z0-9_-]+\}?$/i;
+const AUTH_PREFIX_REGEX = /^(?:Bearer|Token)\s+(.+)$/i;
+
+function isAuthVariableReference(value: string): boolean {
+  const reference = value.match(AUTH_PREFIX_REGEX)?.[1];
+  return reference !== undefined && isVariableReference(reference);
+}
 
 const TOKEN_PATTERN_REGEX =
   /(?:sk-[a-zA-Z0-9_-]{10,}|ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9_-]{20,}|xox[baprs]-[a-zA-Z0-9_-]{10,})/;
@@ -81,10 +85,10 @@ export function checkLiteralCredentials(
   if (isRecord(raw.env)) {
     for (const [key, val] of Object.entries(raw.env)) {
       if (typeof val === 'string' && val.length > 0) {
-        if (SENSITIVE_KEY_REGEX.test(key) && !VARIABLE_REF_REGEX.test(val)) {
+        if (SENSITIVE_KEY_REGEX.test(key) && !isVariableReference(val)) {
           return { hasCredentials: true, field: `${prefix}env.${key}` };
         }
-        if (TOKEN_PATTERN_REGEX.test(val) && !VARIABLE_REF_REGEX.test(val)) {
+        if (TOKEN_PATTERN_REGEX.test(val) && !isVariableReference(val)) {
           return { hasCredentials: true, field: `${prefix}env.${key}` };
         }
       }
@@ -104,11 +108,11 @@ export function checkLiteralCredentials(
     for (const [key, val] of Object.entries(headers)) {
       if (typeof val === 'string' && val.length > 0) {
         if (SENSITIVE_HEADER_REGEX.test(key)) {
-          if (!VARIABLE_REF_REGEX.test(val) && !AUTH_VAR_REGEX.test(val)) {
+          if (!isVariableReference(val) && !isAuthVariableReference(val)) {
             return { hasCredentials: true, field: `${prefix}headers.${key}` };
           }
         }
-        if (TOKEN_PATTERN_REGEX.test(val) && !VARIABLE_REF_REGEX.test(val)) {
+        if (TOKEN_PATTERN_REGEX.test(val) && !isVariableReference(val)) {
           return { hasCredentials: true, field: `${prefix}headers.${key}` };
         }
       }
@@ -134,7 +138,7 @@ export function checkLiteralCredentials(
       for (const [paramName, paramVal] of parsedUrl.searchParams) {
         if (
           SENSITIVE_KEY_REGEX.test(paramName) &&
-          !VARIABLE_REF_REGEX.test(paramVal)
+          !isVariableReference(paramVal)
         ) {
           return { hasCredentials: true, field: `${prefix}url.param.${paramName}` };
         }
@@ -150,10 +154,10 @@ export function checkLiteralCredentials(
       const arg = raw.args[i];
       if (typeof arg === 'string') {
         const match = arg.match(/(?:token|secret|password|api[_-]?key)=([^\s]+)/i);
-        if (match?.[1] && !VARIABLE_REF_REGEX.test(match[1])) {
+        if (match?.[1] && !isVariableReference(match[1])) {
           return { hasCredentials: true, field: `${prefix}args[${i}]` };
         }
-        if (TOKEN_PATTERN_REGEX.test(arg) && !VARIABLE_REF_REGEX.test(arg)) {
+        if (TOKEN_PATTERN_REGEX.test(arg) && !isVariableReference(arg)) {
           return { hasCredentials: true, field: `${prefix}args[${i}]` };
         }
       }

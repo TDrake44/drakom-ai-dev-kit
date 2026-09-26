@@ -1421,3 +1421,52 @@ test('sync reports an unresolved argument reference before writing client files'
   assert.match(syncResult.stdout, /CONFLICT.*MCP server "gh": Codex args\[0\].*TOKEN.*env.*override/);
   assert.deepEqual(await snapshot(root), before);
 });
+
+test('credential detection and rendering agree on which variable references are valid', () => {
+  for (const value of ['${env:API_KEY}', '${API_KEY}', '$API_KEY', '${input:api-key}']) {
+    assert.equal(checkLiteralCredentials({ env: { API_KEY: value } }).hasCredentials, false, value);
+  }
+  assert.equal(checkLiteralCredentials({ http: { headers: { Authorization: 'Bearer ${API_KEY}' } } }).hasCredentials, false);
+  for (const value of ['${env:API-KEY}', '${API-KEY}', '$API-KEY', '${API_KEY', '${1KEY}']) {
+    assert.equal(checkLiteralCredentials({ env: { API_KEY: value } }).hasCredentials, true, value);
+  }
+  assert.equal(checkLiteralCredentials({ http: { headers: { Authorization: 'Bearer ${env:API-KEY}' } } }).hasCredentials, true);
+});
+
+test('sync rejects unsupported variable names before writing any MCP client config', async () => {
+  const cases = [
+    ['env', 'API_KEY: "${env:API-KEY}"', '${env:API-KEY}'],
+    ['env', 'API_KEY: "${API-KEY}"', '${API-KEY}'],
+    ['env', 'API_KEY: "$API-KEY"', '$API-KEY'],
+    ['env', 'API_KEY: "${API_KEY"', '${API_KEY'],
+    ['env', 'API_KEY: "${1KEY}"', '${1KEY}'],
+  ];
+  for (const [field, entry, token] of cases) {
+    const root = await createInitializedMcpFixture();
+    await writeFile(
+      path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+      `servers:\n  api:\n    command: node\n    ${field}:\n      ${entry}\n`,
+      'utf8',
+    );
+
+    const syncResult = runMcpCli(root, 'sync');
+
+    assert.equal(syncResult.status, 2, `${token}\n${syncResult.stdout}`);
+    assert.ok(syncResult.stdout.includes(`uses unsupported variable reference ${token}`), `${token}\n${syncResult.stdout}`);
+    assert.doesNotMatch(syncResult.stdout, /literal credentials/);
+    for (const clientFile of ['.mcp.json', '.vscode/mcp.json', '.codex/config.toml']) {
+      const content = await readFile(path.join(root, clientFile), 'utf8').catch(() => '');
+      assert.equal(content.includes('API-KEY') || content.includes('1KEY'), false, `${token} leaked into ${clientFile}`);
+    }
+  }
+
+  const headerRoot = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(headerRoot, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:\n  api:\n    http:\n      url: https://api.example.com/mcp\n      headers:\n        Authorization: "Bearer \${env:API-KEY}"\n`,
+    'utf8',
+  );
+  const headerSync = runMcpCli(headerRoot, 'sync');
+  assert.equal(headerSync.status, 2, headerSync.stdout);
+  assert.ok(headerSync.stdout.includes('http.headers.Authorization uses unsupported variable reference ${env:API-KEY}'), headerSync.stdout);
+});
