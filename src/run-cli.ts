@@ -42,14 +42,20 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
       }
       let withPlanAudit = args.withPlanAudit;
+      const planAuditSourceRel = payload.manifest.files.planAuditSkill;
+      if (planAuditSourceRel === undefined) {
+        throw new Error('Package payload manifest is missing the planAuditSkill file entry.');
+      }
+      const planAuditTarget = `.agents/${planAuditSourceRel}`;
+      const planAuditTargetDir = `${planAuditTarget.slice(0, planAuditTarget.lastIndexOf('/') + 1)}`;
       if (
         !withPlanAudit &&
         !args.yes &&
         !args.dryRun &&
         inventory.state === null &&
         !inventory.hasDrakomDirectory &&
-        !inventory.pathSet.has('.agents/skills/plan-audit/SKILL.md') &&
-        !inventory.pathSet.has('.agents/skills/plan-audit/') &&
+        !inventory.pathSet.has(planAuditTarget) &&
+        !inventory.pathSet.has(planAuditTargetDir) &&
         io.selectPlanAudit !== undefined
       ) {
         withPlanAudit = await io.selectPlanAudit();
@@ -94,7 +100,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       );
       io.stdout.write('Ask your coding agent to use $drakom-ai-setup to assess this repository.\n');
       if (withPlanAudit) {
-        io.stdout.write('Ask your coding agent to use $plan-audit to review local plans.\n');
+        io.stdout.write('Ask your coding agent to use $drakom-plan-audit to review local plans.\n');
       }
       return 0;
     }

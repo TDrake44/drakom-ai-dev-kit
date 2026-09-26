@@ -257,7 +257,12 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('dist/run-cli.js'), 'dist/run-cli.js missing');
   assert.ok(packedPaths.includes('payload/v1/payload.json'), 'payload manifest missing');
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
-  assert.ok(packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'), 'optional plan audit skill missing');
+  assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'optional plan audit skill missing');
+  assert.equal(
+    packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'),
+    false,
+    'legacy plan-audit payload path must not be packed',
+  );
   assert.ok(packedPaths.includes('payload/v1/templates/drakom-ai.gitignore'), 'gitignore template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/mcp-servers.yaml'), 'mcp template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/rules.README.md'), 'rules README template missing');
@@ -398,15 +403,15 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     await mkdir(optionalProject, { recursive: true });
     const optionalInit = runDrakom(['init', optionalProject, '--yes', '--with-plan-audit']);
     assert.equal(optionalInit.status, 0, optionalInit.stderr);
-    assert.match(optionalInit.stdout, /Ask your coding agent to use \$plan-audit/);
+    assert.match(optionalInit.stdout, /Ask your coding agent to use \$drakom-plan-audit/);
     assert.match(
-      await readFile(path.join(optionalProject, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+      await readFile(path.join(optionalProject, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
       /classify\s+each plan/i,
     );
     const optionalSync = runDrakom(['sync', optionalProject]);
     assert.equal(optionalSync.status, 0, optionalSync.stderr);
     assert.match(
-      await readFile(path.join(optionalProject, '.claude', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+      await readFile(path.join(optionalProject, '.claude', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
       /GENERATED MIRROR/,
     );
 

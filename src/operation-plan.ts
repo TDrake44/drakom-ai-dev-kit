@@ -148,8 +148,12 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
-  const planAuditTarget = '.agents/skills/plan-audit/SKILL.md';
-  const planAuditSource = 'skills/plan-audit/SKILL.md';
+  const planAuditSourceRel = payload.manifest.files.planAuditSkill;
+  if (planAuditSourceRel === undefined) {
+    throw new Error('Package payload manifest is missing the planAuditSkill file entry.');
+  }
+  const planAuditTarget = `.agents/${planAuditSourceRel}`;
+  const planAuditSource = planAuditSourceRel;
   const planAuditContent = options.withPlanAudit ? requirePayloadFile('planAuditSkill') : undefined;
   const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
   const rulesReadmeSource = 'templates/rules.README.md';
@@ -409,7 +413,7 @@ function planManagedFiles(
       operations.push({
         action: 'conflict',
         path: managedPath,
-        summary: `Managed file source ${entry.source} is missing from package payload; review payload evolution.`,
+        summary: `Managed file source ${entry.source} is missing from this kit version; review the upgrade notes for manual cleanup steps before synchronizing.`,
       });
     }
   }

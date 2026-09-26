@@ -19,5 +19,5 @@ process.exitCode = await runCli(process.argv.slice(2), {
   stderr: process.stderr,
   confirm: () => askYesNo('Apply this operation plan? [y/N] '),
   selectPlanAudit: () =>
-    process.stdin.isTTY ? askYesNo('Install the optional local plan-audit skill? [y/N] ') : Promise.resolve(false),
+    process.stdin.isTTY ? askYesNo('Install the optional drakom-plan-audit skill? [y/N] ') : Promise.resolve(false),
 });

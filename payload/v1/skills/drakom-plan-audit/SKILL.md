@@ -1,5 +1,5 @@
 ---
-name: plan-audit
+name: drakom-plan-audit
 description: Audit or clean up ignored local plans when explicitly requested. Find stale status, broken links, and obsolete plans; ask before deleting uncertain plans. Do not use for ordinary scoped planning.
 ---
 

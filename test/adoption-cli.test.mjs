@@ -240,7 +240,7 @@ test('builds and renders deterministic fresh-project plans', async () => {
   );
   assert.match(renderPlan(firstPlan), /CREATE .*drakom-ai-setup\/SKILL\.md/);
   assert.match(renderPlan(firstPlan), /PRESERVE .*existing files/i);
-  assert.equal(firstPlan.operations.some(({ path: value }) => value === '.agents/skills/plan-audit/SKILL.md'), false);
+  assert.equal(firstPlan.operations.some(({ path: value }) => value === '.agents/skills/drakom-plan-audit/SKILL.md'), false);
 });
 
 test('opt-in plan audit is included and recorded as kit-managed', async () => {
@@ -250,12 +250,12 @@ test('opt-in plan audit is included and recorded as kit-managed', async () => {
 
   assert.match(payload.files.planAuditSkill, /Audit or clean up/);
   const plan = buildInitPlan(inventory, { skipMcp: false, withPlanAudit: true }, payload);
-  const skillOperation = plan.operations.find(({ path: value }) => value === '.agents/skills/plan-audit/SKILL.md');
+  const skillOperation = plan.operations.find(({ path: value }) => value === '.agents/skills/drakom-plan-audit/SKILL.md');
   const stateOperation = plan.operations.find(({ path: value }) => value === `${DRAKOM_DIR}/state.json`);
 
   assert.equal(skillOperation?.action, 'create');
   assert.match(skillOperation?.content ?? '', /uncertain plans still matter before deleting/i);
-  assert.match(stateOperation?.content ?? '', /plan-audit\/SKILL\.md/);
+  assert.match(stateOperation?.content ?? '', /drakom-plan-audit\/SKILL\.md/);
 });
 
 test('init --dry-run is deterministic and makes zero filesystem changes', async () => {
@@ -297,7 +297,7 @@ test('packages a complete approval-gated setup workflow and assessment template'
     path.join(repositoryRoot, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'),
     'utf8',
   );
-  const sourcePlanAuditSkill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8');
+  const sourcePlanAuditSkill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8');
 
   assert.equal(skill, sourceSetupSkill);
   assert.equal(payload.files.planAuditSkill, sourcePlanAuditSkill);
@@ -315,7 +315,7 @@ test('packages a complete approval-gated setup workflow and assessment template'
   assert.match(skill, /remove or revise.*stale.*route/is);
   assert.match(skill, /not.*globally.*load/is);
   assert.doesNotMatch(skill, /legacy|\.ai\//i);
-  assert.match(payload.manifest.files.planAuditSkill, /skills\/plan-audit\/SKILL\.md$/);
+  assert.match(payload.manifest.files.planAuditSkill, /skills\/drakom-plan-audit\/SKILL\.md$/);
   assert.match(assessment, /## Keep/);
   assert.match(assessment, /## Refine/);
   assert.match(assessment, /## Add/);
@@ -370,7 +370,7 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   assert.deepEqual(await snapshot(root), afterFirst);
 });
 
-test('init asks before installing the optional plan-audit skill', async () => {
+test('init asks before installing the optional drakom-plan-audit skill', async () => {
   const root = await createFixture();
   /** @type {string[]} */
   const stdout = [];
@@ -384,9 +384,9 @@ test('init asks before installing the optional plan-audit skill', async () => {
 
   assert.equal(result, 0);
   assert.equal(selected, 1);
-  assert.match(stdout.join(''), /\.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(stdout.join(''), /\.agents\/skills\/drakom-plan-audit\/SKILL\.md/);
   assert.match(
-    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    await readFile(path.join(root, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
     /classify\s+each plan/i,
   );
 });
@@ -399,9 +399,9 @@ test('init --yes --with-plan-audit installs the optional skill without prompting
   });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /\.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(result.stdout, /\.agents\/skills\/drakom-plan-audit\/SKILL\.md/);
   assert.match(
-    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    await readFile(path.join(root, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
     /classify\s+each plan/i,
   );
 });
@@ -420,24 +420,24 @@ test('init --yes --with-plan-audit adds the managed skill to an initialized proj
   });
 
   assert.equal(optIn.status, 0, optIn.stderr);
-  assert.match(optIn.stdout, /CREATE\s+\.agents\/skills\/plan-audit\/SKILL\.md/);
-  assert.match(optIn.stdout, /Ask your coding agent to use \$plan-audit/);
+  assert.match(optIn.stdout, /CREATE\s+\.agents\/skills\/drakom-plan-audit\/SKILL\.md/);
+  assert.match(optIn.stdout, /Ask your coding agent to use \$drakom-plan-audit/);
   assert.match(
-    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    await readFile(path.join(root, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
     /classify\s+each plan/i,
   );
   const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
-  assert.ok(state.managedFiles['.agents/skills/plan-audit/SKILL.md']);
+  assert.ok(state.managedFiles['.agents/skills/drakom-plan-audit/SKILL.md']);
 });
 
-test('initialized plan-audit opt-in refuses to take ownership of an unmanaged skill', async () => {
+test('initialized drakom-plan-audit opt-in refuses to take ownership of an unmanaged skill', async () => {
   const root = await createFixture();
   const initial = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   });
   assert.equal(initial.status, 0, initial.stderr);
-  const skillDirectory = path.join(root, '.agents', 'skills', 'plan-audit');
+  const skillDirectory = path.join(root, '.agents', 'skills', 'drakom-plan-audit');
   const skillPath = path.join(skillDirectory, 'SKILL.md');
   await mkdir(skillDirectory, { recursive: true });
   await writeFile(skillPath, '# Project-owned plan audit\n', 'utf8');
@@ -448,13 +448,13 @@ test('initialized plan-audit opt-in refuses to take ownership of an unmanaged sk
   });
 
   assert.notEqual(optIn.status, 0);
-  assert.match(optIn.stdout, /CONFLICT \.agents\/skills\/plan-audit\/SKILL\.md/);
+  assert.match(optIn.stdout, /CONFLICT \.agents\/skills\/drakom-plan-audit\/SKILL\.md/);
   assert.equal(await readFile(skillPath, 'utf8'), '# Project-owned plan audit\n');
   const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
-  assert.equal(state.managedFiles['.agents/skills/plan-audit/SKILL.md'], undefined);
+  assert.equal(state.managedFiles['.agents/skills/drakom-plan-audit/SKILL.md'], undefined);
 });
 
-test('initialized plan-audit opt-in rejects state created by a newer kit version', async () => {
+test('initialized drakom-plan-audit opt-in rejects state created by a newer kit version', async () => {
   const root = await createFixture();
   const initial = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], {
     cwd: repositoryRoot,
@@ -473,7 +473,7 @@ test('initialized plan-audit opt-in rejects state created by a newer kit version
 
   assert.notEqual(optIn.status, 0);
   assert.match(optIn.stderr, /newer than CLI kitVersion.*upgrade/i);
-  assert.equal(await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8').catch(() => null), null);
+  assert.equal(await readFile(path.join(root, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8').catch(() => null), null);
   assert.equal(JSON.parse(await readFile(statePath, 'utf8')).kitVersion, '999.0.0');
 });
 
@@ -1008,7 +1008,7 @@ test('sync reports conflict and refuses state update when managed file source is
   });
 
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*obsolete.*missing from package payload/i);
+  assert.match(syncResult.stdout, /CONFLICT.*obsolete.*missing from this kit version.*upgrade notes/i);
   assert.deepEqual(await snapshot(root), before);
   const stateAfter = JSON.parse(await readFile(statePath, 'utf8'));
   assert.equal(stateAfter.kitVersion, '0.0.9');
@@ -1159,6 +1159,32 @@ test('sync reports conflict and makes zero writes when a stale Claude skill mirr
   assert.notEqual(syncResult.status, 0);
   assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/stale-skill\/SKILL\.md.*is unrecorded/i);
   assert.deepEqual(await snapshot(root), before);
+});
+
+test('an unmanaged .agents/skills/plan-audit/ no longer blocks opting in to drakom-plan-audit', async () => {
+  const root = await createFixture();
+  await mkdir(path.join(root, '.agents', 'skills', 'plan-audit'), { recursive: true });
+  await writeFile(
+    path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'),
+    '# Project-owned plan audit, unrelated to the kit\n',
+    'utf8',
+  );
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root, '--yes', '--with-plan-audit'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /CREATE\s+\.agents\/skills\/drakom-plan-audit\/SKILL\.md/);
+  assert.equal(
+    await readFile(path.join(root, '.agents', 'skills', 'plan-audit', 'SKILL.md'), 'utf8'),
+    '# Project-owned plan audit, unrelated to the kit\n',
+  );
+  assert.match(
+    await readFile(path.join(root, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
+    /classify\s+each plan/i,
+  );
 });
 
 test('sync rejects invalid SemVer kitVersion in state', async () => {
