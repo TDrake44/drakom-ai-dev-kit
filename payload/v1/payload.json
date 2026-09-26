@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "kitVersion": "0.2.0",
+  "kitVersion": "0.3.0",
   "files": {
     "assessmentTemplate": "skills/drakom-ai-setup/references/assessment-plan-template.md",
     "localIgnore": "templates/drakom-ai.gitignore",
