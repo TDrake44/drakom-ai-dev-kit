@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "kitVersion": "0.2.0",
+  "kitVersion": "0.3.0",
   "features": {
     "mcp": true,
     "skillMirrors": true
