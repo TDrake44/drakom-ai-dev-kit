@@ -85,9 +85,3 @@ export interface DiscoveredMcpConfiguration {
   clientFiles: string[];
   servers: Map<string, DiscoveredServerSummary>;
 }
-
-export type McpImportChoice =
-  | 'import'
-  | 'import_with_overrides'
-  | 'leave_unmanaged'
-  | 'skip';

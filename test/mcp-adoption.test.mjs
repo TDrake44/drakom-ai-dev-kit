@@ -9,11 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { DRAKOM_DIR } from '../dist/constants.js';
 import { inspectTarget } from '../dist/inspect-target.js';
 import {
+  checkLiteralCredentials,
   discoverMcp,
   renderMcpComparisonReport,
-  applyMcpImport,
 } from '../dist/mcp-discovery.js';
 import { validateMcpRegistry } from '../dist/mcp-generation.js';
+import { generateAntigravityServer, generateClaudeServer, generateCodexServerSnippet, generateVscodeServer } from '../dist/mcp-renderers.js';
 import { buildSyncPlan } from '../dist/operation-plan.js';
 import { loadPackagePayload } from '../dist/package-payload.js';
 import { loadState } from '../dist/state.js';
@@ -219,20 +220,9 @@ test('MCP credential detection never echoes literal secrets in reports, diagnost
   assert.match(report, /secret-server/);
   assert.match(report, /literal credential/i);
   assert.doesNotMatch(report, new RegExp(rawSecret));
-
-  // Refuses import
-  assert.throws(
-    () =>
-      applyMcpImport(
-        'servers: {}\n',
-        { 'secret-server': 'import' },
-        discovered,
-      ),
-    /literal credential/i,
-  );
 });
 
-test('renderMcpComparisonReport presents import choices: import, import with overrides, leave unmanaged, skip', async () => {
+test('renderMcpComparisonReport lists the setup-skill decisions: import, import with overrides, leave unmanaged, skip', async () => {
   const root = await createFixture();
   await writeFixture(
     root,
@@ -261,61 +251,24 @@ test('renderMcpComparisonReport presents import choices: import, import with ove
   const discovered = discoverMcp(inventory);
   const report = renderMcpComparisonReport(discovered);
 
+  assert.match(report, /drakom-ai-setup skill/);
   assert.match(report, new RegExp(`Import into ${DRAKOM_DIR}/mcp-servers\\.yaml`));
   assert.match(report, /Import with explicit client overrides/);
   assert.match(report, /Leave unmanaged/);
   assert.match(report, /Skip MCP management/);
 });
 
-test('safe approved import writes valid entries to registry YAML and refuses unsafe operations', async () => {
+test('renderMcpComparisonReport surfaces a registry parse error', async () => {
   const root = await createFixture();
-  await writeFixture(
-    root,
-    '.mcp.json',
-    JSON.stringify({
-      mcpServers: {
-        'my-server': { command: 'node', args: ['./server.js'] },
-        'conflict-server': { command: 'node' },
-      },
-    }),
-    'utf8',
-  );
-
-  await writeFixture(
-    root,
-    '.vscode/mcp.json',
-    JSON.stringify({
-      servers: {
-        'conflict-server': { type: 'stdio', command: 'python' },
-      },
-    }),
-    'utf8',
-  );
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers: [not, a, mapping]\n');
 
   const inventory = await inspectTarget(root);
   const discovered = discoverMcp(inventory);
+  assert.equal(discovered.registryError, 'servers must be a mapping of server names to definitions');
 
-  const initialYaml = 'servers:\n  existing-server:\n    command: existing\n';
-  const updatedYaml = applyMcpImport(
-    initialYaml,
-    { 'my-server': 'import', 'conflict-server': 'leave_unmanaged' },
-    discovered,
-  );
-
-  assert.match(updatedYaml, /existing-server:/);
-  assert.match(updatedYaml, /my-server:/);
-  assert.doesNotMatch(updatedYaml, /conflict-server:/);
-
-  // Attempting to import a conflicting server must throw
-  assert.throws(
-    () =>
-      applyMcpImport(
-        initialYaml,
-        { 'conflict-server': 'import' },
-        discovered,
-      ),
-    /conflicting/i,
-  );
+  const report = renderMcpComparisonReport(discovered);
+  assert.match(report, /Registry Errors/);
+  assert.match(report, /servers must be a mapping of server names to definitions/);
 });
 
 test('sync generates managed MCP entries into all supported client targets and updates state fingerprints', async () => {
@@ -332,7 +285,6 @@ test('sync generates managed MCP entries into all supported client targets and u
     args: ['./server.mjs']
     env:
       LOG_LEVEL: info
-      TOKEN: "\${TOKEN}"
   docs:
     http:
       url: https://mcp.example.com/docs
@@ -350,7 +302,7 @@ test('sync generates managed MCP entries into all supported client targets and u
   assert.deepEqual(claude.mcpServers['local-tools'], {
     command: 'node',
     args: ['./server.mjs'],
-    env: { LOG_LEVEL: 'info', TOKEN: '${TOKEN}' },
+    env: { LOG_LEVEL: 'info' },
   });
   assert.deepEqual(claude.mcpServers.docs, {
     type: 'http',
@@ -396,7 +348,7 @@ test('sync cleanly adopts identical existing unmanaged servers without destructi
   // Pre-existing unmanaged .mcp.json with an unmanaged setting and the server
   await writeFile(
     path.join(root, '.mcp.json'),
-    JSON.stringify({
+    `${JSON.stringify({
       projectCustomSetting: 'keep-me',
       mcpServers: {
         'fetch-tool': {
@@ -404,7 +356,7 @@ test('sync cleanly adopts identical existing unmanaged servers without destructi
           args: ['mcp-server-fetch'],
         },
       },
-    }, null, 2) + '\n',
+    }, null, 2)}\n`,
     'utf8',
   );
 
@@ -511,7 +463,7 @@ test('sync detects conflict and refuses all writes when a generated entry is man
   const claudePath = path.join(root, '.mcp.json');
   const claude = JSON.parse(await readFile(claudePath, 'utf8'));
   claude.mcpServers.tools.command = 'hacked-command';
-  await writeFile(claudePath, JSON.stringify(claude, null, 2) + '\n', 'utf8');
+  await writeFile(claudePath, `${JSON.stringify(claude, null, 2)}\n`, 'utf8');
 
   const before = await snapshot(root);
   const sync2 = runMcpCli(root, 'sync');
@@ -610,7 +562,7 @@ test('sync safely removes deleted servers from targets while preserving unmanage
   const claudePath = path.join(root, '.mcp.json');
   const claude = JSON.parse(await readFile(claudePath, 'utf8'));
   claude.mcpServers['unmanaged-extra'] = { command: 'extra' };
-  await writeFile(claudePath, JSON.stringify(claude, null, 2) + '\n', 'utf8');
+  await writeFile(claudePath, `${JSON.stringify(claude, null, 2)}\n`, 'utf8');
 
   // Remove server-one from mcp-servers.yaml
   await writeFile(
@@ -1032,11 +984,10 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
       url: "https://api.example.com/mcp"
       type: "sse"
       headers:
-        Authorization: "Bearer \${BASE_KEY}"
+        X-Base: base
     overrides:
       antigravity:
         headers:
-          Authorization: "Bearer \${AG_KEY}"
           X-Tool: "antigravity"
       vscode:
         url: "https://vscode.example.com/mcp"
@@ -1058,7 +1009,7 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
   assert.deepEqual(claudeConfig.mcpServers['http-tool'], {
     type: 'sse',
     url: 'https://api.example.com/mcp',
-    headers: { Authorization: 'Bearer ${BASE_KEY}' },
+    headers: { 'X-Base': 'base' },
   });
 
   // 2. Codex: stdio-tool has base command, base args, merged env
@@ -1068,7 +1019,7 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
   assert.match(codexConfig, /SHARED_VAR = "shared"/);
   assert.match(codexConfig, /CODEX_VAR = "codex_only"/);
   assert.match(codexConfig, /url = "https:\/\/api\.example\.com\/mcp"/);
-  assert.match(codexConfig, /Authorization = "Bearer \$\{BASE_KEY\}"/);
+  assert.match(codexConfig, /X-Base = "base"/);
 
   // 3. Antigravity: http-tool has base URL and type, overridden headers
   const agyConfig = JSON.parse(await readFile(path.join(root, '.agents', 'mcp_config.json'), 'utf8'));
@@ -1076,7 +1027,7 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
     serverUrl: 'https://api.example.com/mcp',
     transport: 'sse',
     headers: {
-      Authorization: 'Bearer ${AG_KEY}',
+      'X-Base': 'base',
       'X-Tool': 'antigravity',
     },
   });
@@ -1086,8 +1037,188 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
   assert.deepEqual(vscodeConfig.servers['http-tool'], {
     type: 'sse',
     url: 'https://vscode.example.com/mcp',
-    headers: { Authorization: 'Bearer ${BASE_KEY}' },
+    headers: { 'X-Base': 'base' },
   });
+});
+
+test('sync translates bare env/header variable references into each client\'s documented syntax', async () => {
+  const root = await createInitializedMcpFixture();
+
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  var-tool:
+    command: npx
+    args: ["-y", "var-server"]
+    env:
+      API_KEY: "\${API_KEY}"
+      OTHER: "$OTHER"
+      LITERAL: "not-a-var-ref value"
+    overrides:
+      antigravity:
+        http:
+          url: https://antigravity.example.com/mcp
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+  assert.equal(syncResult.status, 0, syncResult.stderr);
+
+  const claudeConfig = JSON.parse(await readFile(path.join(root, '.mcp.json'), 'utf8'));
+  assert.deepEqual(claudeConfig.mcpServers['var-tool'].env, {
+    API_KEY: '${API_KEY}',
+    OTHER: '${OTHER}',
+    LITERAL: 'not-a-var-ref value',
+  });
+
+  const vscodeConfig = JSON.parse(await readFile(path.join(root, '.vscode', 'mcp.json'), 'utf8'));
+  assert.deepEqual(vscodeConfig.servers['var-tool'].env, {
+    API_KEY: '${env:API_KEY}',
+    OTHER: '${env:OTHER}',
+    LITERAL: 'not-a-var-ref value',
+  });
+
+  const codexConfig = await readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+  assert.match(codexConfig, /env_vars = \["API_KEY","OTHER"\]/);
+  assert.match(codexConfig, /LITERAL = "not-a-var-ref value"/);
+  assert.doesNotMatch(codexConfig, /API_KEY = "\$\{API_KEY\}"/);
+  assert.doesNotMatch(codexConfig, /OTHER = "\$OTHER"/);
+});
+
+test('sync maps Codex header variable references to bearer_token_env_var and env_http_headers', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  api:
+    http:
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer \${API_TOKEN}"
+        X-Tenant: "\${TENANT_ID}"
+        X-Client: drakom
+    overrides:
+      antigravity:
+        command: node
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 0, syncResult.stderr);
+  const codexConfig = await readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+  assert.match(codexConfig, /bearer_token_env_var = "API_TOKEN"/);
+  assert.match(codexConfig, /\[mcp_servers\.api\.env_http_headers\]\nX-Tenant = "TENANT_ID"/);
+  assert.match(codexConfig, /\[mcp_servers\.api\.http_headers\]\nX-Client = "drakom"/);
+  assert.doesNotMatch(codexConfig, /Authorization = /);
+
+  const resync = runMcpCli(root, 'sync', ['--check']);
+  assert.equal(resync.status, 0, resync.stdout);
+});
+
+test('sync writes each client\'s syntax for ${env:VAR} registry references', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  api:
+    http:
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer \${env:API_TOKEN}"
+        X-Tenant: "\${env:TENANT_ID}"
+    overrides:
+      antigravity:
+        command: node
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 0, syncResult.stderr);
+  const claudeConfig = JSON.parse(await readFile(path.join(root, '.mcp.json'), 'utf8'));
+  assert.deepEqual(claudeConfig.mcpServers.api.headers, {
+    Authorization: 'Bearer ${API_TOKEN}',
+    'X-Tenant': '${TENANT_ID}',
+  });
+  const vscodeConfig = JSON.parse(await readFile(path.join(root, '.vscode', 'mcp.json'), 'utf8'));
+  assert.deepEqual(vscodeConfig.servers.api.headers, {
+    Authorization: 'Bearer ${env:API_TOKEN}',
+    'X-Tenant': '${env:TENANT_ID}',
+  });
+  const codexConfig = await readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+  assert.match(codexConfig, /bearer_token_env_var = "API_TOKEN"/);
+  assert.match(codexConfig, /X-Tenant = "TENANT_ID"/);
+  assert.doesNotMatch(codexConfig, /env:/);
+});
+
+test('sync reports a conflict for ${input:...} outside a VS Code override', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  api:
+    http:
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer \${input:api-token}"
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 2);
+  assert.match(syncResult.stdout, /CONFLICT.*input:api-token.*overrides\.vscode/);
+});
+
+test('sync accepts ${input:...} inside a VS Code override', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  api:
+    http:
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer \${API_TOKEN}"
+    overrides:
+      vscode:
+        headers:
+          Authorization: "Bearer \${input:api-token}"
+      antigravity:
+        command: node
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 0, syncResult.stdout);
+  const vscodeConfig = JSON.parse(await readFile(path.join(root, '.vscode', 'mcp.json'), 'utf8'));
+  assert.equal(vscodeConfig.servers.api.headers.Authorization, 'Bearer ${input:api-token}');
+});
+
+test('sync reports a conflict when a Codex env key references a differently named variable', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:
+  gh:
+    command: npx
+    env:
+      GITHUB_TOKEN: "\${GH_PAT}"
+`,
+    'utf8',
+  );
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 2);
+  assert.match(syncResult.stdout, /CONFLICT.*GITHUB_TOKEN.*GH_PAT/);
 });
 
 test('validateMcpRegistry rejects mismatched partial overrides that contradict base transport', () => {
@@ -1173,4 +1304,169 @@ test('buildSyncPlan Phase 3 catches defensive throw during MCP generation', asyn
   );
   assert.ok(conflictOp);
   assert.match(conflictOp.summary, /MCP generation failed: Simulated generator failure/);
+});
+
+test('sync does not conflict when a managed server is removed from both the registry and a JSON client file', async () => {
+  const root = await createInitializedMcpFixture();
+
+  const mcpYaml = path.join(root, DRAKOM_DIR, 'mcp-servers.yaml');
+  await writeFile(
+    mcpYaml,
+    `servers:
+  gh:
+    command: npx
+`,
+    'utf8',
+  );
+
+  const sync1 = runMcpCli(root, 'sync');
+  assert.equal(sync1.status, 0, sync1.stderr);
+
+  await writeFile(mcpYaml, 'servers: {}\n', 'utf8');
+  await writeFixture(root, '.mcp.json', `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`);
+  await writeFixture(root, '.vscode/mcp.json', `${JSON.stringify({ servers: {} }, null, 2)}\n`);
+  await writeFixture(root, '.agents/mcp_config.json', `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`);
+
+  const sync2 = runMcpCli(root, 'sync');
+  assert.equal(sync2.status, 0, sync2.stderr);
+
+  const state = await loadState(root);
+  assert.equal(state?.managedMcpServers.gh, undefined);
+});
+
+test('renderers translate variable references throughout supported client values', () => {
+  const server = {
+    command: '${env:RUNNER}',
+    args: ['--token=${TOKEN}', '$REGION/${env:ZONE}'],
+    env: { API_KEY: 'Token ${env:TOKEN}' },
+  };
+
+  assert.deepEqual(generateClaudeServer(server), {
+    command: '${RUNNER}',
+    args: ['--token=${TOKEN}', '${REGION}/${ZONE}'],
+    env: { API_KEY: 'Token ${TOKEN}' },
+  });
+  assert.deepEqual(generateVscodeServer(server), {
+    type: 'stdio',
+    command: '${env:RUNNER}',
+    args: ['--token=${env:TOKEN}', '${env:REGION}/${env:ZONE}'],
+    env: { API_KEY: 'Token ${env:TOKEN}' },
+  });
+
+  const http = { http: { url: 'https://${env:HOST}/mcp?region=$REGION', headers: { 'X-Key': 'Token ${TOKEN}' } } };
+  assert.equal(generateClaudeServer(http).url, 'https://${HOST}/mcp?region=${REGION}');
+  assert.equal(generateVscodeServer(http).url, 'https://${env:HOST}/mcp?region=${env:REGION}');
+  assert.deepEqual(generateVscodeServer(http).headers, { 'X-Key': 'Token ${env:TOKEN}' });
+  assert.equal(checkLiteralCredentials({ http: { headers: { Authorization: 'Token ${TOKEN}' } } }).hasCredentials, false);
+});
+
+test('unsupported clients reject variable references they cannot expand', () => {
+  assert.throws(
+    () => generateCodexServerSnippet('api', { command: 'node', args: ['--token=${TOKEN}'] }),
+    /Codex.*args.*TOKEN.*env.*override/i,
+  );
+  assert.throws(
+    () => generateCodexServerSnippet('api', { http: { url: 'https://${env:HOST}/mcp' } }),
+    /Codex.*url.*HOST.*override/i,
+  );
+  assert.throws(
+    () => generateCodexServerSnippet('api', { command: 'node', env: { API_KEY: 'Token ${TOKEN}' } }),
+    /Codex.*env\.API_KEY.*TOKEN.*override/i,
+  );
+  assert.throws(
+    () => generateAntigravityServer({ command: 'node', args: ['--token=$TOKEN'] }),
+    /Antigravity.*args.*TOKEN.*override/i,
+  );
+  assert.throws(
+    () => generateAntigravityServer({ http: { url: 'https://${HOST}/mcp' } }),
+    /Antigravity.*url.*HOST.*override/i,
+  );
+  assert.throws(
+    () => generateAntigravityServer({ command: 'node', env: { TOKEN: '${TOKEN}' } }),
+    /Antigravity.*env\.TOKEN.*overrides\.antigravity/i,
+  );
+});
+
+test('VS Code input prompts remain limited to VS Code overrides in all fields', () => {
+  assert.throws(
+    () => generateClaudeServer({ command: 'node', args: ['--token=${input:token}'] }),
+    /input:token.*overrides\.vscode/,
+  );
+  assert.throws(
+    () => generateCodexServerSnippet('api', { http: { url: 'https://${input:host}/mcp' } }),
+    /input:host.*overrides\.vscode/,
+  );
+  const server = {
+    command: 'node',
+    overrides: { vscode: { args: ['--token=${input:token}'] } },
+  };
+  assert.deepEqual(generateVscodeServer(server).args, ['--token=${input:token}']);
+});
+
+test('sync reports an unresolved argument reference before writing client files', async () => {
+  const root = await createInitializedMcpFixture();
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, `servers:
+  gh:
+    command: node
+    args: ["--token=\${TOKEN}"]
+    overrides:
+      antigravity:
+        args: ["--safe"]
+`);
+  const before = await snapshot(root);
+
+  const syncResult = runMcpCli(root, 'sync');
+
+  assert.equal(syncResult.status, 2);
+  assert.match(syncResult.stdout, /CONFLICT.*MCP server "gh": Codex args\[0\].*TOKEN.*env.*override/);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('credential detection and rendering agree on which variable references are valid', () => {
+  for (const value of ['${env:API_KEY}', '${API_KEY}', '$API_KEY', '${input:api-key}']) {
+    assert.equal(checkLiteralCredentials({ env: { API_KEY: value } }).hasCredentials, false, value);
+  }
+  assert.equal(checkLiteralCredentials({ http: { headers: { Authorization: 'Bearer ${API_KEY}' } } }).hasCredentials, false);
+  for (const value of ['${env:API-KEY}', '${API-KEY}', '$API-KEY', '${API_KEY', '${1KEY}']) {
+    assert.equal(checkLiteralCredentials({ env: { API_KEY: value } }).hasCredentials, true, value);
+  }
+  assert.equal(checkLiteralCredentials({ http: { headers: { Authorization: 'Bearer ${env:API-KEY}' } } }).hasCredentials, true);
+});
+
+test('sync rejects unsupported variable names before writing any MCP client config', async () => {
+  const cases = [
+    ['env', 'API_KEY: "${env:API-KEY}"', '${env:API-KEY}'],
+    ['env', 'API_KEY: "${API-KEY}"', '${API-KEY}'],
+    ['env', 'API_KEY: "$API-KEY"', '$API-KEY'],
+    ['env', 'API_KEY: "${API_KEY"', '${API_KEY'],
+    ['env', 'API_KEY: "${1KEY}"', '${1KEY}'],
+  ];
+  for (const [field, entry, token] of cases) {
+    const root = await createInitializedMcpFixture();
+    await writeFile(
+      path.join(root, DRAKOM_DIR, 'mcp-servers.yaml'),
+      `servers:\n  api:\n    command: node\n    ${field}:\n      ${entry}\n`,
+      'utf8',
+    );
+
+    const syncResult = runMcpCli(root, 'sync');
+
+    assert.equal(syncResult.status, 2, `${token}\n${syncResult.stdout}`);
+    assert.ok(syncResult.stdout.includes(`uses unsupported variable reference ${token}`), `${token}\n${syncResult.stdout}`);
+    assert.doesNotMatch(syncResult.stdout, /literal credentials/);
+    for (const clientFile of ['.mcp.json', '.vscode/mcp.json', '.codex/config.toml']) {
+      const content = await readFile(path.join(root, clientFile), 'utf8').catch(() => '');
+      assert.equal(content.includes('API-KEY') || content.includes('1KEY'), false, `${token} leaked into ${clientFile}`);
+    }
+  }
+
+  const headerRoot = await createInitializedMcpFixture();
+  await writeFile(
+    path.join(headerRoot, DRAKOM_DIR, 'mcp-servers.yaml'),
+    `servers:\n  api:\n    http:\n      url: https://api.example.com/mcp\n      headers:\n        Authorization: "Bearer \${env:API-KEY}"\n`,
+    'utf8',
+  );
+  const headerSync = runMcpCli(headerRoot, 'sync');
+  assert.equal(headerSync.status, 2, headerSync.stdout);
+  assert.ok(headerSync.stdout.includes('http.headers.Authorization uses unsupported variable reference ${env:API-KEY}'), headerSync.stdout);
 });

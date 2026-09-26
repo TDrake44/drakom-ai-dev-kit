@@ -1,8 +1,6 @@
 import type { BaseServerConfig, ClientOverrideConfig, HttpConfig, McpClient, McpRegistry, StringMap } from './mcp-types.js';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './util.js';
+import { findUnsupportedVarRefInValue } from './mcp-variables.js';
 
 const SERVER_KEYS = new Set(['command', 'args', 'env', 'http', 'overrides']);
 const OVERRIDE_KEYS = new Set([
@@ -132,6 +130,10 @@ function validateServer(serverName: string, value: unknown): BaseServerConfig | 
   if (!isRecord(value)) return `MCP server "${serverName}" definition must be an object`;
   const key = unsupportedKey(value, SERVER_KEYS);
   if (key) return `MCP server "${serverName}" contains unsupported field "${key}"`;
+  const unsupportedRef = findUnsupportedVarRefInValue(value, '');
+  if (unsupportedRef) {
+    return `MCP server "${serverName}" ${unsupportedRef.field} uses unsupported variable reference ${unsupportedRef.token}; use \${NAME}, \${env:NAME}, or $NAME where NAME starts with a letter or underscore and contains only letters, digits, and underscores`;
+  }
 
   const hasCommand = isNonEmptyString(value.command);
   const hasHttp = isRecord(value.http);

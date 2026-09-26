@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { load as loadYaml } from 'js-yaml';
 
 import type { TargetInventory } from './inspect-target.js';
@@ -6,6 +5,7 @@ import { checkLiteralCredentials } from './mcp-discovery.js';
 import { generateMcpOperations, validateMcpRegistry } from './mcp-generation.js';
 import type { PackagePayload } from './package-payload.js';
 import { compareVersions, DRAKOM_DIR, serializeState, type InstallState, type ManagedMcpServerState } from './state.js';
+import { fingerprint } from './util.js';
 
 export { compareVersions, DRAKOM_DIR };
 
@@ -52,10 +52,6 @@ export interface OperationPlan {
   hasConflicts: boolean;
 }
 
-export function fingerprint(content: string): string {
-  return `sha256:${createHash('sha256').update(content).digest('hex')}`;
-}
-
 export function isGeneratedMirrorContent(content: string): boolean {
   const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
   const body = frontmatter ? content.slice(frontmatter.length).replace(/^(?:\r?\n)*/, '') : content;
@@ -94,7 +90,7 @@ function planWorktreeInclude(
 ): void {
   const worktreePath = '.worktreeinclude';
   const worktreeContent = inventory.contents[worktreePath];
-  if (inventory.paths.includes(`${worktreePath}/`)) {
+  if (inventory.pathSet.has(`${worktreePath}/`)) {
     operations.push({
       action: 'conflict',
       path: worktreePath,
@@ -152,8 +148,12 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
-  const planAuditTarget = '.agents/skills/plan-audit/SKILL.md';
-  const planAuditSource = 'skills/plan-audit/SKILL.md';
+  const planAuditSourceRel = payload.manifest.files.planAuditSkill;
+  if (planAuditSourceRel === undefined) {
+    throw new Error('Package payload manifest is missing the planAuditSkill file entry.');
+  }
+  const planAuditTarget = `.agents/${planAuditSourceRel}`;
+  const planAuditSource = planAuditSourceRel;
   const planAuditContent = options.withPlanAudit ? requirePayloadFile('planAuditSkill') : undefined;
   const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
   const rulesReadmeSource = 'templates/rules.README.md';
@@ -169,7 +169,7 @@ export function buildInitPlan(
   const stateTarget = `${DRAKOM_DIR}/state.json`;
 
   const inventoryHasPath = (targetPath: string): boolean =>
-    inventory.paths.includes(targetPath) || inventory.paths.includes(`${targetPath}/`);
+    inventory.pathSet.has(targetPath) || inventory.pathSet.has(`${targetPath}/`);
 
   const addDirectory = (targetPath: string, summary: string): void => {
     if (!inventoryHasPath(targetPath)) {
@@ -356,18 +356,12 @@ export function buildInitPlan(
   };
 }
 
-/** Purely derive a synchronization plan from an already-captured inventory. */
-export function buildSyncPlan(
+function planManagedFiles(
   inventory: TargetInventory,
+  state: InstallState,
   payload: PackagePayload,
-): OperationPlan {
-  const operations: Operation[] = [];
-  const state = inventory.state;
-  if (!state) {
-    throw new Error('Target is not an initialized Drakom installation; run init first.');
-  }
-
-  // Phase 1: Kit-managed files
+  operations: Operation[],
+): void {
   const payloadSourceToContent = new Map<string, string>();
   for (const [key, sourceRel] of Object.entries(payload.manifest.files)) {
     const fileContent = payload.files[key];
@@ -419,12 +413,13 @@ export function buildSyncPlan(
       operations.push({
         action: 'conflict',
         path: managedPath,
-        summary: `Managed file source ${entry.source} is missing from package payload; review payload evolution.`,
+        summary: `Managed file source ${entry.source} is missing from this kit version; review the upgrade notes for manual cleanup steps before synchronizing.`,
       });
     }
   }
+}
 
-  // Managed blocks (e.g. AGENTS.md#drakom-ai)
+function planManagedBlocks(inventory: TargetInventory, state: InstallState, operations: Operation[]): void {
   if (state.managedBlocks) {
     for (const [blockKey, entry] of Object.entries(state.managedBlocks)) {
       const [filePath, identifier] = blockKey.split('#');
@@ -466,7 +461,7 @@ export function buildSyncPlan(
         const canonicalBlock = `${MANAGED_BLOCK}\n`;
         const canonicalFp = fingerprint(canonicalBlock);
         if (blockFp !== canonicalFp && fingerprint(normalizedBlockWithNl) !== canonicalFp) {
-          const updatedContent = fileContent.replace(block, canonicalBlock);
+          const updatedContent = fileContent.replace(block, () => canonicalBlock);
           operations.push({
             action: 'update',
             path: filePath,
@@ -484,15 +479,16 @@ export function buildSyncPlan(
       }
     }
   }
+}
 
-  // Phase 2: Claude skill mirrors
+function planSkillMirrors(inventory: TargetInventory, state: InstallState, operations: Operation[]): Set<string> {
   const canonicalSkillMirrorPaths = new Set<string>();
   if (state.features.skillMirrors !== false) {
     const canonicalSkills: Array<{ name: string; path: string; content: string }> = [];
     for (const skillPath of inventory.skillFiles) {
       const match = skillPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/);
       const skillContent = inventory.contents[skillPath];
-      if (match && match[1] && skillContent !== undefined) {
+      if (match?.[1] && skillContent !== undefined) {
         const plannedUpdate = operations.find((op) => op.action === 'update' && op.path === skillPath);
         const effectiveContent = plannedUpdate?.content ?? skillContent;
         canonicalSkills.push({
@@ -511,8 +507,8 @@ export function buildSyncPlan(
       canonicalSkillMirrorPaths.add(targetFile);
       const expectedContent = createMirrorContent(skill.content);
 
-      const targetExists = inventory.paths.includes(targetFile);
-      const targetDirExists = inventory.paths.includes(targetDir) || inventory.paths.includes(`${targetDir}/`);
+      const targetExists = inventory.pathSet.has(targetFile);
+      const targetDirExists = inventory.pathSet.has(targetDir) || inventory.pathSet.has(`${targetDir}/`);
 
       if (targetDirExists && !targetExists) {
         operations.push({
@@ -585,7 +581,7 @@ export function buildSyncPlan(
     // Stale mirrors in .claude/skills/
     for (const skillPath of inventory.skillFiles) {
       const match = skillPath.match(/^\.claude\/skills\/([^/]+)\/SKILL\.md$/);
-      if (match && match[1]) {
+      if (match?.[1]) {
         const mirrorName = match[1];
         if (!canonicalNames.has(mirrorName)) {
           const content = inventory.contents[skillPath] ?? '';
@@ -626,7 +622,10 @@ export function buildSyncPlan(
     }
   }
 
-  // Phase 3: MCP generation
+  return canonicalSkillMirrorPaths;
+}
+
+function planMcp(inventory: TargetInventory, state: InstallState, operations: Operation[]): Record<string, ManagedMcpServerState> {
   let nextManagedMcpServers: Record<string, ManagedMcpServerState> = { ...state.managedMcpServers };
   if (state.features.mcp !== false) {
     const registryRelPath = `${DRAKOM_DIR}/mcp-servers.yaml`;
@@ -705,7 +704,17 @@ export function buildSyncPlan(
     }
   }
 
-  // Phase 4: State updates
+  return nextManagedMcpServers;
+}
+
+function planStateUpdate(
+  inventory: TargetInventory,
+  state: InstallState,
+  payload: PackagePayload,
+  operations: Operation[],
+  canonicalSkillMirrorPaths: Set<string>,
+  nextManagedMcpServers: Record<string, ManagedMcpServerState>,
+): boolean {
   const hasConflicts = operations.some((op) => op.action === 'conflict');
   const updatedManagedFiles: Record<string, { source: string; fingerprint: string }> = { ...state.managedFiles };
   for (const op of operations) {
@@ -777,6 +786,23 @@ export function buildSyncPlan(
       summary: 'Installation state is up to date.',
     });
   }
+
+  return hasConflicts;
+}
+
+/** Purely derive a synchronization plan from an already-captured inventory. */
+export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayload): OperationPlan {
+  const operations: Operation[] = [];
+  const state = inventory.state;
+  if (!state) {
+    throw new Error('Target is not an initialized Drakom installation; run init first.');
+  }
+
+  planManagedFiles(inventory, state, payload, operations);
+  planManagedBlocks(inventory, state, operations);
+  const canonicalSkillMirrorPaths = planSkillMirrors(inventory, state, operations);
+  const nextManagedMcpServers = planMcp(inventory, state, operations);
+  const hasConflicts = planStateUpdate(inventory, state, payload, operations, canonicalSkillMirrorPaths, nextManagedMcpServers);
 
   operations.push({
     action: 'preserve',

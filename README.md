@@ -56,12 +56,16 @@ When initialization completes, open your preferred AI assistant and run the setu
 $drakom-ai-setup    # OpenAI Codex CLI
 ```
 
-Interactive initialization also offers the optional `plan-audit` skill for
-reviewing or cleaning up local `.drakom-ai/plans/`. To install it without the
-interactive choice, pass `--with-plan-audit`; it is omitted by default from
+Interactive initialization also offers the optional `drakom-plan-audit` skill
+for reviewing or cleaning up local `.drakom-ai/plans/`. To install it without
+the interactive choice, pass `--with-plan-audit`; it is omitted by default from
 `--yes` runs. The same flag can add the skill safely to an existing initialized
 project. The skill is recorded as kit-managed and its Claude mirror is generated
-by `drakom-ai sync`.
+by `drakom-ai sync`. Projects that opted in under the former name in
+`@drakom/ai-dev-kit@0.2.0` should remove `.agents/skills/plan-audit/SKILL.md`
+and `managedFiles[".agents/skills/plan-audit/SKILL.md"]` from
+`.drakom-ai/state.json`, then run `drakom-ai init --with-plan-audit`. Until
+then, `drakom-ai sync` reports a conflict and applies no updates.
 
 The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
 
@@ -83,10 +87,12 @@ For a fresh repository, `drakom-ai init .` creates:
 
 .agents/
 └── skills/
-    └── drakom-ai-setup/
-        ├── SKILL.md
-        └── references/
-            └── assessment-plan-template.md
+    ├── drakom-ai-setup/
+    │   ├── SKILL.md
+    │   └── references/
+    │       └── assessment-plan-template.md
+    └── drakom-plan-audit/           # optional; selected during init or via --with-plan-audit
+        └── SKILL.md
 
 AGENTS.md
 CLAUDE.md
@@ -124,13 +130,15 @@ skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
 Skills are procedures rather than policy. Author them in `.agents/skills/`; run
 `drakom-ai sync .` to generate their Claude Code mirrors. A project may add,
 replace, or remove its own rules and skills—the kit does not claim ownership of
-them.
+them. Kit-managed skills use the `drakom-` prefix (`drakom-ai-setup`,
+`drakom-plan-audit`); projects should not name their own skills with that
+prefix, to avoid colliding with skills the kit may add in the future.
 
 ## Managed and Project-Owned Content
 
 | Managed by Drakom AI Dev Kit | Owned by the project |
 | --- | --- |
-| Setup skill and optional plan-audit skill installed by `init` | Rules in `.drakom-ai/rules/` |
+| Setup skill and optional drakom-plan-audit skill installed by `init` | Rules in `.drakom-ai/rules/` |
 | The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
 | Generated Claude skill mirrors | Project-authored canonical skills in `.agents/skills/` |
 | Generated MCP client blocks | MCP registry choices and all unmanaged client configuration |
@@ -150,10 +158,19 @@ into these repository-local client files:
 - `.agents/mcp_config.json` for Antigravity CLI
 - `.codex/config.toml` for OpenAI Codex CLI
 
+Variable references in commands, arguments, URLs, environment values, and
+headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
+receives `${env:VAR}`. Codex maps whole environment and header references to
+its environment-backed fields; other references require a Codex override.
+Antigravity requires client-specific values for references it cannot expand.
+Sync reports a conflict when a reference cannot be represented safely.
+
 During initialization, Drakom AI Dev Kit compares discovered repository-local MCP
-configuration with the registry. It preserves unmanaged definitions and asks
-for an explicit decision before adopting a non-identical server. Use
-`--skip-mcp` if the project should not initialize MCP management.
+configuration with the registry and reports what it found, preserving unmanaged
+definitions rather than adopting them automatically. Run the `drakom-ai-setup`
+skill to walk through the reported decisions (import, import with overrides,
+leave unmanaged, or skip) for each discovered server. Use `--skip-mcp` if the
+project should not initialize MCP management.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
 

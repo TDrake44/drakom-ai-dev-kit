@@ -11,7 +11,6 @@ Applies to all source code files across application and script modules.
 ## 3. Prohibited Patterns
 - **No `any` types**: Never bypass compiler validation using `any` or untyped casts.
 - **No Implicit Globals**: Every dependency must be cleanly imported.
-- **No Premature Loading**: Do not import large suites or rules into session start context.
 - **No Logic in Entry Hubs**: Keep `AGENTS.md` and `CLAUDE.md` as routers, not code dumps.
 
 ## 4. Verification

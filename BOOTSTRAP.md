@@ -108,6 +108,7 @@ mkdir -p .agents/skills/document
    * **Key Commands**: The real lint, typecheck, test, and AI verification commands.
    * **Skill Suite Table**: Brief descriptions of the skills actually included
      in the target repository. The four starter skills below are optional.
+   * **Conventions**: Core architectural invariants, Conventional Commits format, and conventional branch naming (`fix/*`, `feat/*`, etc.).
 
 
 3. **`.gitignore`**: Do not ignore `.drakom-ai/` broadly. Track its
@@ -135,11 +136,11 @@ canonical configuration by default and ignore only local plans and assets:
 
 Create initial rule files tailored to the target project's tech stack. **Keep them under 150-200 lines each.**
 
-Every rule file MUST follow this anatomy:
+Every rule file follows this anatomy:
 
 1. **Scope**: Which files or directories this rule applies to.
 2. **Required Patterns**: The idioms, conventions, and architectural structures required by this repository.
-3. **Prohibited Patterns**: **Crucial.** Explicit bullet points of patterns the AI must *never* introduce (e.g., deprecated libraries, forbidden style approaches, bypassed type checks, anti-pattern assertions).
+3. **Prohibited Patterns**: Patterns agents have introduced, or plausibly would, that linters, types, and tests don't already catch (e.g., deprecated libraries, bypassed type checks). Give each its reason. Prefer stating the desired pattern under Required Patterns; list a prohibition only when the failure is real in this repository.
 4. **Verification**: How to verify compliance via CLI commands.
 
 Core files to create:
@@ -213,8 +214,7 @@ servers: {}
 3. **Project Task Registry** (e.g. `package.json`, `Makefile`, `Taskfile`):
    Add tasks for synchronization and drift verification:
    * `sync`: `drakom-ai sync .`
-   * `sync:check` (or `verify:ai`): `drakom-ai sync . --check`
-   * Aliases if desired: `mcp:gen`, `mcp:check`, `skills:sync`, `skills:check`
+   * `sync:check`: `drakom-ai sync . --check`
 
 4. **Git Hooks / CI**: Add `drakom-ai sync . --check` (or `pnpm sync:check`) after dependency
    installation in existing pre-push hooks and pull request CI. Keep the

@@ -18,8 +18,8 @@ Claude Code does not read this directory directly; it reads the **generated mirr
 ## Synchronization
 After creating or editing any skill here:
 ```bash
-pnpm skills:sync  # Regenerate the .claude/skills mirror
-pnpm skills:check # Verify consistency (used in CI)
+pnpm sync        # Regenerate the .claude/skills mirror
+pnpm sync:check  # Verify consistency (used in CI)
 ```
 
 The sync script only manages Claude mirrors marked with its generated notice. It

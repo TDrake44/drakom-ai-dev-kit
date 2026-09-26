@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { SEMVER_REGEX } from './state.js';
+import { isRecord } from './util.js';
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const payloadRoot = path.resolve(moduleDirectory, '..', 'payload', 'v1');
@@ -16,10 +17,6 @@ export interface PayloadManifest {
 export interface PackagePayload {
   manifest: PayloadManifest;
   files: Record<string, string>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export async function loadPackagePayload(): Promise<PackagePayload> {
