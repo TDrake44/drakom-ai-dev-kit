@@ -16,7 +16,7 @@
      - **Medium:** Code smells, architectural degradation, missing docstrings on public APIs.
      - **Low:** Minor styling suggestions, non-critical readability improvements.
 4. **Inline Review Format:**
-   - Begin the response with `Reviewer: <model name>`, using the actual model identifier performing the review.
+   - Begin the response with `Reviewer: <model family> <variant> (<model identifier>)` when the runtime exposes both, for example `Reviewer: GPT-6 Sol (gpt-6-sol)`. If the variant or identifier is unavailable, use the most specific model name the runtime provides; never guess the variant.
    - Present findings directly in the response under separate `High`, `Medium`, and `Low` sections, in that order.
    - Include every priority section even when it has no findings; write `None.` for an empty section.
    - For each finding, provide a concise title, a file and line reference, the concrete impact, and the required remediation.
