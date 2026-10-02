@@ -9,6 +9,7 @@ import { parse as parseJsonc } from 'jsonc-parser';
 
 import { DRAKOM_DIR } from '../dist/constants.js';
 import { inspectTarget } from '../dist/inspect-target.js';
+import { setJsonValue } from '../dist/json-text.js';
 import {
   checkLiteralCredentials,
   discoverMcp,
@@ -1760,4 +1761,77 @@ test('sync keeps the byte-order mark and comments when adding a server to a VS C
   const text = await readFixtureText(root, '.vscode/mcp.json');
   assert.ok(text.startsWith(`${BYTE_ORDER_MARK}{\n  // Workspace MCP servers for VS Code Copilot`));
   assert.deepEqual(parseJsonc(text.slice(BYTE_ORDER_MARK.length)).servers.tools, { type: 'stdio', command: 'node' });
+});
+
+const MANAGED_FIRST_VSCODE_MCP = `{
+  "servers": {
+    "tools": {
+      "type": "stdio",
+      "command": "node"
+    }, // note after tools
+    // unmanaged helper explanation
+    "helper": {
+      "command": "h"
+    }
+  }
+}
+`;
+
+const MANAGED_LAST_VSCODE_MCP = `{
+  "servers": {
+    "helper": {
+      "command": "h"
+    },
+    // managed tools below
+    "tools": {
+      "type": "stdio",
+      "command": "node"
+    }
+    // trailing note
+  }
+}
+`;
+
+/** @param {string} layout */
+async function createManagedToolsFixture(layout) {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  tools:\n    command: node\n');
+  const first = runMcpCli(root, 'sync');
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  await writeFixture(root, '.vscode/mcp.json', layout);
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers: {}\n');
+  return root;
+}
+
+test('removing a managed server keeps comments that precede the next unmanaged server', async () => {
+  const root = await createManagedToolsFixture(MANAGED_FIRST_VSCODE_MCP);
+
+  const result = runMcpCli(root, 'sync');
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(
+    await readFixtureText(root, '.vscode/mcp.json'),
+    '{\n  "servers": {\n    // note after tools\n    // unmanaged helper explanation\n    "helper": {\n      "command": "h"\n    }\n  }\n}\n',
+  );
+});
+
+test('removing the last managed server keeps surrounding comments and leaves valid JSON', async () => {
+  const root = await createManagedToolsFixture(MANAGED_LAST_VSCODE_MCP);
+
+  const result = runMcpCli(root, 'sync');
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(
+    await readFixtureText(root, '.vscode/mcp.json'),
+    '{\n  "servers": {\n    "helper": {\n      "command": "h"\n    }\n    // managed tools below\n    // trailing note\n  }\n}\n',
+  );
+});
+
+test('removing the last server from strict JSON drops the preceding comma and keeps the sibling layout', () => {
+  const text = '{\n  "mcpServers": {\n    "a": {"command": "x"},\n    "tools": {\n      "command": "n"\n    }\n  }\n}\n';
+
+  const result = setJsonValue(text, ['mcpServers', 'tools'], undefined);
+
+  assert.equal(result, '{\n  "mcpServers": {\n    "a": {"command": "x"}\n  }\n}\n');
+  assert.deepEqual(JSON.parse(result), { mcpServers: { a: { command: 'x' } } });
 });

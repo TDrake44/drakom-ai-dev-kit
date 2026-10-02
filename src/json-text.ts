@@ -1,10 +1,13 @@
 import {
   applyEdits,
+  createScanner,
+  findNodeAtLocation,
   type FormattingOptions,
   modify,
   type Node,
   type ParseError,
   parseTree,
+  SyntaxKind,
 } from 'jsonc-parser';
 
 const BYTE_ORDER_MARK = '\uFEFF';
@@ -67,12 +70,63 @@ function detectFormatting(text: string): FormattingOptions {
   return { insertSpaces: true, tabSize: indent.length, eol };
 }
 
+// Offset of the next comma or closing token after `offset`, skipping whitespace and comments.
+function nextToken(text: string, offset: number): { kind: SyntaxKind; offset: number } {
+  const scanner = createScanner(text, true);
+  scanner.setPosition(offset);
+  const kind = scanner.scan();
+  return { kind, offset: scanner.getTokenOffset() };
+}
+
+/**
+ * Deletes only the property and one separating comma. jsonc-parser's `modify`
+ * also deletes any comments between the property and its next sibling.
+ */
+function removeProperty(text: string, path: readonly string[]): string {
+  const root = parseJsoncTree(text);
+  const property = root === undefined ? undefined : findNodeAtLocation(root, [...path])?.parent;
+  const siblings = property?.parent?.children;
+  if (property === undefined || siblings === undefined) return text;
+
+  const propertyEnd = property.offset + property.length;
+  const following = nextToken(text, propertyEnd);
+  let start = property.offset;
+  let end = propertyEnd;
+  let precedingComma: number | undefined;
+  if (following.kind === SyntaxKind.CommaToken) {
+    end = following.offset + 1;
+  } else {
+    const previous = siblings[siblings.indexOf(property) - 1];
+    if (previous !== undefined) {
+      precedingComma = nextToken(text, previous.offset + previous.length).offset;
+    }
+  }
+
+  // Remove whole lines when the property occupies them; otherwise keep trailing comments in place.
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const restOfLine = /^[ \t]*(?:\r?\n|$)/.exec(text.slice(end));
+  if (/^[ \t]*$/.test(text.slice(lineStart, start)) && restOfLine !== null) {
+    start = lineStart;
+    end += restOfLine[0].length;
+  } else {
+    end += /^[ \t]*/.exec(text.slice(end))?.[0].length ?? 0;
+  }
+
+  const withoutProperty = text.slice(0, start) + text.slice(end);
+  return precedingComma === undefined
+    ? withoutProperty
+    : withoutProperty.slice(0, precedingComma) + withoutProperty.slice(precedingComma + 1);
+}
+
 /**
  * Sets (or, with `undefined`, removes) the value at `path` as a minimal text
  * edit, so comments, key order, formatting, and any byte-order mark survive.
  */
 export function setJsonValue(text: string, path: readonly string[], value: unknown): string {
   const { bom, body } = splitByteOrderMark(text);
+  if (value === undefined) {
+    return bom + removeProperty(body, path);
+  }
   const edits = modify(body, [...path], value, { formattingOptions: detectFormatting(body) });
   return bom + applyEdits(body, edits);
 }
