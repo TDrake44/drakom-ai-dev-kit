@@ -1835,3 +1835,65 @@ test('removing the last server from strict JSON drops the preceding comma and ke
   assert.equal(result, '{\n  "mcpServers": {\n    "a": {"command": "x"}\n  }\n}\n');
   assert.deepEqual(JSON.parse(result), { mcpServers: { a: { command: 'x' } } });
 });
+
+const MANAGED_TOOLS_ENTRY = '"tools": {"type":"stdio","command":"node"}';
+const HELPER_ENTRY = '"helper": {"command":"h"}';
+
+/** @type {Array<[string, string, string]>} */
+const COMMENT_BEFORE_COMMA_CASES = [
+  [
+    'a line comment with the comma on its own line',
+    `{\n  "servers": {\n    ${MANAGED_TOOLS_ENTRY}\n    // unmanaged helper explanation\n    ,\n    ${HELPER_ENTRY}\n  }\n}\n`,
+    `{\n  "servers": {\n    // unmanaged helper explanation\n    ${HELPER_ENTRY}\n  }\n}\n`,
+  ],
+  [
+    'a line comment with a leading comma',
+    `{\n  "servers": {\n    ${MANAGED_TOOLS_ENTRY}\n    // unmanaged helper explanation\n    , ${HELPER_ENTRY}\n  }\n}\n`,
+    `{\n  "servers": {\n    // unmanaged helper explanation\n    ${HELPER_ENTRY}\n  }\n}\n`,
+  ],
+  [
+    'a block comment',
+    `{\n  "servers": {\n    ${MANAGED_TOOLS_ENTRY} /* unmanaged helper explanation */,\n    ${HELPER_ENTRY}\n  }\n}\n`,
+    `{\n  "servers": {\n    /* unmanaged helper explanation */\n    ${HELPER_ENTRY}\n  }\n}\n`,
+  ],
+];
+
+for (const [label, layout, expected] of COMMENT_BEFORE_COMMA_CASES) {
+  test(`removing a managed server keeps ${label} before its separating comma`, async () => {
+    const root = await createManagedToolsFixture(layout);
+
+    const result = runMcpCli(root, 'sync');
+
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(await readFixtureText(root, '.vscode/mcp.json'), expected);
+  });
+
+  test(`sync after removing a managed server before ${label} changes nothing`, async () => {
+    const root = await createManagedToolsFixture(layout);
+    const first = runMcpCli(root, 'sync');
+    assert.equal(first.status, 0, first.stdout + first.stderr);
+    const before = await snapshot(root);
+
+    const second = runMcpCli(root, 'sync');
+
+    assert.equal(second.status, 0, second.stdout + second.stderr);
+    assert.deepEqual(await snapshot(root), before);
+  });
+}
+
+test('removing the only server keeps a comment before its trailing comma, BOM, and CRLF', () => {
+  const text = `${BYTE_ORDER_MARK}{\r\n  "servers": {\r\n    "tools": {"command":"node"} /* keep */,\r\n  }\r\n}\r\n`;
+
+  const result = setJsonValue(text, ['servers', 'tools'], undefined);
+
+  assert.equal(result, `${BYTE_ORDER_MARK}{\r\n  "servers": {\r\n    /* keep */\r\n  }\r\n}\r\n`);
+  assert.deepEqual(parseJsonc(result.slice(BYTE_ORDER_MARK.length)), { servers: {} });
+});
+
+test('removing the last server also removes a leading comma on its line', () => {
+  const text = '{\n  "servers": {\n    "helper": {"command":"h"}\n    , "tools": {"command":"node"}\n  }\n}\n';
+
+  const result = setJsonValue(text, ['servers', 'tools'], undefined);
+
+  assert.equal(result, '{\n  "servers": {\n    "helper": {"command":"h"}\n  }\n}\n');
+});

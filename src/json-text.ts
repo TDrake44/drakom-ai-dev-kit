@@ -1,6 +1,7 @@
 import {
   applyEdits,
   createScanner,
+  type Edit,
   findNodeAtLocation,
   type FormattingOptions,
   modify,
@@ -78,6 +79,23 @@ function nextToken(text: string, offset: number): { kind: SyntaxKind; offset: nu
   return { kind, offset: scanner.getTokenOffset() };
 }
 
+function lineStartOf(text: string, offset: number): number {
+  return text.lastIndexOf('\n', offset - 1) + 1;
+}
+
+// Deletes a comma. When it begins its line, also deletes the spaces after it, or the whole line if nothing else is on it.
+function commaDeletion(text: string, offset: number): Edit {
+  const lineStart = lineStartOf(text, offset);
+  if (!/^[ \t]*$/.test(text.slice(lineStart, offset))) {
+    return { offset, length: 1, content: '' };
+  }
+  const rest = /^[ \t]*(\r?\n|$)?/.exec(text.slice(offset + 1));
+  const restLength = rest?.[0].length ?? 0;
+  return rest?.[1] === undefined
+    ? { offset, length: 1 + restLength, content: '' }
+    : { offset: lineStart, length: offset + 1 + restLength - lineStart, content: '' };
+}
+
 /**
  * Deletes only the property and one separating comma. jsonc-parser's `modify`
  * also deletes any comments between the property and its next sibling.
@@ -92,18 +110,34 @@ function removeProperty(text: string, path: readonly string[]): string {
   const following = nextToken(text, propertyEnd);
   let start = property.offset;
   let end = propertyEnd;
-  let precedingComma: number | undefined;
+  let separateComma: number | undefined;
   if (following.kind === SyntaxKind.CommaToken) {
-    end = following.offset + 1;
+    if (/^\s*$/.test(text.slice(propertyEnd, following.offset))) {
+      end = following.offset + 1;
+    } else {
+      // Keep comments between the value and comma outside the property deletion.
+      separateComma = following.offset;
+    }
   } else {
     const previous = siblings[siblings.indexOf(property) - 1];
     if (previous !== undefined) {
-      precedingComma = nextToken(text, previous.offset + previous.length).offset;
+      separateComma = nextToken(text, previous.offset + previous.length).offset;
     }
   }
 
+  // A leading comma on the property's own line is removed together with the property.
+  if (
+    separateComma !== undefined &&
+    separateComma < start &&
+    /^[ \t]*$/.test(text.slice(lineStartOf(text, separateComma), separateComma)) &&
+    /^[ \t]*$/.test(text.slice(separateComma + 1, start))
+  ) {
+    start = separateComma;
+    separateComma = undefined;
+  }
+
   // Remove whole lines when the property occupies them; otherwise keep trailing comments in place.
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const lineStart = lineStartOf(text, start);
   const restOfLine = /^[ \t]*(?:\r?\n|$)/.exec(text.slice(end));
   if (/^[ \t]*$/.test(text.slice(lineStart, start)) && restOfLine !== null) {
     start = lineStart;
@@ -112,10 +146,11 @@ function removeProperty(text: string, path: readonly string[]): string {
     end += /^[ \t]*/.exec(text.slice(end))?.[0].length ?? 0;
   }
 
-  const withoutProperty = text.slice(0, start) + text.slice(end);
-  return precedingComma === undefined
-    ? withoutProperty
-    : withoutProperty.slice(0, precedingComma) + withoutProperty.slice(precedingComma + 1);
+  const edits: Edit[] = [{ offset: start, length: end - start, content: '' }];
+  if (separateComma !== undefined) {
+    edits.push(commaDeletion(text, separateComma));
+  }
+  return applyEdits(text, edits);
 }
 
 /**
