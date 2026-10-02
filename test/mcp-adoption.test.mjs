@@ -780,6 +780,7 @@ test('sync strictly validates MCP registry schema and rejects invalid shapes bef
     { source: 'servers:\n  number-override-cmd:\n    command: node\n    overrides:\n      claude:\n        command: 42\n', error: /command must be a non-empty string/i },
     { source: 'servers:\n  bad-override-url:\n    command: node\n    overrides:\n      claude:\n        http:\n          url: 42\n', error: /http\.url must be a non-empty string/i },
     { source: 'servers:\n  both-override:\n    command: node\n    overrides:\n      claude:\n        command: node\n        url: https://example.com\n', error: /specifies both command and http/i },
+    { source: 'servers:\n  __proto__:\n    command: node\n', error: /server name "__proto__" is reserved/i },
   ];
 
   for (const { source, error } of invalidConfigs) {
@@ -1703,34 +1704,60 @@ test('a "__proto__" server in a commented VS Code file is an ordinary unmanaged 
   assert.match(text, /"__proto__": \{\s*"command": "mine"\s*\},\s*"command": \{\s*"type": "stdio",\s*"command": "node"\s*\}/);
 });
 
-test('sync manages a server whose name matches an Object.prototype member', async () => {
+test('validateMcpRegistry rejects a "__proto__" server name instead of dropping it', () => {
+  const raw = JSON.parse('{"servers":{"__proto__":{"command":"node"}}}');
+
+  const result = validateMcpRegistry(raw);
+
+  assert.equal(result.valid, false);
+  assert.match(result.error, /server name "__proto__" is reserved/);
+});
+
+test('sync writes a server whose name matches an Object.prototype member', async () => {
   const root = await createSyncedMcpFixture();
   await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  constructor:\n    command: node\n');
 
+  const result = runMcpCli(root, 'sync');
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual((await readFixtureJson(root, '.mcp.json')).mcpServers.constructor, { command: 'node' });
+});
+
+test('sync is idempotent for a server whose name matches an Object.prototype member', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  constructor:\n    command: node\n');
   const first = runMcpCli(root, 'sync');
   assert.equal(first.status, 0, first.stdout + first.stderr);
   const before = await snapshot(root);
+
   const second = runMcpCli(root, 'sync');
 
   assert.equal(second.status, 0, second.stdout + second.stderr);
   assert.deepEqual(await snapshot(root), before);
-  assert.deepEqual((await readFixtureJson(root, '.mcp.json')).mcpServers.constructor, { command: 'node' });
 });
 
-test('sync keeps a byte-order mark in a commented VS Code file', async () => {
+const BYTE_ORDER_MARK = '\uFEFF';
+
+test('no-op sync leaves a commented VS Code file with a byte-order mark byte-identical', async () => {
   const root = await createSyncedMcpFixture();
-  await writeFixture(root, '.vscode/mcp.json', `﻿${COMMENTED_VSCODE_MCP}`);
-  const unchanged = await snapshot(root);
+  await writeFixture(root, '.vscode/mcp.json', `${BYTE_ORDER_MARK}${COMMENTED_VSCODE_MCP}`);
+  const before = await snapshot(root);
 
-  const noop = runMcpCli(root, 'sync');
-  assert.equal(noop.status, 0, noop.stdout + noop.stderr);
-  assert.deepEqual(await snapshot(root), unchanged);
+  const result = runMcpCli(root, 'sync');
 
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('sync keeps the byte-order mark and comments when adding a server to a VS Code file', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, '.vscode/mcp.json', `${BYTE_ORDER_MARK}${COMMENTED_VSCODE_MCP}`);
   await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  tools:\n    command: node\n');
-  const add = runMcpCli(root, 'sync');
 
-  assert.equal(add.status, 0, add.stdout + add.stderr);
+  const result = runMcpCli(root, 'sync');
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
   const text = await readFixtureText(root, '.vscode/mcp.json');
-  assert.ok(text.startsWith('﻿{\n  // Workspace MCP servers for VS Code Copilot'));
-  assert.deepEqual(parseJsonc(text.slice(1)).servers.tools, { type: 'stdio', command: 'node' });
+  assert.ok(text.startsWith(`${BYTE_ORDER_MARK}{\n  // Workspace MCP servers for VS Code Copilot`));
+  assert.deepEqual(parseJsonc(text.slice(BYTE_ORDER_MARK.length)).servers.tools, { type: 'stdio', command: 'node' });
 });
