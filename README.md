@@ -146,7 +146,9 @@ prefix, to avoid colliding with skills the kit may add in the future.
 
 Managed content is updated only when its recorded fingerprint still matches.
 If it has local edits, synchronization reports a conflict rather than replacing
-it. Unmanaged content is preserved byte-for-byte.
+it. Files with no managed changes are left untouched. Files with managed
+changes are edited minimally: comments and unmanaged content are kept, and only
+the managed entries and the lines around them change.
 
 ## MCP Configuration
 

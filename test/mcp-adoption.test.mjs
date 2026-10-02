@@ -1470,3 +1470,165 @@ test('sync rejects unsupported variable names before writing any MCP client conf
   assert.equal(headerSync.status, 2, headerSync.stdout);
   assert.ok(headerSync.stdout.includes('http.headers.Authorization uses unsupported variable reference ${env:API-KEY}'), headerSync.stdout);
 });
+
+/** Initialized fixture with its first sync applied, so later syncs start drift-free. */
+async function createSyncedMcpFixture() {
+  const root = await createInitializedMcpFixture();
+  const baseline = runMcpCli(root, 'sync');
+  assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
+  return root;
+}
+
+const COMMENTED_VSCODE_MCP = `{
+  // Workspace MCP servers for VS Code Copilot
+  "inputs": [],
+  "servers": {
+    /* personal helper, not managed */
+    "local-helper": {
+      "type": "stdio",
+      "command": "helper",
+    },
+  },
+}
+`;
+
+/** @param {string} text */
+function stripJsonComments(text) {
+  return JSON.parse(
+    text
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/,(\s*[}\]])/g, '$1'),
+  );
+}
+
+test('sync, --check, and --dry-run leave a commented, trailing-comma VS Code file byte-identical with an empty registry', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, '.vscode/mcp.json', COMMENTED_VSCODE_MCP);
+  const before = await snapshot(root);
+
+  const check = runMcpCli(root, 'sync', ['--check']);
+  const dryRun = runMcpCli(root, 'sync', ['--dry-run']);
+  const sync = runMcpCli(root, 'sync');
+
+  assert.equal(check.status, 0, check.stdout + check.stderr);
+  assert.equal(dryRun.status, 0, dryRun.stdout + dryRun.stderr);
+  assert.equal(sync.status, 0, sync.stdout + sync.stderr);
+  for (const result of [check, dryRun, sync]) {
+    assert.doesNotMatch(result.stdout, /CONFLICT/);
+  }
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('MCP discovery reports servers defined in a commented VS Code file', async () => {
+  const root = await createFixture();
+  await writeFixture(root, '.vscode/mcp.json', COMMENTED_VSCODE_MCP);
+
+  const discovered = discoverMcp(await inspectTarget(root));
+
+  assert.equal(discovered.fileErrors, undefined);
+  assert.equal(discovered.servers.get('local-helper')?.classification, 'identical');
+  assert.match(renderMcpComparisonReport(discovered), /Server: `local-helper`/);
+});
+
+test('MCP discovery keeps .mcp.json and .agents/mcp_config.json strict about comments', async () => {
+  const root = await createFixture();
+  const commented = '{\n  // comment\n  "mcpServers": {}\n}\n';
+  await writeFixture(root, '.mcp.json', commented);
+  await writeFixture(root, '.agents/mcp_config.json', commented);
+
+  const discovered = discoverMcp(await inspectTarget(root));
+
+  assert.ok(discovered.fileErrors?.['.mcp.json']);
+  assert.ok(discovered.fileErrors?.['.agents/mcp_config.json']);
+});
+
+test('sync adds, updates, and removes managed servers in a commented VS Code file without losing comments', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, '.vscode/mcp.json', COMMENTED_VSCODE_MCP);
+  const registryPath = `${DRAKOM_DIR}/mcp-servers.yaml`;
+
+  await writeFixture(root, registryPath, "servers:\n  tools:\n    command: node\n    args: ['v1']\n");
+  const add = runMcpCli(root, 'sync');
+  assert.equal(add.status, 0, add.stdout + add.stderr);
+  const added = await readFixtureText(root, '.vscode/mcp.json');
+  assert.match(added, /\/\/ Workspace MCP servers for VS Code Copilot/);
+  assert.match(added, /\/\* personal helper, not managed \*\//);
+  assert.deepEqual(stripJsonComments(added).servers, {
+    'local-helper': { type: 'stdio', command: 'helper' },
+    tools: { type: 'stdio', command: 'node', args: ['v1'] },
+  });
+
+  await writeFixture(root, registryPath, "servers:\n  tools:\n    command: node\n    args: ['v2']\n");
+  const update = runMcpCli(root, 'sync');
+  assert.equal(update.status, 0, update.stdout + update.stderr);
+  const updated = await readFixtureText(root, '.vscode/mcp.json');
+  assert.match(updated, /\/\/ Workspace MCP servers for VS Code Copilot/);
+  assert.deepEqual(stripJsonComments(updated).servers.tools.args, ['v2']);
+
+  await writeFixture(root, registryPath, 'servers: {}\n');
+  const remove = runMcpCli(root, 'sync');
+  assert.equal(remove.status, 0, remove.stdout + remove.stderr);
+  const removed = await readFixtureText(root, '.vscode/mcp.json');
+  assert.match(removed, /\/\* personal helper, not managed \*\//);
+  assert.deepEqual(stripJsonComments(removed).servers, {
+    'local-helper': { type: 'stdio', command: 'helper' },
+  });
+});
+
+test('sync reports a conflict without writes when a managed server in a commented VS Code file is edited locally', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, '.vscode/mcp.json', COMMENTED_VSCODE_MCP);
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  tools:\n    command: node\n');
+  const first = runMcpCli(root, 'sync');
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  const synced = await readFixtureText(root, '.vscode/mcp.json');
+  await writeFixture(root, '.vscode/mcp.json', synced.replace('"node"', '"hacked"'));
+  const before = await snapshot(root);
+
+  const second = runMcpCli(root, 'sync');
+
+  assert.notEqual(second.status, 0);
+  assert.match(second.stdout, /CONFLICT.*\.vscode\/mcp\.json.*tools.*edited manually/i);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+/** @type {Array<[string, (key: string) => string]>} */
+const UNMANAGED_FORMAT_CASES = [
+  ['minified', (key) => JSON.stringify({ [key]: { other: { command: 'other' } } })],
+  ['CRLF', (key) => `${JSON.stringify({ [key]: { other: { command: 'other' } } }, null, 2).replace(/\n/g, '\r\n')}\r\n`],
+  ['tab-indented', (key) => `${JSON.stringify({ [key]: { other: { command: 'other' } } }, null, '\t')}\n`],
+  ['extra-key', (key) => `${JSON.stringify({ $schema: 'https://example.com/schema', [key]: {}, custom: { keep: true } }, null, 4)}`],
+];
+
+for (const [label, render] of UNMANAGED_FORMAT_CASES) {
+  test(`no-op sync leaves ${label} unmanaged JSON client files byte-identical`, async () => {
+    const root = await createSyncedMcpFixture();
+    await writeFixture(root, '.mcp.json', render('mcpServers'));
+    await writeFixture(root, '.vscode/mcp.json', render('servers'));
+    await writeFixture(root, '.agents/mcp_config.json', render('mcpServers'));
+    const before = await snapshot(root);
+
+    const check = runMcpCli(root, 'sync', ['--check']);
+    const sync = runMcpCli(root, 'sync');
+
+    assert.equal(check.status, 0, check.stdout + check.stderr);
+    assert.equal(sync.status, 0, sync.stdout + sync.stderr);
+    assert.deepEqual(await snapshot(root), before);
+  });
+}
+
+test('sync leaves a reformatted file untouched when its managed servers are semantically unchanged', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, "servers:\n  tools:\n    command: node\n    args: ['a']\n");
+  const first = runMcpCli(root, 'sync');
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  const claude = await readFixtureJson(root, '.mcp.json');
+  await writeFixture(root, '.mcp.json', JSON.stringify(claude, null, '\t').replace(/\n/g, '\r\n'));
+  const before = await snapshot(root);
+
+  const second = runMcpCli(root, 'sync');
+
+  assert.equal(second.status, 0, second.stdout + second.stderr);
+  assert.deepEqual(await snapshot(root), before);
+});

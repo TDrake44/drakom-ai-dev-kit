@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import type { TargetInventory } from './inspect-target.js';
 import { DRAKOM_DIR } from './constants.js';
+import { parseJsonc } from './json-text.js';
 import { validateMcpRegistry } from './mcp-registry.js';
 import { isVariableReference } from './mcp-variables.js';
 import type {
@@ -290,7 +291,7 @@ const CLIENT_FILE_SPECS: readonly ClientFileSpec[] = [
     topLevelError: 'Top-level must be a JSON object',
     serverMappingError: '"servers" must be a JSON mapping',
     syntaxError: 'Syntax error parsing JSON',
-    parse: JSON.parse,
+    parse: parseJsonc,
     normalization: {
       urlFields: ['url'],
       missingTransportReason: 'Server must define command or url',

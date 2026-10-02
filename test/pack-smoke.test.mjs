@@ -97,6 +97,8 @@ class SmokeHarness {
   /** @type {string} */
   smoltomlTarball = '';
   /** @type {string} */
+  jsoncParserTarball = '';
+  /** @type {string} */
   hookPath = '';
   /** @type {Record<string, unknown>} */
   packInfo = {};
@@ -140,11 +142,13 @@ class SmokeHarness {
     // 2. Prepare local runtime dependency tarballs for hermetic offline installation
     const jsyamlRoot = findPackageRoot('js-yaml');
     const smoltomlRoot = findPackageRoot('smol-toml');
+    const jsoncParserRoot = findPackageRoot('jsonc-parser');
     const argparseRoot = findPackageRoot('argparse', path.join(jsyamlRoot, 'index.js'));
 
     this.argparseTarball = packDirToTarball(argparseRoot, path.join(this.packDir, 'argparse-2.0.1.tgz'));
     this.jsyamlTarball = packDirToTarball(jsyamlRoot, path.join(this.packDir, 'js-yaml-4.1.0.tgz'));
     this.smoltomlTarball = packDirToTarball(smoltomlRoot, path.join(this.packDir, 'smol-toml-1.8.0.tgz'));
+    this.jsoncParserTarball = packDirToTarball(jsoncParserRoot, path.join(this.packDir, 'jsonc-parser-3.3.1.tgz'));
 
     // Create pnpm resolution hook redirecting runtime dependencies to local tarballs
     this.hookPath = path.join(this.packDir, 'pnpm-hook.cjs');
@@ -157,6 +161,7 @@ class SmokeHarness {
         if (pkg.dependencies['argparse']) pkg.dependencies['argparse'] = 'file:${this.argparseTarball}';
         if (pkg.dependencies['js-yaml']) pkg.dependencies['js-yaml'] = 'file:${this.jsyamlTarball}';
         if (pkg.dependencies['smol-toml']) pkg.dependencies['smol-toml'] = 'file:${this.smoltomlTarball}';
+        if (pkg.dependencies['jsonc-parser']) pkg.dependencies['jsonc-parser'] = 'file:${this.jsoncParserTarball}';
       }
       return pkg;
     }
@@ -297,6 +302,7 @@ test('packed artifact contains only required publishable runtime files and metad
   // Assert runtime dependencies are in production dependencies
   assert.ok(unpackedPkg.dependencies?.['js-yaml'], 'js-yaml must be declared in dependencies');
   assert.ok(unpackedPkg.dependencies?.['smol-toml'], 'smol-toml must be declared in dependencies');
+  assert.ok(unpackedPkg.dependencies?.['jsonc-parser'], 'jsonc-parser must be declared in dependencies');
 
   // Verify CLI executable permissions and shebang in unpacked package
   const cliFile = path.join(harness.unpackedDir, 'package', 'dist', 'cli.js');
@@ -639,6 +645,7 @@ test('npm install installs packed artifact and provides additional runtime cover
         harness.argparseTarball,
         harness.jsyamlTarball,
         harness.smoltomlTarball,
+        harness.jsoncParserTarball,
         harness.kitTarball,
       ],
       {
