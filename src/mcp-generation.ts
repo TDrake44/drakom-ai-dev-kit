@@ -42,6 +42,13 @@ interface JsonTargetPreparation {
 
 type JsonParser = (text: string) => unknown;
 
+// Own-key lookup, so server names such as "constructor" never resolve to Object.prototype members.
+function managedTargetFingerprint(state: InstallState, serverName: string, targetPath: string): string | undefined {
+  return Object.hasOwn(state.managedMcpServers, serverName)
+    ? state.managedMcpServers[serverName]?.targetFingerprints[targetPath]
+    : undefined;
+}
+
 function editProducedServers(
   content: string,
   containerKey: string,
@@ -110,8 +117,8 @@ function prepareJsonTarget(
   for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
     const prevFp = serverState.targetFingerprints[targetPath];
     if (prevFp !== undefined) {
-      if (!(serverName in currentServers)) {
-        if (serverName in generatedServers) {
+      if (!Object.hasOwn(currentServers, serverName)) {
+        if (Object.hasOwn(generatedServers, serverName)) {
           operations.push({
             action: 'conflict',
             path: targetPath,
@@ -134,8 +141,8 @@ function prepareJsonTarget(
   // 2. Check newly generated servers for collisions with unmanaged servers
   for (const [serverName, generatedServer] of Object.entries(generatedServers)) {
     targetFingerprints[serverName] = fingerprintObject(generatedServer);
-    const prevFp = state.managedMcpServers[serverName]?.targetFingerprints[targetPath];
-    if (serverName in currentServers && prevFp === undefined) {
+    const prevFp = managedTargetFingerprint(state, serverName, targetPath);
+    if (Object.hasOwn(currentServers, serverName) && prevFp === undefined) {
       // It exists in current client file but was not managed
       if (!isDeepStrictEqual(sortKeys(currentServers[serverName]), sortKeys(generatedServer))) {
         operations.push({
@@ -154,9 +161,9 @@ function prepareJsonTarget(
   // 3. Determine managed changes; semantically unchanged entries are left as written
   const removedServers = Object.keys(state.managedMcpServers).filter(
     (serverName) =>
-      !(serverName in generatedServers) &&
+      !Object.hasOwn(generatedServers, serverName) &&
       Object.hasOwn(currentServers, serverName) &&
-      state.managedMcpServers[serverName]?.targetFingerprints[targetPath] !== undefined,
+      managedTargetFingerprint(state, serverName, targetPath) !== undefined,
   );
   const changedServers = Object.entries(generatedServers).filter(
     ([serverName]) =>
@@ -348,8 +355,8 @@ function prepareCodexTarget(
     for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
       const prevFp = serverState.targetFingerprints[targetPath];
       if (prevFp !== undefined) {
-        if (!(serverName in blockServers)) {
-          if (serverName in generatedServers) {
+        if (!Object.hasOwn(blockServers, serverName)) {
+          if (Object.hasOwn(generatedServers, serverName)) {
             operations.push({
               action: 'conflict',
               path: targetPath,
@@ -389,7 +396,7 @@ function prepareCodexTarget(
   const unmanagedServers = parsedUnmanaged.mcp_servers;
   if (isRecord(unmanagedServers)) {
     for (const [serverName, serverDef] of Object.entries(generatedServers)) {
-      const prevFp = state.managedMcpServers[serverName]?.targetFingerprints[targetPath];
+      const prevFp = managedTargetFingerprint(state, serverName, targetPath);
       if (Object.hasOwn(unmanagedServers, serverName) && prevFp === undefined) {
         const expectedSnippet = renderCodexSnippet(serverName, serverDef);
         let parsedExpectedServer: Record<string, unknown> | null = null;
