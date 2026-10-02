@@ -7,6 +7,14 @@ import {
   parseTree,
 } from 'jsonc-parser';
 
+const BYTE_ORDER_MARK = '\uFEFF';
+
+function splitByteOrderMark(text: string): { bom: string; body: string } {
+  return text.startsWith(BYTE_ORDER_MARK)
+    ? { bom: BYTE_ORDER_MARK, body: text.slice(BYTE_ORDER_MARK.length) }
+    : { bom: '', body: text };
+}
+
 function parseJsoncTree(text: string): Node | undefined {
   const errors: ParseError[] = [];
   const root = parseTree(text, errors, { allowTrailingComma: true });
@@ -38,9 +46,9 @@ function nodeValue(node: Node): unknown {
   return result;
 }
 
-/** Parses JSON with comments and trailing commas, throwing on any syntax error. */
+/** Parses JSON with comments, trailing commas, and a leading byte-order mark, throwing on any syntax error. */
 export function parseJsonc(text: string): unknown {
-  const root = parseJsoncTree(text);
+  const root = parseJsoncTree(splitByteOrderMark(text).body);
   return root === undefined ? undefined : nodeValue(root);
 }
 
@@ -61,9 +69,10 @@ function detectFormatting(text: string): FormattingOptions {
 
 /**
  * Sets (or, with `undefined`, removes) the value at `path` as a minimal text
- * edit, so comments, key order, and formatting elsewhere in the file survive.
+ * edit, so comments, key order, formatting, and any byte-order mark survive.
  */
 export function setJsonValue(text: string, path: readonly string[], value: unknown): string {
-  const edits = modify(text, [...path], value, { formattingOptions: detectFormatting(text) });
-  return applyEdits(text, edits);
+  const { bom, body } = splitByteOrderMark(text);
+  const edits = modify(body, [...path], value, { formattingOptions: detectFormatting(body) });
+  return bom + applyEdits(body, edits);
 }

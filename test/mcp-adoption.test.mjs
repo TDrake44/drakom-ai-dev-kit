@@ -1716,3 +1716,21 @@ test('sync manages a server whose name matches an Object.prototype member', asyn
   assert.deepEqual(await snapshot(root), before);
   assert.deepEqual((await readFixtureJson(root, '.mcp.json')).mcpServers.constructor, { command: 'node' });
 });
+
+test('sync keeps a byte-order mark in a commented VS Code file', async () => {
+  const root = await createSyncedMcpFixture();
+  await writeFixture(root, '.vscode/mcp.json', `﻿${COMMENTED_VSCODE_MCP}`);
+  const unchanged = await snapshot(root);
+
+  const noop = runMcpCli(root, 'sync');
+  assert.equal(noop.status, 0, noop.stdout + noop.stderr);
+  assert.deepEqual(await snapshot(root), unchanged);
+
+  await writeFixture(root, `${DRAKOM_DIR}/mcp-servers.yaml`, 'servers:\n  tools:\n    command: node\n');
+  const add = runMcpCli(root, 'sync');
+
+  assert.equal(add.status, 0, add.stdout + add.stderr);
+  const text = await readFixtureText(root, '.vscode/mcp.json');
+  assert.ok(text.startsWith('﻿{\n  // Workspace MCP servers for VS Code Copilot'));
+  assert.deepEqual(parseJsonc(text.slice(1)).servers.tools, { type: 'stdio', command: 'node' });
+});
