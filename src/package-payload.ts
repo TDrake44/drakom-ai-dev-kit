@@ -1,12 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
+import { loadPackageMetadata, packageRoot } from './package-metadata.js';
 import { SEMVER_REGEX } from './state.js';
 import { isRecord } from './util.js';
 
-const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-const payloadRoot = path.resolve(moduleDirectory, '..', 'payload', 'v1');
+const payloadRoot = path.join(packageRoot, 'payload', 'v1');
 
 export interface PayloadManifest {
   schemaVersion: 1;
@@ -30,6 +29,13 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
     !isRecord(parsed.files)
   ) {
     throw new Error(`Invalid package payload manifest: ${manifestPath}`);
+  }
+
+  const metadata = await loadPackageMetadata();
+  if (parsed.kitVersion !== metadata.version) {
+    throw new Error(
+      `Installed kit is inconsistent: payload kitVersion ${parsed.kitVersion} does not match package version ${metadata.version}. Reinstall ${metadata.name} and retry; no changes were made.`,
+    );
   }
 
   const manifestFiles: Record<string, string> = {};

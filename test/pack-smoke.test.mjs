@@ -393,6 +393,14 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
         input,
       });
 
+    // --version reports the packed package version, read independently from the tarball contents
+    const packedPackage = JSON.parse(
+      await readFile(path.join(harness.unpackedDir, 'package', 'package.json'), 'utf8'),
+    );
+    const versionRes = runDrakom(['--version']);
+    assert.equal(versionRes.status, 0, versionRes.stderr);
+    assert.equal(versionRes.stdout.trim(), packedPackage.version);
+
     // 2. Dry-run init makes zero changes
     const dryInit = runDrakom(['init', '.', '--dry-run']);
     assert.equal(dryInit.status, 0, dryInit.stderr);
