@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -133,6 +133,12 @@ test('parses global and command-specific help without requiring a target path', 
   assert.deepEqual(parseCliArgs(['init', '.', '--help']), { command: 'help', topic: 'init' });
 });
 
+test('parses --version and -V as a standalone command', () => {
+  assert.deepEqual(parseCliArgs(['--version']), { command: 'version' });
+  assert.deepEqual(parseCliArgs(['-V']), { command: 'version' });
+  assert.throws(() => parseCliArgs(['--version', '.']), /--version does not accept additional arguments/);
+});
+
 test('renders help successfully before inspecting targets or prompting', async () => {
   /** @type {string[]} */
   const stdout = [];
@@ -162,7 +168,86 @@ test('the compiled executable prints global help and exits successfully', () => 
   assert.match(result.stdout, /Usage: drakom-ai <command>/);
   assert.match(result.stdout, /init/);
   assert.match(result.stdout, /sync/);
+  assert.match(result.stdout, /-V, --version/);
   assert.equal(result.stderr, '');
+});
+
+test('the compiled executable prints the kit version, not the version of the project in the working directory', async () => {
+  const kitPackage = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+  const project = await createFixture();
+  await writeFile(path.join(project, 'package.json'), JSON.stringify({ name: 'consumer-app', version: '9.8.7' }), 'utf8');
+  const before = await snapshot(project);
+
+  for (const flag of ['--version', '-V']) {
+    const result = spawnSync(process.execPath, [cliPath, flag], { cwd: project, encoding: 'utf8' });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${kitPackage.version}\n`);
+    assert.equal(result.stderr, '');
+  }
+  assert.deepEqual(await snapshot(project), before);
+});
+
+test('--version prints without inspecting targets or prompting', async () => {
+  /** @type {string[]} */
+  const stdout = [];
+  const result = await runCli(['--version'], {
+    stdout: { write: (content) => { stdout.push(content); return true; } },
+    stderr: { write: () => { throw new Error('--version must not write to stderr'); } },
+    confirm: async () => {
+      throw new Error('--version must not prompt');
+    },
+    selectPlanAudit: async () => {
+      throw new Error('--version must not prompt');
+    },
+  });
+
+  assert.equal(result, 0);
+  assert.match(stdout.join(''), /^\d+\.\d+\.\d+\S*\n$/);
+});
+
+/**
+ * Copy the compiled kit into a standalone directory whose payload declares a different kitVersion.
+ * @returns {Promise<string>} path to the copied cli.js
+ */
+async function createMismatchedKit() {
+  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-mismatched-kit-'));
+  await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'package.json'), path.join(kitRoot, 'package.json'));
+  await symlink(path.join(repositoryRoot, 'node_modules'), path.join(kitRoot, 'node_modules'), 'dir');
+  const manifestPath = path.join(kitRoot, 'payload', 'v1', 'payload.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.kitVersion = '0.0.1';
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  return path.join(kitRoot, 'dist', 'cli.js');
+}
+
+test('a payload whose kitVersion differs from the package version fails before planning in every mode', async () => {
+  const mismatchedCli = await createMismatchedKit();
+  const freshTarget = await createFixture();
+  const initializedTarget = await createFixture();
+  const setup = spawnSync(process.execPath, [cliPath, 'init', initializedTarget, '--yes'], { encoding: 'utf8' });
+  assert.equal(setup.status, 0, setup.stderr);
+
+  const cases = [
+    { target: freshTarget, args: ['init', freshTarget, '--yes'] },
+    { target: freshTarget, args: ['init', freshTarget, '--dry-run'] },
+    { target: initializedTarget, args: ['sync', initializedTarget] },
+    { target: initializedTarget, args: ['sync', initializedTarget, '--dry-run'] },
+    { target: initializedTarget, args: ['sync', initializedTarget, '--check'] },
+  ];
+  for (const { target, args } of cases) {
+    const before = await snapshot(target);
+
+    const result = spawnSync(process.execPath, [mismatchedCli, ...args], { encoding: 'utf8', input: 'y\n' });
+
+    assert.equal(result.status, 1, `${args.join(' ')}: ${result.stdout}`);
+    assert.equal(result.stdout, '', `${args.join(' ')} must not render a plan`);
+    assert.match(result.stderr, /payload kitVersion 0\.0\.1 does not match package version/i);
+    assert.match(result.stderr, /reinstall/i);
+    assert.deepEqual(await snapshot(target), before, `${args.join(' ')} must not mutate the target`);
+  }
 });
 
 test('inventories existing AI context and MCP targets', async () => {

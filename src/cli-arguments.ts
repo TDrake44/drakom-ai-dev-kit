@@ -10,7 +10,8 @@ export type CliArguments =
       withPlanAudit: boolean;
     }
   | { command: 'sync'; targetPath: string; dryRun: boolean; check: boolean }
-  | { command: 'help'; topic: HelpTopic };
+  | { command: 'help'; topic: HelpTopic }
+  | { command: 'version' };
 
 /**
  * Parse the public CLI surface without performing any I/O.
@@ -22,6 +23,13 @@ export function parseCliArgs(argv: string[]): CliArguments {
       throw new Error(`${command} does not accept additional arguments.`);
     }
     return { command: 'help', topic: 'global' };
+  }
+
+  if (command === '--version' || command === '-V') {
+    if (tokens.length > 0) {
+      throw new Error(`${command} does not accept additional arguments.`);
+    }
+    return { command: 'version' };
   }
 
   if (command !== 'init' && command !== 'sync') {

@@ -5,6 +5,7 @@ import { DRAKOM_DIR } from './constants.js';
 import { inspectTarget } from './inspect-target.js';
 import { discoverMcp, renderMcpComparisonReport } from './mcp-discovery.js';
 import { buildInitPlan, buildSyncPlan, compareVersions } from './operation-plan.js';
+import { loadPackageMetadata } from './package-metadata.js';
 import { loadPackagePayload } from './package-payload.js';
 import { renderPlan } from './render-plan.js';
 
@@ -32,6 +33,11 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     const args = parseCliArgs(argv);
     if (args.command === 'help') {
       io.stdout.write(renderCliHelp(args.topic));
+      return 0;
+    }
+
+    if (args.command === 'version') {
+      io.stdout.write(`${(await loadPackageMetadata()).version}\n`);
       return 0;
     }
 

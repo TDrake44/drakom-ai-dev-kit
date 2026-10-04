@@ -6,6 +6,10 @@ Commands:
   init [path]  Preview and approve initialization of a project. The default path is .
   sync [path]  Synchronize an initialized project. The default path is .
 
+Options:
+  -V, --version  Print the installed drakom-ai version.
+  -h, --help     Show this help message.
+
 Run "drakom-ai <command> --help" for command-specific options.
 `;
 
