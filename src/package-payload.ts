@@ -2,15 +2,22 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { loadPackageMetadata, packageRoot } from './package-metadata.js';
-import { SEMVER_REGEX } from './state.js';
+import { isRelativePath, SEMVER_REGEX } from './state.js';
 import { isRecord } from './util.js';
 
 const payloadRoot = path.join(packageRoot, 'payload', 'v1');
+
+/** A payload file that sync installs into projects whose recorded kit version predates `addedIn`. */
+export interface PayloadDefault {
+  target: string;
+  addedIn: string;
+}
 
 export interface PayloadManifest {
   schemaVersion: 1;
   kitVersion: string;
   files: Record<string, string>;
+  defaults: Record<string, PayloadDefault>;
 }
 
 export interface PackagePayload {
@@ -53,7 +60,49 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
       schemaVersion: 1,
       kitVersion: parsed.kitVersion,
       files: manifestFiles,
+      defaults: validateDefaults(parsed.defaults, manifestFiles),
     },
     files,
   };
+}
+
+/**
+ * Targets are compared with inventory paths and stored in state verbatim, so they must already be
+ * in the inventory's form: forward slashes, no `.` or empty segments, and no trailing slash.
+ */
+function isCanonicalTargetPath(target: string): boolean {
+  return (
+    isRelativePath(target) &&
+    !target.includes('\\') &&
+    !target.endsWith('/') &&
+    path.posix.normalize(target) === target
+  );
+}
+
+function validateDefaults(value: unknown, manifestFiles: Record<string, string>): Record<string, PayloadDefault> {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new Error('Invalid package payload defaults: expected an object.');
+  }
+  const defaults: Record<string, PayloadDefault> = {};
+  const targets = new Set<string>();
+  for (const [name, entry] of Object.entries(value).sort(([left], [right]) => left.localeCompare(right))) {
+    if (!Object.hasOwn(manifestFiles, name)) {
+      throw new Error(`Invalid payload default ${name}: key is not declared in files.`);
+    }
+    if (!isRecord(entry) || typeof entry.target !== 'string' || !isCanonicalTargetPath(entry.target)) {
+      throw new Error(`Invalid payload default ${name}: target must be a canonical, safe relative file path.`);
+    }
+    if (targets.has(entry.target)) {
+      throw new Error(`Invalid payload default ${name}: target ${entry.target} is already declared.`);
+    }
+    if (typeof entry.addedIn !== 'string' || !SEMVER_REGEX.test(entry.addedIn)) {
+      throw new Error(`Invalid payload default ${name}: addedIn must be a SemVer version.`);
+    }
+    targets.add(entry.target);
+    defaults[name] = { target: entry.target, addedIn: entry.addedIn };
+  }
+  return defaults;
 }

@@ -9,5 +9,6 @@
     "rulesReadme": "templates/rules.README.md",
     "setupSkill": "skills/drakom-ai-setup/SKILL.md",
     "specsReadme": "templates/specs.README.md"
-  }
+  },
+  "defaults": {}
 }
