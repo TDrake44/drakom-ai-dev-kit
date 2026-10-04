@@ -88,7 +88,7 @@ export function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-function isRelativePath(value: string): boolean {
+export function isRelativePath(value: string): boolean {
   return value.length > 0 && !path.isAbsolute(value) && !value.split(/[\\/]/).includes('..');
 }
 

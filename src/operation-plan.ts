@@ -4,7 +4,14 @@ import type { TargetInventory } from './inspect-target.js';
 import { checkLiteralCredentials } from './mcp-discovery.js';
 import { generateMcpOperations, validateMcpRegistry } from './mcp-generation.js';
 import type { PackagePayload } from './package-payload.js';
-import { compareVersions, DRAKOM_DIR, serializeState, type InstallState, type ManagedMcpServerState } from './state.js';
+import {
+  compareVersions,
+  DRAKOM_DIR,
+  serializeState,
+  type InstallState,
+  type ManagedFileState,
+  type ManagedMcpServerState,
+} from './state.js';
 import { fingerprint } from './util.js';
 
 export { compareVersions, DRAKOM_DIR };
@@ -319,19 +326,27 @@ export function buildInitPlan(
 
     planWorktreeInclude(inventory, operations, addCreate);
 
+    const managedFiles: Record<string, ManagedFileState> = {
+      [rulesReadmeTarget]: { source: rulesReadmeSource, fingerprint: fingerprint(rulesReadmeContent) },
+      [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
+      [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
+      [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
+      ...(planAuditContent === undefined
+        ? {}
+        : { [planAuditTarget]: { source: planAuditSource, fingerprint: fingerprint(planAuditContent) } }),
+    };
+    for (const entry of listPayloadDefaults(payload)) {
+      if (!Object.hasOwn(managedFiles, entry.target)) {
+        addCreate(entry.target, entry.content, 'Install a kit-managed default file.');
+        managedFiles[entry.target] = { source: entry.source, fingerprint: fingerprint(entry.content) };
+      }
+    }
+
     const state: InstallState = {
       schemaVersion: 1,
       kitVersion: payload.manifest.kitVersion,
       features: { mcp: !options.skipMcp, skillMirrors: true },
-      managedFiles: {
-        [rulesReadmeTarget]: { source: rulesReadmeSource, fingerprint: fingerprint(rulesReadmeContent) },
-        [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
-        [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
-        [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
-        ...(planAuditContent === undefined
-          ? {}
-          : { [planAuditTarget]: { source: planAuditSource, fingerprint: fingerprint(planAuditContent) } }),
-      },
+      managedFiles,
       managedBlocks: {
         'AGENTS.md#drakom-ai': { fingerprint: fingerprint(`${MANAGED_BLOCK}\n`) },
       },
@@ -354,6 +369,58 @@ export function buildInitPlan(
     operations,
     hasConflicts: operations.some(({ action }) => action === 'conflict'),
   };
+}
+
+interface ResolvedPayloadDefault {
+  target: string;
+  source: string;
+  content: string;
+  addedIn: string;
+}
+
+function listPayloadDefaults(payload: PackagePayload): ResolvedPayloadDefault[] {
+  return Object.entries(payload.manifest.defaults).map(([name, entry]) => {
+    const source = payload.manifest.files[name];
+    const content = payload.files[name];
+    if (source === undefined || content === undefined) {
+      throw new Error(`Package payload is missing default file ${name}.`);
+    }
+    return { target: entry.target, source, content, addedIn: entry.addedIn };
+  });
+}
+
+/**
+ * Install defaults introduced after the project's recorded kit version. A default the project
+ * removed after reaching its `addedIn` version is never offered again.
+ */
+function planNewDefaults(
+  inventory: TargetInventory,
+  state: InstallState,
+  payload: PackagePayload,
+  operations: Operation[],
+): Record<string, ManagedFileState> {
+  const addedManagedFiles: Record<string, ManagedFileState> = {};
+  for (const entry of listPayloadDefaults(payload)) {
+    if (Object.hasOwn(state.managedFiles, entry.target) || compareVersions(entry.addedIn, state.kitVersion) <= 0) {
+      continue;
+    }
+    if (inventory.pathSet.has(entry.target) || inventory.pathSet.has(`${entry.target}/`)) {
+      operations.push({
+        action: 'conflict',
+        path: entry.target,
+        summary: `Unmanaged path occupies a default file added in kit version ${entry.addedIn}; move or remove it before synchronizing.`,
+      });
+      continue;
+    }
+    operations.push({
+      action: 'create',
+      path: entry.target,
+      summary: `Install default file added in kit version ${entry.addedIn}.`,
+      content: entry.content,
+    });
+    addedManagedFiles[entry.target] = { source: entry.source, fingerprint: fingerprint(entry.content) };
+  }
+  return addedManagedFiles;
 }
 
 function planManagedFiles(
@@ -485,12 +552,16 @@ function planSkillMirrors(inventory: TargetInventory, state: InstallState, opera
   const canonicalSkillMirrorPaths = new Set<string>();
   if (state.features.skillMirrors !== false) {
     const canonicalSkills: Array<{ name: string; path: string; content: string }> = [];
-    for (const skillPath of inventory.skillFiles) {
+    const plannedCreates = operations
+      .filter((op) => op.action === 'create' && !inventory.skillFiles.includes(op.path))
+      .map((op) => op.path);
+    for (const skillPath of [...inventory.skillFiles, ...plannedCreates]) {
       const match = skillPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/);
-      const skillContent = inventory.contents[skillPath];
-      if (match?.[1] && skillContent !== undefined) {
-        const plannedUpdate = operations.find((op) => op.action === 'update' && op.path === skillPath);
-        const effectiveContent = plannedUpdate?.content ?? skillContent;
+      const plannedWrite = operations.find(
+        (op) => (op.action === 'update' || op.action === 'create') && op.path === skillPath,
+      );
+      const effectiveContent = plannedWrite?.content ?? inventory.contents[skillPath];
+      if (match?.[1] && effectiveContent !== undefined) {
         canonicalSkills.push({
           name: match[1],
           path: skillPath,
@@ -714,9 +785,10 @@ function planStateUpdate(
   operations: Operation[],
   canonicalSkillMirrorPaths: Set<string>,
   nextManagedMcpServers: Record<string, ManagedMcpServerState>,
+  addedManagedFiles: Record<string, ManagedFileState>,
 ): boolean {
   const hasConflicts = operations.some((op) => op.action === 'conflict');
-  const updatedManagedFiles: Record<string, { source: string; fingerprint: string }> = { ...state.managedFiles };
+  const updatedManagedFiles: Record<string, ManagedFileState> = { ...state.managedFiles, ...addedManagedFiles };
   for (const op of operations) {
     if (op.action === 'update' && op.path in updatedManagedFiles && op.content) {
       const existing = updatedManagedFiles[op.path];
@@ -799,10 +871,19 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
   }
 
   planManagedFiles(inventory, state, payload, operations);
+  const addedManagedFiles = planNewDefaults(inventory, state, payload, operations);
   planManagedBlocks(inventory, state, operations);
   const canonicalSkillMirrorPaths = planSkillMirrors(inventory, state, operations);
   const nextManagedMcpServers = planMcp(inventory, state, operations);
-  const hasConflicts = planStateUpdate(inventory, state, payload, operations, canonicalSkillMirrorPaths, nextManagedMcpServers);
+  const hasConflicts = planStateUpdate(
+    inventory,
+    state,
+    payload,
+    operations,
+    canonicalSkillMirrorPaths,
+    nextManagedMcpServers,
+    addedManagedFiles,
+  );
 
   operations.push({
     action: 'preserve',

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cp, mkdtemp, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -207,20 +207,72 @@ test('--version prints without inspecting targets or prompting', async () => {
 });
 
 /**
- * Copy the compiled kit into a standalone directory whose payload declares a different kitVersion.
+ * Copy the compiled kit into a standalone directory so a test can alter its payload.
+ * @param {(manifest: Record<string, any>, payloadRoot: string) => Promise<void> | void} mutate
  * @returns {Promise<string>} path to the copied cli.js
  */
-async function createMismatchedKit() {
-  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-mismatched-kit-'));
+async function createKitCopy(mutate) {
+  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-kit-copy-'));
   await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
   await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
   await cp(path.join(repositoryRoot, 'package.json'), path.join(kitRoot, 'package.json'));
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(kitRoot, 'node_modules'), 'dir');
-  const manifestPath = path.join(kitRoot, 'payload', 'v1', 'payload.json');
+  const payloadRoot = path.join(kitRoot, 'payload', 'v1');
+  const manifestPath = path.join(payloadRoot, 'payload.json');
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  manifest.kitVersion = '0.0.1';
+  await mutate(manifest, payloadRoot);
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   return path.join(kitRoot, 'dist', 'cli.js');
+}
+
+/**
+ * Copy the compiled kit with a payload that declares a different kitVersion.
+ * @returns {Promise<string>} path to the copied cli.js
+ */
+async function createMismatchedKit() {
+  return createKitCopy((manifest) => {
+    manifest.kitVersion = '0.0.1';
+  });
+}
+
+const exampleSkillTarget = '.agents/skills/drakom-example-default/SKILL.md';
+const exampleReferenceTarget = '.agents/skills/drakom-example-default/references/example.md';
+const exampleSkillContent = '---\nname: drakom-example-default\ndescription: Synthetic default skill\n---\n\n# Example\n';
+const exampleReferenceContent = '# Example reference\n';
+
+/**
+ * Copy the compiled kit with a synthetic default skill and reference registered under `defaults`.
+ * @param {string} addedIn
+ * @returns {Promise<string>} path to the copied cli.js
+ */
+async function createKitWithDefaults(addedIn) {
+  return createKitCopy(async (manifest, payloadRoot) => {
+    const skillDir = path.join(payloadRoot, 'skills', 'drakom-example-default');
+    await mkdir(path.join(skillDir, 'references'), { recursive: true });
+    await writeFile(path.join(skillDir, 'SKILL.md'), exampleSkillContent, 'utf8');
+    await writeFile(path.join(skillDir, 'references', 'example.md'), exampleReferenceContent, 'utf8');
+    manifest.files.exampleSkill = 'skills/drakom-example-default/SKILL.md';
+    manifest.files.exampleReference = 'skills/drakom-example-default/references/example.md';
+    manifest.defaults = {
+      exampleSkill: { target: exampleSkillTarget, addedIn },
+      exampleReference: { target: exampleReferenceTarget, addedIn },
+    };
+  });
+}
+
+/**
+ * Initialize a target with the current kit, then rewrite its state kitVersion.
+ * @param {string} kitVersion
+ */
+async function createInstalledFixture(kitVersion) {
+  const root = await createFixture();
+  const init = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+  assert.equal(init.status, 0, init.stderr);
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.kitVersion = kitVersion;
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  return root;
 }
 
 test('a payload whose kitVersion differs from the package version fails before planning in every mode', async () => {
@@ -717,6 +769,127 @@ test('preflight conflicts prevent every initialization mutation', async () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /CONFLICT.*drakom-ai-setup\/SKILL\.md/);
   assert.deepEqual(await snapshot(root), before);
+});
+
+test('the shipped payload manifest declares a valid defaults table', async () => {
+  const payload = await loadPackagePayload();
+
+  assert.deepEqual(payload.manifest.defaults, {});
+});
+
+test('payload defaults are validated before any planning', async () => {
+  const target = await createInstalledFixture('0.3.0');
+  const cases = [
+    { defaults: { missingKey: { target: '.agents/skills/x/SKILL.md', addedIn: '0.4.0' } }, error: /missingKey.*not.*files/i },
+    { defaults: { setupSkill: { target: '../escape/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '/abs/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '.agents/skills/x/SKILL.md', addedIn: '0.4' } }, error: /setupSkill.*addedIn/i },
+    { defaults: [], error: /defaults/i },
+  ];
+  for (const { defaults, error } of cases) {
+    const kitCli = await createKitCopy((manifest) => {
+      manifest.defaults = defaults;
+    });
+    const before = await snapshot(target);
+
+    const result = spawnSync(process.execPath, [kitCli, 'sync', target, '--check'], { encoding: 'utf8' });
+
+    assert.equal(result.status, 1, JSON.stringify(defaults));
+    assert.match(result.stderr, error);
+    assert.deepEqual(await snapshot(target), before);
+  }
+});
+
+test('sync installs default files added after the recorded kit version, with mirrors and state', async () => {
+  const kitCli = await createKitWithDefaults('0.4.0');
+  const root = await createInstalledFixture('0.3.0');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const pristine = await snapshot(root);
+
+  const check = spawnSync(process.execPath, [kitCli, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.notEqual(check.status, 0, check.stdout);
+  assert.match(check.stdout, /CREATE.*drakom-example-default\/SKILL\.md/);
+  assert.deepEqual(await snapshot(root), pristine);
+
+  const dryRun = spawnSync(process.execPath, [kitCli, 'sync', root, '--dry-run'], { encoding: 'utf8' });
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  assert.match(dryRun.stdout, /CREATE.*\.agents\/skills\/drakom-example-default\/SKILL\.md/);
+  assert.match(dryRun.stdout, /CREATE.*drakom-example-default\/references\/example\.md/);
+  assert.match(dryRun.stdout, /CREATE.*\.claude\/skills\/drakom-example-default\/SKILL\.md/);
+  assert.deepEqual(await snapshot(root), pristine);
+
+  const sync = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+  assert.equal(sync.status, 0, sync.stderr);
+
+  assert.equal(await readFile(path.join(root, exampleSkillTarget), 'utf8'), exampleSkillContent);
+  assert.equal(await readFile(path.join(root, exampleReferenceTarget), 'utf8'), exampleReferenceContent);
+  const mirror = await readFile(path.join(root, '.claude', 'skills', 'drakom-example-default', 'SKILL.md'), 'utf8');
+  assert.match(mirror, /GENERATED MIRROR/);
+  assert.match(mirror, /# Example/);
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(state.managedFiles[exampleSkillTarget].source, 'skills/drakom-example-default/SKILL.md');
+  assert.equal(
+    state.managedFiles[exampleReferenceTarget].source,
+    'skills/drakom-example-default/references/example.md',
+  );
+  assert.ok(state.managedSkillMirrors['.claude/skills/drakom-example-default/SKILL.md']);
+
+  const cleanCheck = spawnSync(process.execPath, [kitCli, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
+});
+
+test('sync refuses to take ownership of an unmanaged file at a new default path', async () => {
+  const kitCli = await createKitWithDefaults('0.4.0');
+  const root = await createInstalledFixture('0.3.0');
+  await mkdir(path.join(root, '.agents', 'skills', 'drakom-example-default', 'references'), { recursive: true });
+  await writeFile(path.join(root, exampleReferenceTarget), '# Hand-written\n', 'utf8');
+  const before = await snapshot(root);
+
+  const sync = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+
+  assert.notEqual(sync.status, 0);
+  assert.match(sync.stdout, /CONFLICT.*drakom-example-default\/references\/example\.md/);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('sync does not re-offer a removed default once state reaches its addedIn version', async () => {
+  const kitCli = await createKitWithDefaults('0.3.0');
+  const root = await createInstalledFixture('0.2.0');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const install = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+  assert.equal(install.status, 0, install.stderr);
+  assert.equal(await readFile(path.join(root, exampleSkillTarget), 'utf8'), exampleSkillContent);
+
+  await rm(path.join(root, '.agents', 'skills', 'drakom-example-default'), { recursive: true });
+  await rm(path.join(root, '.claude', 'skills', 'drakom-example-default'), { recursive: true });
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(state.kitVersion, '0.3.0');
+  delete state.managedFiles[exampleSkillTarget];
+  delete state.managedFiles[exampleReferenceTarget];
+  delete state.managedSkillMirrors['.claude/skills/drakom-example-default/SKILL.md'];
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  const before = await snapshot(root);
+
+  const check = spawnSync(process.execPath, [kitCli, 'sync', root, '--check'], { encoding: 'utf8' });
+  const sync = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(check.status, 0, check.stdout);
+  assert.equal(sync.status, 0, sync.stderr);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('init installs registered defaults on fresh projects and records them as managed', async () => {
+  const kitCli = await createKitWithDefaults('0.4.0');
+  const root = await createFixture();
+
+  const init = spawnSync(process.execPath, [kitCli, 'init', root, '--yes'], { encoding: 'utf8' });
+
+  assert.equal(init.status, 0, init.stderr);
+  assert.equal(await readFile(path.join(root, exampleSkillTarget), 'utf8'), exampleSkillContent);
+  assert.equal(await readFile(path.join(root, exampleReferenceTarget), 'utf8'), exampleReferenceContent);
+  const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
+  assert.ok(state.managedFiles[exampleSkillTarget]);
+  assert.ok(state.managedFiles[exampleReferenceTarget]);
 });
 
 test('sync rejects uninitialized target directories with a clear message', async () => {
