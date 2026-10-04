@@ -16,6 +16,7 @@ Inspect only repository-local evidence unless the user explicitly broadens scope
 - documentation, CI configuration, and issue or contribution workflows;
 - root and relevant nested `AGENTS.md` and `CLAUDE.md` files;
 - known agent instruction files, existing rule directories, `.agents/skills/`, and `.claude/skills/`;
+- `.drakom-ai/plans/` and `.drakom-ai/specs/`, listed explicitly by directory. Plans are gitignored and specs may be, and search tools that honour `.gitignore` silently skip ignored files;
 - `.drakom-ai/mcp-servers.yaml`, `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json`, and `.codex/config.toml` when present. Run `drakom-ai init . --dry-run` to preview initialization operations and inspect any discovered MCP servers or comparison reports.
 
 Do not inspect user-global AI or MCP configuration without explicit permission.
@@ -37,8 +38,18 @@ Present a concise recommendation using exactly these decision categories:
 
 - **Keep:** useful existing context that should remain unchanged.
 - **Refine:** existing context that is valuable but inaccurate, duplicated, or poorly routed.
-- **Add:** a missing rule, skill, or entry-point link supported by repository evidence.
-- **Omit:** plausible additions that do not justify their maintenance cost.
+- **Add:** a missing rule, skill, or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy at the repository-root path `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
+- **Omit:** plausible additions or existing context that do not justify their maintenance cost. Omit never means delete: omitted existing files stay in place unless the user separately approves removing them.
+
+Within each category, list every relevant source, or a bounded group of related sources, with:
+
+- **Source path and evidence:** the file, directory, or group, and what in the repository supports the decision.
+- **Ownership:** kit-managed, generated, project-owned, unmanaged, or unknown.
+- **Decision and rationale:** why it belongs in this category.
+- **Destination or action:** the target path, the edit, or "keep in place".
+- **Dependencies:** routes, scripts, and companion files that reference or are referenced by the source.
+- **Approval status:** pending, approved, or declined.
+- **Verification:** the check that proves the action succeeded.
 
 For discovered MCP configurations, inspect the comparison report and present the 4 explicit choices to the user for each non-identical or unmanaged server:
 1. Import into `.drakom-ai/mcp-servers.yaml`
@@ -60,7 +71,7 @@ Stop and request explicit approval before creating or changing any project-owned
 
 Apply only the approved items while preserving unrelated content. Then:
 
-1. Create each approved rule in `.drakom-ai/rules/`.
+1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
 2. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. Do not globally load rules; companion deep-dive references may instead be routed on demand.
 3. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
 4. Verify every referenced path exists or is explicitly marked as prospective.

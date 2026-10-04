@@ -18,6 +18,13 @@ export function renderPlan(plan: OperationPlan): string {
     `Status: ${plan.targetStatus}`,
     '',
   ];
+  if (plan.detectedContext !== undefined) {
+    if (plan.detectedContext.length === 0) {
+      lines.push('Detected context sources: none', '');
+    } else {
+      lines.push('Detected context sources:', ...plan.detectedContext.map((contextPath) => `  ${contextPath}`), '');
+    }
+  }
   for (const operation of plan.operations) {
     lines.push(`${labels[operation.action].padEnd(8)} ${operation.path} — ${operation.summary}`);
   }

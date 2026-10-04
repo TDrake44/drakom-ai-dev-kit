@@ -55,6 +55,8 @@ export interface OperationPlan {
   command: 'init' | 'sync';
   root: string;
   targetStatus: TargetInventory['status'];
+  /** Existing agent context paths found during init inspection, in inventory order; never their contents. */
+  detectedContext?: string[];
   operations: Operation[];
   hasConflicts: boolean;
 }
@@ -366,6 +368,7 @@ export function buildInitPlan(
     command: 'init',
     root: inventory.root,
     targetStatus: inventory.status,
+    detectedContext: [...inventory.contextFiles],
     operations,
     hasConflicts: operations.some(({ action }) => action === 'conflict'),
   };
