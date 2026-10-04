@@ -249,10 +249,12 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 
 To upgrade, update the package and run `drakom-ai sync .`. Sync updates
 unmodified managed files and installs default files added in releases newer
-than the recorded `kitVersion`, then records the installed kit version. A
-default you delete, together with its `managedFiles` entry in `state.json`, is
-not reinstalled. Sync refuses to run when the recorded `kitVersion` is newer
-than the installed kit.
+than the recorded `kitVersion`, then records the installed kit version. Once
+the recorded `kitVersion` has reached the release that added a default, you
+can remove that default by deleting the file and its `managedFiles` entry in
+`state.json`; sync does not reinstall it. Removed earlier, sync treats it as
+new and installs it again. Sync refuses to run when the recorded `kitVersion`
+is newer than the installed kit.
 
 ## Alternative Adoption Paths
 
