@@ -21,6 +21,7 @@ export const MANAGED_BLOCK = `<!-- drakom-ai:start -->
 
 Project-specific AI context is stored under \`${DRAKOM_DIR}/\`.
 Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
+Use \`$drakom-skill-author\` to find, write, check, refine, or retire project-owned skills.
 <!-- drakom-ai:end -->`;
 
 export const NOTICE =

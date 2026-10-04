@@ -280,6 +280,11 @@ test('packed artifact contains only required publishable runtime files and metad
     packedPaths.includes('payload/v1/skills/drakom-ai-setup/references/rule-anatomy.md'),
     'rule anatomy reference missing',
   );
+  assert.ok(packedPaths.includes('payload/v1/skills/drakom-skill-author/SKILL.md'), 'skill authoring skill missing');
+  assert.ok(
+    packedPaths.includes('payload/v1/skills/drakom-skill-author/references/skill-patterns.md'),
+    'skill patterns reference missing',
+  );
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'optional plan audit skill missing');
   assert.equal(
     packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'),
@@ -647,6 +652,17 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const ruleAnatomyContent = await readFile(path.join(consumer, ruleAnatomyTarget), 'utf8');
     assert.match(ruleAnatomyContent, /Required Patterns/);
     assert.equal(updatedState.managedFiles[ruleAnatomyTarget].fingerprint, sha256(ruleAnatomyContent));
+    for (const target of [
+      '.agents/skills/drakom-skill-author/SKILL.md',
+      '.agents/skills/drakom-skill-author/references/skill-patterns.md',
+    ]) {
+      const content = await readFile(path.join(consumer, target), 'utf8');
+      assert.equal(updatedState.managedFiles[target].fingerprint, sha256(content), target);
+    }
+    assert.match(
+      await readFile(path.join(consumer, '.claude', 'skills', 'drakom-skill-author', 'SKILL.md'), 'utf8'),
+      /GENERATED MIRROR/,
+    );
 
     // Post-update sync --check passes clean
     const postCheck = runDrakom(['sync', '.', '--check']);

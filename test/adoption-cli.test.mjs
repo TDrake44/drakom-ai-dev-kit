@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { parseCliArgs } from '../dist/cli-arguments.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
 import { inspectTarget } from '../dist/inspect-target.js';
-import { buildInitPlan } from '../dist/operation-plan.js';
+import { buildInitPlan, MANAGED_BLOCK } from '../dist/operation-plan.js';
 import { loadPackagePayload } from '../dist/package-payload.js';
 import { renderPlan } from '../dist/render-plan.js';
 import { runCli } from '../dist/run-cli.js';
@@ -19,6 +19,11 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
 const ruleAnatomyTarget = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
 const ruleAnatomySource = 'skills/drakom-ai-setup/references/rule-anatomy.md';
+const skillAuthorTarget = '.agents/skills/drakom-skill-author/SKILL.md';
+const skillAuthorSource = 'skills/drakom-skill-author/SKILL.md';
+const skillAuthorMirror = '.claude/skills/drakom-skill-author/SKILL.md';
+const skillPatternsTarget = '.agents/skills/drakom-skill-author/references/skill-patterns.md';
+const skillPatternsSource = 'skills/drakom-skill-author/references/skill-patterns.md';
 
 test('publishes the strict TypeScript CLI from compiled dist output', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
@@ -382,6 +387,8 @@ test('builds and renders deterministic fresh-project plans', async () => {
       'CLAUDE.md',
       '.worktreeinclude',
       ruleAnatomyTarget,
+      skillAuthorTarget,
+      skillPatternsTarget,
       `${DRAKOM_DIR}/state.json`,
     ],
   );
@@ -567,6 +574,143 @@ test('a 0.3.0 install receives the rule anatomy reference through one sync', asy
   assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
 });
 
+test('packages an approval-gated skill authoring skill that routes to its patterns by repository-root path', async () => {
+  const payload = await loadPackagePayload();
+  const skill = payload.files.skillAuthorSkill;
+  const patterns = payload.files.skillPatterns;
+
+  assert.equal(skill, await readFile(path.join(repositoryRoot, skillAuthorTarget), 'utf8'));
+  assert.equal(patterns, await readFile(path.join(repositoryRoot, skillPatternsTarget), 'utf8'));
+  assert.match(skill, /^---\nname: drakom-skill-author\ndescription: [^\n]+\n---\n/);
+
+  const referencedPaths = [...skill.matchAll(/`\.agents\/(skills\/drakom-skill-author\/references\/[^`]+)`/g)].map(
+    ([, rel]) => rel,
+  );
+  assert.ok(referencedPaths.includes(skillPatternsSource), 'skill author must reference skill-patterns.md');
+  for (const rel of referencedPaths) {
+    assert.ok(Object.values(payload.manifest.files).includes(rel), `${rel} is not packaged`);
+    await readFile(path.join(repositoryRoot, '.agents', rel), 'utf8');
+  }
+
+  for (const mode of ['Find', 'Write', 'Check', 'Refine or Retire']) {
+    assert.match(skill, new RegExp(`^## ${mode}$`, 'm'), mode);
+  }
+  assert.match(skill, /^## Approval Gate$/m);
+  assert.match(skill, /explicit approval before creating or changing any project skill/i);
+  assert.match(skill, /at least two real occurrences.*explicit (user )?request/is);
+  for (const source of ['git history', 'pull request history', 'CI configuration', 'package scripts', 'CONTRIBUTING', 'plan']) {
+    assert.match(skill, new RegExp(source, 'i'), source);
+  }
+  assert.match(skill, /never use the `drakom-` prefix/i);
+  assert.match(skill, /what it does and when to use it/i);
+  assert.match(skill, /route.*rules.*instead of copying/is);
+  assert.match(skill, /`\.agents\/skills\/<name>\/SKILL\.md`/);
+  assert.match(skill, /AGENTS\.md.*skill table/is);
+  assert.match(skill, /drakom-ai sync/);
+  assert.match(skill, /propose remov/i);
+  assert.doesNotMatch(skill, /legacy|\.ai\/|moneycl/i);
+
+  for (const archetype of ['Plan', 'Task', 'Review', 'Release', 'Docs sync', 'Migration step', 'Debugging']) {
+    const heading = new RegExp(`^### ${archetype}\\n([\\s\\S]*?)(?=^##|$(?![\\s\\S]))`, 'm');
+    const block = patterns.match(heading)?.[1] ?? '';
+    assert.match(block, /Justified when/i, archetype);
+    assert.match(block, /Skip when/i, archetype);
+    assert.match(block, /Sections/i, archetype);
+  }
+  assert.match(patterns, /^## Worked Example/m);
+  assert.doesNotMatch(patterns, /legacy|\.ai\/|moneycl/i);
+});
+
+test('the setup skill hands skill additions to drakom-skill-author and never installs a fixed suite', async () => {
+  const skill = (await loadPackagePayload()).files.setupSkill;
+
+  const addSection = skill.slice(skill.indexOf('**Add:**'), skill.indexOf('**Omit:**'));
+  assert.match(addSection, /proposed skill.*Write and Check procedure/is);
+  assert.match(addSection, new RegExp(skillAuthorTarget.replaceAll('.', '\\.')));
+  assert.match(skill, /Create each approved skill[^\n]*drakom-skill-author[^\n]*Write and Check/i);
+  assert.match(skill, /never install a fixed skill suite/i);
+  assert.doesNotMatch(skill, /legacy|\.ai\//i);
+});
+
+test('the managed AGENTS.md block names the skill authoring skill', () => {
+  assert.match(MANAGED_BLOCK, /`\$drakom-skill-author`/);
+  assert.match(MANAGED_BLOCK, /`\$drakom-ai-setup`/);
+});
+
+for (const mode of ['interactive', '--yes']) {
+  test(`fresh ${mode} init installs the skill authoring skill and the next sync mirrors it`, async () => {
+    const root = await createFixture();
+
+    if (mode === 'interactive') {
+      const result = await runCli(['init', root], {
+        stdout: { write: () => true },
+        stderr: { write: () => true },
+        selectPlanAudit: async () => false,
+        confirm: async () => true,
+      });
+      assert.equal(result, 0);
+    } else {
+      const init = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+      assert.equal(init.status, 0, init.stderr);
+    }
+
+    const payload = await loadPackagePayload();
+    assert.equal(await readFile(path.join(root, skillAuthorTarget), 'utf8'), payload.files.skillAuthorSkill);
+    assert.equal(await readFile(path.join(root, skillPatternsTarget), 'utf8'), payload.files.skillPatterns);
+    const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
+    assert.equal(state.managedFiles[skillAuthorTarget].source, skillAuthorSource);
+    assert.equal(state.managedFiles[skillPatternsTarget].source, skillPatternsSource);
+
+    const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+    assert.equal(sync.status, 0, sync.stderr);
+    const mirror = await readFile(path.join(root, skillAuthorMirror), 'utf8');
+    assert.match(mirror, /GENERATED MIRROR/);
+    assert.match(mirror, /^---\nname: drakom-skill-author\n/);
+    await assert.rejects(readFile(path.join(root, '.claude', 'skills', 'drakom-skill-author', 'references', 'skill-patterns.md')));
+  });
+}
+
+test('a 0.3.0 install receives the skill authoring files, mirror, managed block, and state in one sync', async () => {
+  const root = await createInstalledFixture('0.3.0');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const legacyBlock = `<!-- drakom-ai:start -->
+## Drakom AI Development Context
+
+Project-specific AI context is stored under \`${DRAKOM_DIR}/\`.
+Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
+<!-- drakom-ai:end -->
+`;
+  await rm(path.join(root, '.agents', 'skills', 'drakom-skill-author'), { recursive: true });
+  await writeFile(path.join(root, 'AGENTS.md'), `# Project\n\n${legacyBlock}`, 'utf8');
+  const legacyState = JSON.parse(await readFile(statePath, 'utf8'));
+  delete legacyState.managedFiles[skillAuthorTarget];
+  delete legacyState.managedFiles[skillPatternsTarget];
+  const crypto = await import('node:crypto');
+  legacyState.managedBlocks['AGENTS.md#drakom-ai'] = {
+    fingerprint: `sha256:${crypto.createHash('sha256').update(legacyBlock).digest('hex')}`,
+  };
+  await writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`, 'utf8');
+
+  const check = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.notEqual(check.status, 0, check.stdout);
+  assert.match(check.stdout, /CREATE.*drakom-skill-author\/SKILL\.md/);
+
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+  assert.equal(sync.status, 0, sync.stderr);
+
+  const payload = await loadPackagePayload();
+  assert.equal(await readFile(path.join(root, skillAuthorTarget), 'utf8'), payload.files.skillAuthorSkill);
+  assert.equal(await readFile(path.join(root, skillPatternsTarget), 'utf8'), payload.files.skillPatterns);
+  assert.match(await readFile(path.join(root, skillAuthorMirror), 'utf8'), /GENERATED MIRROR/);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `# Project\n\n${MANAGED_BLOCK}\n`);
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(state.managedFiles[skillAuthorTarget].source, skillAuthorSource);
+  assert.equal(state.managedFiles[skillPatternsTarget].source, skillPatternsSource);
+  assert.ok(state.managedSkillMirrors[skillAuthorMirror]);
+  const cleanCheck = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
+});
+
 test('init output lists detected context paths in deterministic order without contents', async () => {
   const root = await createFixture();
   await mkdir(path.join(root, 'packages', 'api'), { recursive: true });
@@ -634,8 +778,12 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
     '.agents/skills/drakom-ai-setup/SKILL.md',
     '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
     ruleAnatomyTarget,
+    skillAuthorTarget,
+    skillPatternsTarget,
   ]);
   assert.equal(state.managedFiles[ruleAnatomyTarget].source, ruleAnatomySource);
+  assert.equal(state.managedFiles[skillAuthorTarget].source, skillAuthorSource);
+  assert.equal(state.managedFiles[skillPatternsTarget].source, skillPatternsSource);
   assert.equal(
     await readFile(path.join(root, ruleAnatomyTarget), 'utf8'),
     (await loadPackagePayload()).files.ruleAnatomy,
@@ -920,8 +1068,12 @@ test('the shipped payload manifest declares a valid defaults table', async () =>
 
   assert.deepEqual(payload.manifest.defaults, {
     ruleAnatomy: { target: ruleAnatomyTarget, addedIn: '0.4.0' },
+    skillAuthorSkill: { target: skillAuthorTarget, addedIn: '0.4.0' },
+    skillPatterns: { target: skillPatternsTarget, addedIn: '0.4.0' },
   });
   assert.equal(payload.manifest.files.ruleAnatomy, ruleAnatomySource);
+  assert.equal(payload.manifest.files.skillAuthorSkill, skillAuthorSource);
+  assert.equal(payload.manifest.files.skillPatterns, skillPatternsSource);
 });
 
 test('payload defaults are validated before any planning', async () => {
