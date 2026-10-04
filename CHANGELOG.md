@@ -2,16 +2,6 @@
 
 ## 0.4.0
 
-### Upgrading from 0.3.0
-
-Update the package, then run `drakom-ai sync` once. It will:
-
-- add the new `drakom-skill-author` skill, its `skill-patterns.md` reference, and its Claude mirror;
-- add `rule-anatomy.md` next to the setup skill;
-- update the setup skill and the managed block in `AGENTS.md`.
-
-If you have edited any kit-managed file or the managed `AGENTS.md` block, or already have a file at one of the new paths, `sync` reports a conflict and changes nothing until you resolve it.
-
 ### Minor Changes
 
 - af31fe1: **New skill: `drakom-skill-author`.** Helps your project create and maintain its own agent skills.
@@ -40,6 +30,16 @@ If you have edited any kit-managed file or the managed `AGENTS.md` block, or alr
 - 860cfc5: **MCP config files keep their comments and formatting.**
   - `.vscode/mcp.json` may now contain comments and trailing commas. `.mcp.json` and `.agents/mcp_config.json` must still be plain JSON.
   - `sync` no longer rewrites MCP config files when nothing it manages has changed. When something does change, only those entries are edited.
+
+### Upgrading from 0.3.0
+
+Update the package, then run `drakom-ai sync` once. It will:
+
+- add the new `drakom-skill-author` skill, its `skill-patterns.md` reference, and its Claude mirror;
+- add `rule-anatomy.md` next to the setup skill;
+- update the setup skill and the managed block in `AGENTS.md`.
+
+If you have edited any kit-managed file or the managed `AGENTS.md` block, or already have a file at one of the new paths, `sync` reports a conflict and changes nothing until you resolve it.
 
 ## 0.3.0
 
