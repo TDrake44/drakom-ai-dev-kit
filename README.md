@@ -61,11 +61,7 @@ for reviewing or cleaning up local `.drakom-ai/plans/`. To install it without
 the interactive choice, pass `--with-plan-audit`; it is omitted by default from
 `--yes` runs. The same flag can add the skill safely to an existing initialized
 project. The skill is recorded as kit-managed and its Claude mirror is generated
-by `drakom-ai sync`. Projects that opted in under the former name in
-`@drakom/ai-dev-kit@0.2.0` should remove `.agents/skills/plan-audit/SKILL.md`
-and `managedFiles[".agents/skills/plan-audit/SKILL.md"]` from
-`.drakom-ai/state.json`, then run `drakom-ai init --with-plan-audit`. Until
-then, `drakom-ai sync` reports a conflict and applies no updates.
+by `drakom-ai sync`.
 
 The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
 
@@ -90,7 +86,12 @@ For a fresh repository, `drakom-ai init .` creates:
     ├── drakom-ai-setup/
     │   ├── SKILL.md
     │   └── references/
-    │       └── assessment-plan-template.md
+    │       ├── assessment-plan-template.md
+    │       └── rule-anatomy.md
+    ├── drakom-skill-author/
+    │   ├── SKILL.md
+    │   └── references/
+    │       └── skill-patterns.md
     └── drakom-plan-audit/           # optional; selected during init or via --with-plan-audit
         └── SKILL.md
 
@@ -98,6 +99,9 @@ AGENTS.md
 CLAUDE.md
 .worktreeinclude
 ```
+
+`init` does not create Claude Code skill mirrors. Run `drakom-ai sync .` to
+generate them in `.claude/skills/`.
 
 `init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
 
@@ -122,27 +126,48 @@ imports that shared router so the two entry points stay aligned.
 When a project needs to add, revise, rename, or retire a rule, run the setup
 skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
 
-1. Creates the rule under `.drakom-ai/rules/`.
+1. Creates the rule under `.drakom-ai/rules/`, following the anatomy and size
+   budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
 2. Adds a task-based link to the `AGENTS.md` Standards Index.
 3. Revises stale routes when a rule is renamed or superseded.
 4. Verifies links, commands, and relevant project checks.
 
 Skills are procedures rather than policy. Author them in `.agents/skills/`; run
-`drakom-ai sync .` to generate their Claude Code mirrors. A project may add,
-replace, or remove its own rules and skills—the kit does not claim ownership of
-them. Kit-managed skills use the `drakom-` prefix (`drakom-ai-setup`,
-`drakom-plan-audit`); projects should not name their own skills with that
-prefix, to avoid colliding with skills the kit may add in the future.
+`drakom-ai sync .` to generate their Claude Code mirrors. The
+`drakom-skill-author` skill (`/drakom-skill-author` or `$drakom-skill-author`)
+manages project skills, and setup hands approved skill additions to it:
+
+1. **Find**: proposes a candidate only from evidence of repeated work (git and
+   pull request history, CI configuration, package scripts, contribution docs,
+   plans and specs) or an explicit request.
+2. **Write**: drafts a short skill that routes to rules instead of copying
+   them, with stop points, verification commands, and a report.
+3. **Check**: walks the draft through a recent real task and verifies its paths
+   and commands.
+4. **Refine or retire**: makes targeted fixes to stale or misfiring skills, or
+   proposes removing unused ones.
+
+It asks for approval before creating, changing, or removing any project skill.
+Common archetypes and a worked example are in
+`.agents/skills/drakom-skill-author/references/skill-patterns.md`.
+
+A project may add, replace, or remove its own rules and skills—the kit does not
+claim ownership of them. Kit-managed skills use the `drakom-` prefix
+(`drakom-ai-setup`, `drakom-skill-author`, `drakom-plan-audit`); projects should
+not name their own skills with that prefix, to avoid colliding with skills the
+kit may add in the future.
 
 ## Managed and Project-Owned Content
 
 | Managed by Drakom AI Dev Kit | Owned by the project |
 | --- | --- |
-| Setup skill and optional drakom-plan-audit skill installed by `init` | Rules in `.drakom-ai/rules/` |
-| The managed block in `AGENTS.md` | Task routes and all other `AGENTS.md` content |
-| Generated Claude skill mirrors | Project-authored canonical skills in `.agents/skills/` |
-| Generated MCP client blocks | MCP registry choices and all unmanaged client configuration |
-| Fingerprints in `.drakom-ai/state.json` | Plans, specifications, `.worktreeinclude`, and team decisions |
+| `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`) | Rules in `.drakom-ai/rules/` |
+| `drakom-skill-author` skill and its reference (`skill-patterns.md`) | Task routes and all other `AGENTS.md` content |
+| Optional `drakom-plan-audit` skill, when selected | Project-authored canonical skills in `.agents/skills/` |
+| The managed block in `AGENTS.md` | MCP registry choices and all unmanaged client configuration |
+| Generated Claude skill mirrors | Plans, specifications, `.worktreeinclude`, and team decisions |
+| Generated MCP client blocks | |
+| Fingerprints in `.drakom-ai/state.json` | |
 
 Managed content is updated only when its recorded fingerprint still matches.
 If it has local edits, synchronization reports a conflict rather than replacing
@@ -160,6 +185,9 @@ into these repository-local client files:
 - `.vscode/mcp.json` for VS Code Copilot
 - `.agents/mcp_config.json` for Antigravity CLI
 - `.codex/config.toml` for OpenAI Codex CLI
+
+`.vscode/mcp.json` is read as JSONC, so it may contain comments and trailing
+commas. `.mcp.json` and `.agents/mcp_config.json` must be strict JSON.
 
 Variable references in commands, arguments, URLs, environment values, and
 headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
@@ -190,6 +218,7 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 | Command | Effect |
 | --- | --- |
 | `drakom-ai --help` | Show command usage and available subcommands. |
+| `drakom-ai --version` (`-V`) | Print the installed kit version. |
 | `drakom-ai init --help` | Show initialization options without inspecting or changing the target. |
 | `drakom-ai sync --help` | Show synchronization options without inspecting or changing the target. |
 | `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
@@ -208,6 +237,22 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 3. Make changes through the project’s routed rules and canonical skills.
 4. Run `sync` after kit updates or canonical-skill/MCP changes.
 5. Use `sync --check` in CI to detect drift before it reaches contributors.
+
+### Versions
+
+| Version | Meaning |
+| --- | --- |
+| Your application's version | Never changed by the kit, and unrelated to the versions below. |
+| Installed kit version | The `@drakom/ai-dev-kit` package in use; print it with `drakom-ai --version`. |
+| `kitVersion` in `.drakom-ai/state.json` | The last kit release successfully applied to the project by `init` or `sync`. |
+| `schemaVersion` | The format of `state.json` and the packaged payload. It changes independently of kit releases. |
+
+To upgrade, update the package and run `drakom-ai sync .`. Sync updates
+unmodified managed files and installs default files added in releases newer
+than the recorded `kitVersion`, then records the installed kit version. A
+default you delete, together with its `managedFiles` entry in `state.json`, is
+not reinstalled. Sync refuses to run when the recorded `kitVersion` is newer
+than the installed kit.
 
 ## Alternative Adoption Paths
 
