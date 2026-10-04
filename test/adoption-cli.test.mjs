@@ -17,6 +17,8 @@ import { compareVersions, loadState } from '../dist/state.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
+const ruleAnatomyTarget = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
+const ruleAnatomySource = 'skills/drakom-ai-setup/references/rule-anatomy.md';
 
 test('publishes the strict TypeScript CLI from compiled dist output', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
@@ -379,6 +381,7 @@ test('builds and renders deterministic fresh-project plans', async () => {
       'AGENTS.md',
       'CLAUDE.md',
       '.worktreeinclude',
+      ruleAnatomyTarget,
       `${DRAKOM_DIR}/state.json`,
     ],
   );
@@ -468,6 +471,134 @@ test('packages a complete approval-gated setup workflow and assessment template'
   assert.doesNotMatch(assessment, /legacy|\.ai\//i);
 });
 
+test('the setup skill and template require a per-source assessment matrix', async () => {
+  const payload = await loadPackagePayload();
+
+  for (const [name, text] of [
+    ['setupSkill', payload.files.setupSkill],
+    ['assessmentTemplate', payload.files.assessmentTemplate],
+  ]) {
+    assert.match(text, /source path and evidence/i, name);
+    assert.match(text, /kit-managed.*generated.*project-owned.*unmanaged.*unknown/is, name);
+    assert.match(text, /decision and rationale/i, name);
+    assert.match(text, /destination or action/i, name);
+    assert.match(text, /keep in place/i, name);
+    assert.match(text, /dependencies.*routes.*scripts.*companion files/is, name);
+    assert.match(text, /approval status/i, name);
+    assert.match(text, /verification/i, name);
+    assert.match(text, /Omit never means delete/i, name);
+    assert.doesNotMatch(text, /legacy|\.ai\//i, name);
+  }
+  assert.match(payload.files.setupSkill, new RegExp(`${DRAKOM_DIR}/plans/.*${DRAKOM_DIR}/specs/.*gitignore`, 'is'));
+});
+
+test('packages a rule anatomy reference that the setup skill routes to by repository-root path', async () => {
+  const payload = await loadPackagePayload();
+  const skill = payload.files.setupSkill;
+  const anatomy = payload.files.ruleAnatomy;
+  const installedAnatomy = await readFile(path.join(repositoryRoot, ruleAnatomyTarget), 'utf8');
+
+  assert.equal(anatomy, installedAnatomy);
+  const referencedPaths = [...skill.matchAll(/`\.agents\/(skills\/drakom-ai-setup\/references\/[^`]+)`/g)].map(
+    ([, rel]) => rel,
+  );
+  assert.ok(referencedPaths.includes(ruleAnatomySource), 'setup skill must reference rule-anatomy.md');
+  for (const rel of referencedPaths) {
+    assert.ok(Object.values(payload.manifest.files).includes(rel), `${rel} is not packaged`);
+  }
+  const addSection = skill.slice(skill.indexOf('**Add:**'), skill.indexOf('**Omit:**'));
+  assert.match(addSection, new RegExp(ruleAnatomyTarget.replaceAll('.', '\\.')));
+  assert.match(skill, new RegExp(`Create each approved rule[^\\n]*${ruleAnatomyTarget.replaceAll('.', '\\.')}`, 'i'));
+
+  for (const section of ['Scope', 'Required Patterns', 'Prohibited Patterns', 'Verification']) {
+    assert.match(anatomy, new RegExp(`\\*\\*${section}\\*\\*`), section);
+  }
+  assert.match(anatomy, /150.200 lines/);
+  assert.match(anatomy, /real.*in this repository/i);
+  assert.match(anatomy, /reason/i);
+  assert.match(anatomy, /formatters, linters, types, or tests/i);
+  for (const ruleType of ['Coding', 'Testing', 'Documentation', 'Domain risk', 'Security', 'API contracts']) {
+    const heading = new RegExp(`^### ${ruleType}\\n([\\s\\S]*?)(?=^##|$(?![\\s\\S]))`, 'm');
+    const block = anatomy.match(heading)?.[1] ?? '';
+    assert.match(block, /Justified when/i, ruleType);
+    assert.match(block, /Skip when/i, ruleType);
+  }
+  assert.match(anatomy, /## Worked Example/);
+  assert.doesNotMatch(anatomy, /legacy|\.ai\//i);
+});
+
+test('fresh interactive init installs the rule anatomy reference and records it as managed', async () => {
+  const root = await createFixture();
+
+  const result = await runCli(['init', root], {
+    stdout: { write: () => true },
+    stderr: { write: () => true },
+    selectPlanAudit: async () => false,
+    confirm: async () => true,
+  });
+
+  assert.equal(result, 0);
+  const payload = await loadPackagePayload();
+  assert.equal(await readFile(path.join(root, ruleAnatomyTarget), 'utf8'), payload.files.ruleAnatomy);
+  const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
+  assert.equal(state.managedFiles[ruleAnatomyTarget].source, ruleAnatomySource);
+});
+
+test('a 0.3.0 install receives the rule anatomy reference through one sync', async () => {
+  const root = await createInstalledFixture('0.3.0');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  await rm(path.join(root, ruleAnatomyTarget));
+  const legacyState = JSON.parse(await readFile(statePath, 'utf8'));
+  delete legacyState.managedFiles[ruleAnatomyTarget];
+  await writeFile(statePath, `${JSON.stringify(legacyState, null, 2)}\n`, 'utf8');
+
+  const check = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.notEqual(check.status, 0, check.stdout);
+  assert.match(check.stdout, /CREATE.*references\/rule-anatomy\.md/);
+
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+  assert.equal(sync.status, 0, sync.stderr);
+
+  const payload = await loadPackagePayload();
+  assert.equal(await readFile(path.join(root, ruleAnatomyTarget), 'utf8'), payload.files.ruleAnatomy);
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(state.managedFiles[ruleAnatomyTarget].source, ruleAnatomySource);
+  const cleanCheck = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+  assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
+});
+
+test('init output lists detected context paths in deterministic order without contents', async () => {
+  const root = await createFixture();
+  await mkdir(path.join(root, 'packages', 'api'), { recursive: true });
+  await mkdir(path.join(root, '.github'), { recursive: true });
+  await mkdir(path.join(root, '.cursor', 'rules'), { recursive: true });
+  await writeFile(path.join(root, 'AGENTS.md'), 'SECRET-AGENTS-BODY\n', 'utf8');
+  await writeFile(path.join(root, 'packages', 'api', 'CLAUDE.md'), 'SECRET-NESTED-BODY\n', 'utf8');
+  await writeFile(path.join(root, '.github', 'copilot-instructions.md'), 'SECRET-COPILOT-BODY\n', 'utf8');
+  await writeFile(path.join(root, '.cursor', 'rules', 'style.mdc'), 'SECRET-CURSOR-BODY\n', 'utf8');
+
+  const first = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], { encoding: 'utf8' });
+  const second = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], { encoding: 'utf8' });
+
+  assert.equal(first.status, 0, first.stderr);
+  assert.equal(first.stdout, second.stdout);
+  assert.match(
+    first.stdout,
+    /Detected context sources:\n {2}\.cursor\/rules\/style\.mdc\n {2}\.github\/copilot-instructions\.md\n {2}AGENTS\.md\n {2}packages\/api\/CLAUDE\.md\n\n/,
+  );
+  assert.ok(first.stdout.indexOf('Detected context sources:') < first.stdout.indexOf('MKDIR'));
+  assert.doesNotMatch(first.stdout, /SECRET-/);
+});
+
+test('init output reports when no context sources are detected', async () => {
+  const root = await createFixture();
+
+  const result = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], { encoding: 'utf8' });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Detected context sources: none\n/);
+});
+
 test('init --yes creates fresh scaffolding, records state last, and is idempotent', async () => {
   const root = await createFixture();
 
@@ -502,7 +633,13 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
     `${DRAKOM_DIR}/specs/README.md`,
     '.agents/skills/drakom-ai-setup/SKILL.md',
     '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
+    ruleAnatomyTarget,
   ]);
+  assert.equal(state.managedFiles[ruleAnatomyTarget].source, ruleAnatomySource);
+  assert.equal(
+    await readFile(path.join(root, ruleAnatomyTarget), 'utf8'),
+    (await loadPackagePayload()).files.ruleAnatomy,
+  );
   const afterFirst = await snapshot(root);
   assert.equal((await inspectTarget(root)).status, 'initialized');
 
@@ -781,7 +918,10 @@ test('preflight conflicts prevent every initialization mutation', async () => {
 test('the shipped payload manifest declares a valid defaults table', async () => {
   const payload = await loadPackagePayload();
 
-  assert.deepEqual(payload.manifest.defaults, {});
+  assert.deepEqual(payload.manifest.defaults, {
+    ruleAnatomy: { target: ruleAnatomyTarget, addedIn: '0.4.0' },
+  });
+  assert.equal(payload.manifest.files.ruleAnatomy, ruleAnatomySource);
 });
 
 test('payload defaults are validated before any planning', async () => {

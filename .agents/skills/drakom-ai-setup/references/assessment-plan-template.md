@@ -7,21 +7,33 @@
 - Native verification commands:
 - Constraints and unknowns:
 
+## Assessment Entries
+
+List every relevant source, or a bounded group of related sources, under Keep, Refine, Add, or Omit. Include `.drakom-ai/plans/` and `.drakom-ai/specs/` even when search tools skip them because of `.gitignore`. Record each entry with these fields:
+
+- Source path and evidence:
+- Ownership (kit-managed, generated, project-owned, unmanaged, or unknown):
+- Decision and rationale:
+- Destination or action (including "keep in place"):
+- Dependencies (routes, scripts, companion files):
+- Approval status:
+- Verification:
+
 ## Keep
 
-- Existing context to preserve unchanged, with evidence.
+- Existing context to preserve unchanged.
 
 ## Refine
 
-- Existing context to revise, why, and the exact owned file.
+- Existing context to revise, and the exact owned file.
 
 ## Add
 
-- Proposed rule, skill, or router change, with evidence and ownership.
+- Proposed rule, skill, or router change. Draft rules from `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
 
 ## Omit
 
-- Considered additions that do not justify their maintenance cost.
+- Considered additions or existing context that do not justify their maintenance cost. Omit never means delete; omitted files stay in place unless removal is separately approved.
 
 ## Proposed Files and Interfaces
 

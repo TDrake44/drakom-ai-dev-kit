@@ -6,9 +6,15 @@
     "localIgnore": "templates/drakom-ai.gitignore",
     "mcpRegistry": "templates/mcp-servers.yaml",
     "planAuditSkill": "skills/drakom-plan-audit/SKILL.md",
+    "ruleAnatomy": "skills/drakom-ai-setup/references/rule-anatomy.md",
     "rulesReadme": "templates/rules.README.md",
     "setupSkill": "skills/drakom-ai-setup/SKILL.md",
     "specsReadme": "templates/specs.README.md"
   },
-  "defaults": {}
+  "defaults": {
+    "ruleAnatomy": {
+      "target": ".agents/skills/drakom-ai-setup/references/rule-anatomy.md",
+      "addedIn": "0.4.0"
+    }
+  }
 }

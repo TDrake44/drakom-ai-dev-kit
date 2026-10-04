@@ -272,6 +272,14 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('dist/run-cli.js'), 'dist/run-cli.js missing');
   assert.ok(packedPaths.includes('payload/v1/payload.json'), 'payload manifest missing');
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
+  assert.ok(
+    packedPaths.includes('payload/v1/skills/drakom-ai-setup/references/assessment-plan-template.md'),
+    'assessment plan template missing',
+  );
+  assert.ok(
+    packedPaths.includes('payload/v1/skills/drakom-ai-setup/references/rule-anatomy.md'),
+    'rule anatomy reference missing',
+  );
   assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'optional plan audit skill missing');
   assert.equal(
     packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'),
@@ -633,6 +641,12 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const updatedState = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
     assert.equal(updatedState.kitVersion, await packageVersion());
     assert.equal(updatedState.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md'].fingerprint, sha256(newSkillContent));
+
+    // Default files added after the recorded version are installed and recorded by the same sync.
+    const ruleAnatomyTarget = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
+    const ruleAnatomyContent = await readFile(path.join(consumer, ruleAnatomyTarget), 'utf8');
+    assert.match(ruleAnatomyContent, /Required Patterns/);
+    assert.equal(updatedState.managedFiles[ruleAnatomyTarget].fingerprint, sha256(ruleAnatomyContent));
 
     // Post-update sync --check passes clean
     const postCheck = runDrakom(['sync', '.', '--check']);
