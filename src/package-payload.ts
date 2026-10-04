@@ -66,6 +66,19 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
   };
 }
 
+/**
+ * Targets are compared with inventory paths and stored in state verbatim, so they must already be
+ * in the inventory's form: forward slashes, no `.` or empty segments, and no trailing slash.
+ */
+function isCanonicalTargetPath(target: string): boolean {
+  return (
+    isRelativePath(target) &&
+    !target.includes('\\') &&
+    !target.endsWith('/') &&
+    path.posix.normalize(target) === target
+  );
+}
+
 function validateDefaults(value: unknown, manifestFiles: Record<string, string>): Record<string, PayloadDefault> {
   if (value === undefined) {
     return {};
@@ -79,8 +92,8 @@ function validateDefaults(value: unknown, manifestFiles: Record<string, string>)
     if (!Object.hasOwn(manifestFiles, name)) {
       throw new Error(`Invalid payload default ${name}: key is not declared in files.`);
     }
-    if (!isRecord(entry) || typeof entry.target !== 'string' || !isRelativePath(entry.target)) {
-      throw new Error(`Invalid payload default ${name}: target must be a safe relative path.`);
+    if (!isRecord(entry) || typeof entry.target !== 'string' || !isCanonicalTargetPath(entry.target)) {
+      throw new Error(`Invalid payload default ${name}: target must be a canonical, safe relative file path.`);
     }
     if (targets.has(entry.target)) {
       throw new Error(`Invalid payload default ${name}: target ${entry.target} is already declared.`);

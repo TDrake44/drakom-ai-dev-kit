@@ -207,8 +207,14 @@ test('--version prints without inspecting targets or prompting', async () => {
 });
 
 /**
+ * Payload manifest shape that kit-copy fixtures may alter. `defaults` is `unknown` so tests can
+ * write malformed tables that the kit must reject.
+ * @typedef {{ schemaVersion: number, kitVersion: string, files: Record<string, string>, defaults?: unknown }} FixtureManifest
+ */
+
+/**
  * Copy the compiled kit into a standalone directory so a test can alter its payload.
- * @param {(manifest: Record<string, any>, payloadRoot: string) => Promise<void> | void} mutate
+ * @param {(manifest: FixtureManifest, payloadRoot: string) => Promise<void> | void} mutate
  * @returns {Promise<string>} path to the copied cli.js
  */
 async function createKitCopy(mutate) {
@@ -219,6 +225,7 @@ async function createKitCopy(mutate) {
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(kitRoot, 'node_modules'), 'dir');
   const payloadRoot = path.join(kitRoot, 'payload', 'v1');
   const manifestPath = path.join(payloadRoot, 'payload.json');
+  /** @type {FixtureManifest} */
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
   await mutate(manifest, payloadRoot);
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -784,6 +791,11 @@ test('payload defaults are validated before any planning', async () => {
     { defaults: { setupSkill: { target: '../escape/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
     { defaults: { setupSkill: { target: '/abs/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
     { defaults: { setupSkill: { target: '.agents/skills/x/SKILL.md', addedIn: '0.4' } }, error: /setupSkill.*addedIn/i },
+    { defaults: { setupSkill: { target: './.agents/skills/x/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '.agents//skills/x/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '.agents/./skills/x/SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '.agents\\skills\\x\\SKILL.md', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
+    { defaults: { setupSkill: { target: '.agents/skills/x/', addedIn: '0.4.0' } }, error: /setupSkill.*target/i },
     { defaults: [], error: /defaults/i },
   ];
   for (const { defaults, error } of cases) {
@@ -836,6 +848,26 @@ test('sync installs default files added after the recorded kit version, with mir
 
   const cleanCheck = spawnSync(process.execPath, [kitCli, 'sync', root, '--check'], { encoding: 'utf8' });
   assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
+});
+
+test('a default installed by sync stays in sync on the next run', async () => {
+  const target = `${DRAKOM_DIR}/rules/example.md`;
+  const kitCli = await createKitCopy(async (manifest, payloadRoot) => {
+    await writeFile(path.join(payloadRoot, 'templates', 'example-rule.md'), '# Example rule\n', 'utf8');
+    manifest.files.exampleRule = 'templates/example-rule.md';
+    manifest.defaults = { exampleRule: { target, addedIn: '0.4.0' } };
+  });
+  const root = await createInstalledFixture('0.3.0');
+  const install = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+  assert.equal(install.status, 0, install.stderr);
+  const afterInstall = await snapshot(root);
+
+  const second = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(second.status, 0, second.stdout);
+  assert.doesNotMatch(second.stdout, /CONFLICT/);
+  assert.equal(afterInstall[target], '# Example rule\n');
+  assert.deepEqual(await snapshot(root), afterInstall);
 });
 
 test('sync refuses to take ownership of an unmanaged file at a new default path', async () => {
