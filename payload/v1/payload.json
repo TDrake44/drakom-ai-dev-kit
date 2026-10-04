@@ -9,11 +9,21 @@
     "ruleAnatomy": "skills/drakom-ai-setup/references/rule-anatomy.md",
     "rulesReadme": "templates/rules.README.md",
     "setupSkill": "skills/drakom-ai-setup/SKILL.md",
+    "skillAuthorSkill": "skills/drakom-skill-author/SKILL.md",
+    "skillPatterns": "skills/drakom-skill-author/references/skill-patterns.md",
     "specsReadme": "templates/specs.README.md"
   },
   "defaults": {
     "ruleAnatomy": {
       "target": ".agents/skills/drakom-ai-setup/references/rule-anatomy.md",
+      "addedIn": "0.4.0"
+    },
+    "skillAuthorSkill": {
+      "target": ".agents/skills/drakom-skill-author/SKILL.md",
+      "addedIn": "0.4.0"
+    },
+    "skillPatterns": {
+      "target": ".agents/skills/drakom-skill-author/references/skill-patterns.md",
       "addedIn": "0.4.0"
     }
   }

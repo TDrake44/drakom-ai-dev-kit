@@ -41,7 +41,7 @@ Present a concise recommendation using exactly these decision categories:
 
 - **Keep:** useful existing context that should remain unchanged.
 - **Refine:** existing context that is valuable but inaccurate, duplicated, or poorly routed.
-- **Add:** a missing rule, skill, or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy at the repository-root path `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
+- **Add:** a missing rule, skill, or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy at the repository-root path `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`. For each proposed skill, follow the Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md` instead of drafting it here.
 - **Omit:** plausible additions or existing context that do not justify their maintenance cost. Omit never means delete: omitted existing files stay in place unless the user separately approves removing them.
 
 Within each category, list every relevant source, or a bounded group of related sources, with:
@@ -75,11 +75,12 @@ Stop and request explicit approval before creating or changing any project-owned
 Apply only the approved items while preserving unrelated content. Then:
 
 1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
-2. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. Do not globally load rules; companion deep-dive references may instead be routed on demand.
-3. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
-4. Verify every referenced path exists or is explicitly marked as prospective.
-5. Verify every documented command against the repository's actual package manager and tooling.
-6. Verify every cross-file reference, skill name, and entry-point link resolves.
-7. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
-8. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` when the installed CLI supports managed synchronization. If the installed release does not yet implement sync, report that verification as deferred rather than improvising a replacement updater.
-9. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.
+2. Create each approved skill by completing the drakom-skill-author Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md`, including its `AGENTS.md` skill table row and mirror sync.
+3. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. Do not globally load rules; companion deep-dive references may instead be routed on demand.
+4. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
+5. Verify every referenced path exists or is explicitly marked as prospective.
+6. Verify every documented command against the repository's actual package manager and tooling.
+7. Verify every cross-file reference, skill name, and entry-point link resolves.
+8. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
+9. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` when the installed CLI supports managed synchronization. If the installed release does not yet implement sync, report that verification as deferred rather than improvising a replacement updater.
+10. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.
