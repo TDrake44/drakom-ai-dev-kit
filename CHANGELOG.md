@@ -2,19 +2,44 @@
 
 ## 0.4.0
 
+### Upgrading from 0.3.0
+
+Update the package, then run `drakom-ai sync` once. It will:
+
+- add the new `drakom-skill-author` skill, its `skill-patterns.md` reference, and its Claude mirror;
+- add `rule-anatomy.md` next to the setup skill;
+- update the setup skill and the managed block in `AGENTS.md`.
+
+If you have edited any kit-managed file or the managed `AGENTS.md` block, or already have a file at one of the new paths, `sync` reports a conflict and changes nothing until you resolve it.
+
 ### Minor Changes
 
-- 3c37c85: The `drakom-ai-setup` skill and its assessment plan template now record each relevant context source under Keep, Refine, Add, or Omit with its evidence, ownership, rationale, destination or action, dependencies, approval status, and verification. Setup lists `.drakom-ai/plans/` and `.drakom-ai/specs/` explicitly, because search tools that honour `.gitignore` skip them, and states that Omit never means delete. A new rule-authoring reference, `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`, describes the anatomy, size budget, and common types of project rules; `init` installs it, and `sync` adds it to existing installs. `init` output now lists the detected context source paths before the planned operations.
-- af31fe1: A new kit-managed skill, `drakom-skill-author`, helps projects build their own skills after adoption. It finds candidates from repeated work in git and pull request history, CI configuration, package scripts, contribution docs, and plans. It drafts short skills that route to rules and include verification and approval points, checks each draft against a recent real task, and refines or retires skills that go stale. It asks for approval before creating or changing any project skill. A companion reference, `.agents/skills/drakom-skill-author/references/skill-patterns.md`, describes common skill archetypes and includes a worked example. `init` installs both files, and `sync` adds them to existing installs. The `drakom-ai-setup` skill now hands approved skill additions to `drakom-skill-author`, and the managed `AGENTS.md` block names the new skill.
-- e238424: `sync` now installs default files that newer kit releases add, so existing projects receive them without re-running `init`. A new default is created only when the project's recorded kit version predates the release that introduced it and nothing already exists at its path. An unmanaged file at that path is reported as a conflict and nothing is written. A default you delete, together with its state entry, is not offered again. When the new file is a skill, its Claude mirror is generated in the same sync.
+- af31fe1: **New skill: `drakom-skill-author`.** Helps your project create and maintain its own agent skills.
+  - It suggests a skill only when work has repeated, found in git and pull request history, CI configuration, package scripts, contribution docs, or plans, or when you ask for one.
+  - Drafts are short, use your project's name as a prefix, point to your rules instead of copying them, and include verification commands and approval points.
+  - It tests each draft against a recent real task, and later fixes or retires skills that stop being useful.
+  - It always asks before creating or changing a project skill.
+  - Includes a reference of common skill types with a worked example (`references/skill-patterns.md`).
+  - The setup skill now hands new skills to it.
+
+- e238424: **`sync` adds new default files from newer releases.** Existing projects get files introduced in later versions without re-running `init`.
+  - A file is added only if it is new since the version you have installed and nothing already exists at its path.
+  - If something does exist there, `sync` reports a conflict and writes nothing.
+  - If you delete a default file and remove its state entry, it is not added back.
+  - New skills get their Claude mirror in the same run.
+
+- 3c37c85: **Clearer project assessments and a guide for writing rules.**
+  - The setup skill's assessment now records, for every existing context file: what it is, who owns it, what to do with it and why, what depends on it, whether it is approved, and how to verify it. "Omit" never means delete.
+  - The setup skill now looks in `.drakom-ai/plans/` and `.drakom-ai/specs/` directly, because gitignore-aware search tools skip them.
+  - New `rule-anatomy.md` explains how to structure a rule, how long it should be, and which kinds of rules are worth writing.
+  - `init` now lists the existing context files it found before showing the planned changes.
 
 ### Patch Changes
 
-- 2f89a23: Add `drakom-ai --version` (`-V`), which prints the installed kit version. `init` and `sync` now stop with reinstall guidance, before planning or writing anything, when the packaged payload version does not match the package version.
-- 860cfc5: Preserve comments and formatting in MCP client configuration files.
-  
-  - `.vscode/mcp.json` is now read as JSONC, so comments and trailing commas no longer make `sync` and `init` fail. `.mcp.json` and `.agents/mcp_config.json` remain strict JSON.
-  - Sync no longer rewrites JSON MCP client files whose managed servers are unchanged. When managed servers do change, only those entries are edited and comments elsewhere are kept.
+- 2f89a23: **`drakom-ai --version`** (or `-V`) prints the installed version. `init` and `sync` now stop, without changing anything, if the installed package is internally inconsistent, and tell you to reinstall.
+- 860cfc5: **MCP config files keep their comments and formatting.**
+  - `.vscode/mcp.json` may now contain comments and trailing commas. `.mcp.json` and `.agents/mcp_config.json` must still be plain JSON.
+  - `sync` no longer rewrites MCP config files when nothing it manages has changed. When something does change, only those entries are edited.
 
 ## 0.3.0
 
