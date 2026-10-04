@@ -3,6 +3,7 @@ import { parse as parseToml } from 'smol-toml';
 
 import { DRAKOM_DIR } from './constants.js';
 import type { TargetInventory } from './inspect-target.js';
+import { parseJsonc, setJsonValue } from './json-text.js';
 import type {
   BaseServerConfig,
   McpRegistry,
@@ -39,12 +40,36 @@ interface JsonTargetPreparation {
   targetFingerprints: Record<string, string>;
 }
 
+type JsonParser = (text: string) => unknown;
+
+// Own-key lookup, so server names such as "constructor" never resolve to Object.prototype members.
+function managedTargetFingerprint(state: InstallState, serverName: string, targetPath: string): string | undefined {
+  return Object.hasOwn(state.managedMcpServers, serverName)
+    ? state.managedMcpServers[serverName]?.targetFingerprints[targetPath]
+    : undefined;
+}
+
+function editProducedServers(
+  content: string,
+  containerKey: string,
+  expectedServers: Record<string, unknown>,
+  parse: JsonParser,
+): boolean {
+  try {
+    const parsed = parse(content);
+    return isRecord(parsed) && fingerprintObject(parsed[containerKey]) === fingerprintObject(expectedServers);
+  } catch {
+    return false;
+  }
+}
+
 function prepareJsonTarget(
   targetPath: string,
   containerKey: string,
   generatedServers: Record<string, Record<string, unknown>>,
   inventory: TargetInventory,
   state: InstallState,
+  parse: JsonParser,
 ): JsonTargetPreparation {
   const operations: Operation[] = [];
   const targetFingerprints: Record<string, string> = {};
@@ -54,7 +79,7 @@ function prepareJsonTarget(
   let existing: Record<string, unknown> = {};
   if (targetExists) {
     try {
-      const parsed = JSON.parse(currentContent);
+      const parsed = parse(currentContent);
       if (!isRecord(parsed)) {
         operations.push({
           action: 'conflict',
@@ -92,8 +117,8 @@ function prepareJsonTarget(
   for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
     const prevFp = serverState.targetFingerprints[targetPath];
     if (prevFp !== undefined) {
-      if (!(serverName in currentServers)) {
-        if (serverName in generatedServers) {
+      if (!Object.hasOwn(currentServers, serverName)) {
+        if (Object.hasOwn(generatedServers, serverName)) {
           operations.push({
             action: 'conflict',
             path: targetPath,
@@ -116,8 +141,8 @@ function prepareJsonTarget(
   // 2. Check newly generated servers for collisions with unmanaged servers
   for (const [serverName, generatedServer] of Object.entries(generatedServers)) {
     targetFingerprints[serverName] = fingerprintObject(generatedServer);
-    const prevFp = state.managedMcpServers[serverName]?.targetFingerprints[targetPath];
-    if (serverName in currentServers && prevFp === undefined) {
+    const prevFp = managedTargetFingerprint(state, serverName, targetPath);
+    if (Object.hasOwn(currentServers, serverName) && prevFp === undefined) {
       // It exists in current client file but was not managed
       if (!isDeepStrictEqual(sortKeys(currentServers[serverName]), sortKeys(generatedServer))) {
         operations.push({
@@ -133,51 +158,69 @@ function prepareJsonTarget(
     return { operations, targetFingerprints };
   }
 
-  // 3. Build merged servers
-  const mergedServers: Record<string, unknown> = { ...currentServers };
+  // 3. Determine managed changes; semantically unchanged entries are left as written
+  const removedServers = Object.keys(state.managedMcpServers).filter(
+    (serverName) =>
+      !Object.hasOwn(generatedServers, serverName) &&
+      Object.hasOwn(currentServers, serverName) &&
+      managedTargetFingerprint(state, serverName, targetPath) !== undefined,
+  );
+  const changedServers = Object.entries(generatedServers).filter(
+    ([serverName]) =>
+      !Object.hasOwn(currentServers, serverName) ||
+      fingerprintObject(currentServers[serverName]) !== targetFingerprints[serverName],
+  );
 
-  // Remove previously managed servers that are no longer in generatedServers
-  for (const serverName of Object.keys(state.managedMcpServers)) {
-    if (!(serverName in generatedServers) && state.managedMcpServers[serverName]?.targetFingerprints[targetPath] !== undefined) {
-      delete mergedServers[serverName];
+  if (!targetExists) {
+    // If there are no servers to write, do not create an empty file
+    if (changedServers.length > 0) {
+      operations.push({
+        action: 'create',
+        path: targetPath,
+        summary: `Create MCP client configuration: ${targetPath}.`,
+        content: `${JSON.stringify({ [containerKey]: generatedServers }, null, 2)}\n`,
+      });
     }
-  }
-
-  // Add or update generated servers
-  for (const [serverName, generatedServer] of Object.entries(generatedServers)) {
-    mergedServers[serverName] = generatedServer;
-  }
-
-  // If there are no servers to write and target file did not exist, do not create an empty file
-  if (!targetExists && Object.keys(mergedServers).length === 0) {
     return { operations, targetFingerprints };
   }
 
-  const updatedTargetObject = { ...existing, [containerKey]: mergedServers };
-  const newContent = `${JSON.stringify(updatedTargetObject, null, 2)}\n`;
-
-  if (!targetExists) {
-    operations.push({
-      action: 'create',
-      path: targetPath,
-      summary: `Create MCP client configuration: ${targetPath}.`,
-      content: newContent,
-    });
-  } else if (newContent !== currentContent) {
-    operations.push({
-      action: 'update',
-      path: targetPath,
-      summary: `Update managed MCP servers in ${targetPath}.`,
-      content: newContent,
-      before: currentContent,
-    });
-  } else {
+  if (removedServers.length === 0 && changedServers.length === 0) {
     operations.push({
       action: 'preserve',
       path: targetPath,
       summary: `MCP client configuration ${targetPath} is up to date.`,
     });
+    return { operations, targetFingerprints };
   }
+
+  // 4. Apply managed changes as minimal text edits so comments and formatting survive
+  let newContent = currentContent;
+  const expectedServers: Record<string, unknown> = { ...currentServers };
+  for (const serverName of removedServers) {
+    newContent = setJsonValue(newContent, [containerKey, serverName], undefined);
+    delete expectedServers[serverName];
+  }
+  for (const [serverName, generatedServer] of changedServers) {
+    newContent = setJsonValue(newContent, [containerKey, serverName], generatedServer);
+    expectedServers[serverName] = generatedServer;
+  }
+
+  if (!editProducedServers(newContent, containerKey, expectedServers, parse)) {
+    operations.push({
+      action: 'conflict',
+      path: targetPath,
+      summary: `Cannot safely update ${targetPath}: managed MCP edits could not be applied cleanly. Safe next action: check ${targetPath} for duplicate keys or unusual structure.`,
+    });
+    return { operations, targetFingerprints };
+  }
+
+  operations.push({
+    action: 'update',
+    path: targetPath,
+    summary: `Update managed MCP servers in ${targetPath}.`,
+    content: newContent,
+    before: currentContent,
+  });
 
   return { operations, targetFingerprints };
 }
@@ -312,8 +355,8 @@ function prepareCodexTarget(
     for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
       const prevFp = serverState.targetFingerprints[targetPath];
       if (prevFp !== undefined) {
-        if (!(serverName in blockServers)) {
-          if (serverName in generatedServers) {
+        if (!Object.hasOwn(blockServers, serverName)) {
+          if (Object.hasOwn(generatedServers, serverName)) {
             operations.push({
               action: 'conflict',
               path: targetPath,
@@ -353,7 +396,7 @@ function prepareCodexTarget(
   const unmanagedServers = parsedUnmanaged.mcp_servers;
   if (isRecord(unmanagedServers)) {
     for (const [serverName, serverDef] of Object.entries(generatedServers)) {
-      const prevFp = state.managedMcpServers[serverName]?.targetFingerprints[targetPath];
+      const prevFp = managedTargetFingerprint(state, serverName, targetPath);
       if (Object.hasOwn(unmanagedServers, serverName) && prevFp === undefined) {
         const expectedSnippet = renderCodexSnippet(serverName, serverDef);
         let parsedExpectedServer: Record<string, unknown> | null = null;
@@ -497,9 +540,10 @@ export function generateMcpOperations(
     }
   }
 
-  const claudePrep = prepareJsonTarget('.mcp.json', 'mcpServers', claudeServers, inventory, state);
-  const vscodePrep = prepareJsonTarget('.vscode/mcp.json', 'servers', vscodeServers, inventory, state);
-  const agyPrep = prepareJsonTarget('.agents/mcp_config.json', 'mcpServers', agyServers, inventory, state);
+  // Only VS Code documents comments in its MCP file; the other JSON clients stay strict.
+  const claudePrep = prepareJsonTarget('.mcp.json', 'mcpServers', claudeServers, inventory, state, JSON.parse);
+  const vscodePrep = prepareJsonTarget('.vscode/mcp.json', 'servers', vscodeServers, inventory, state, parseJsonc);
+  const agyPrep = prepareJsonTarget('.agents/mcp_config.json', 'mcpServers', agyServers, inventory, state, JSON.parse);
   const codexPrep = prepareCodexTarget(codexServers, inventory, state);
 
   operations.push(...claudePrep.operations);

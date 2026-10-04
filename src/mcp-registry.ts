@@ -182,6 +182,8 @@ export function validateMcpRegistry(raw: unknown): McpValidationResult {
   const servers: Record<string, BaseServerConfig> = {};
   for (const [name, definition] of Object.entries(raw.servers)) {
     if (name.trim().length === 0) return validationError('server name must be a non-empty string');
+    // Plain assignment would set the prototype instead of adding the server, silently dropping it.
+    if (name === '__proto__') return validationError('server name "__proto__" is reserved; rename the server');
     const server = validateServer(name, definition);
     if (typeof server === 'string') return validationError(server);
     servers[name] = server;
