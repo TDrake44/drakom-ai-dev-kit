@@ -1187,7 +1187,7 @@ test('sync does not re-offer a removed default once state reaches its addedIn ve
   await rm(path.join(root, '.agents', 'skills', 'drakom-example-default'), { recursive: true });
   await rm(path.join(root, '.claude', 'skills', 'drakom-example-default'), { recursive: true });
   const state = JSON.parse(await readFile(statePath, 'utf8'));
-  assert.equal(state.kitVersion, '0.3.0');
+  assert.ok(compareVersions(state.kitVersion, '0.3.0') >= 0, `state ${state.kitVersion} should reach addedIn 0.3.0`);
   delete state.managedFiles[exampleSkillTarget];
   delete state.managedFiles[exampleReferenceTarget];
   delete state.managedSkillMirrors['.claude/skills/drakom-example-default/SKILL.md'];
