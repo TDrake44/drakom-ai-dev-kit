@@ -159,15 +159,23 @@ kit may add in the future.
 
 ## Managed and Project-Owned Content
 
-| Managed by Drakom AI Dev Kit | Owned by the project |
-| --- | --- |
-| `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`) | Rules in `.drakom-ai/rules/` |
-| `drakom-skill-author` skill and its reference (`skill-patterns.md`) | Task routes and all other `AGENTS.md` content |
-| Optional `drakom-plan-audit` skill, when selected | Project-authored canonical skills in `.agents/skills/` |
-| The managed block in `AGENTS.md` | MCP registry choices and all unmanaged client configuration |
-| Generated Claude skill mirrors | Plans, specifications, `.worktreeinclude`, and team decisions |
-| Generated MCP client blocks | |
-| Fingerprints in `.drakom-ai/state.json` | |
+Managed by Drakom AI Dev Kit:
+
+- `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`)
+- `drakom-skill-author` skill and its reference (`skill-patterns.md`)
+- Optional `drakom-plan-audit` skill, when selected
+- The managed block in `AGENTS.md`
+- Generated Claude skill mirrors
+- Generated MCP client blocks
+- Fingerprints in `.drakom-ai/state.json`
+
+Owned by the project:
+
+- Rules in `.drakom-ai/rules/`
+- Task routes and all other `AGENTS.md` content
+- Project-authored canonical skills in `.agents/skills/`
+- MCP registry choices and all unmanaged client configuration
+- Plans, specifications, `.worktreeinclude`, and team decisions
 
 Managed content is updated only when its recorded fingerprint still matches.
 If it has local edits, synchronization reports a conflict rather than replacing
@@ -249,12 +257,10 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 
 To upgrade, update the package and run `drakom-ai sync .`. Sync updates
 unmodified managed files and installs default files added in releases newer
-than the recorded `kitVersion`, then records the installed kit version. Once
-the recorded `kitVersion` has reached the release that added a default, you
-can remove that default by deleting the file and its `managedFiles` entry in
-`state.json`; sync does not reinstall it. Removed earlier, sync treats it as
-new and installs it again. Sync refuses to run when the recorded `kitVersion`
-is newer than the installed kit.
+than the recorded `kitVersion`, then records the installed kit version.
+Kit-managed skills and their references are part of the kit and should not be
+removed; sync reports a conflict if one is missing. Sync refuses to run when
+the recorded `kitVersion` is newer than the installed kit.
 
 ## Alternative Adoption Paths
 
