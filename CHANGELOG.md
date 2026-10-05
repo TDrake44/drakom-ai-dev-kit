@@ -15,7 +15,6 @@
 - e238424: **`sync` adds new default files from newer releases.** Existing projects get files introduced in later versions without re-running `init`.
   - A file is added only if it is new since the version you have installed and nothing already exists at its path.
   - If something does exist there, `sync` reports a conflict and writes nothing.
-  - If you delete a default file and remove its state entry, it is not added back.
   - New skills get their Claude mirror in the same run.
 
 - 3c37c85: **Clearer project assessments and a guide for writing rules.**
