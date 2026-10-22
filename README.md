@@ -56,12 +56,8 @@ When initialization completes, open your preferred AI assistant and run the setu
 $drakom-ai-setup    # OpenAI Codex CLI
 ```
 
-Interactive initialization also offers the optional `drakom-plan-audit` skill
-for reviewing or cleaning up local `.drakom-ai/plans/`. To install it without
-the interactive choice, pass `--with-plan-audit`; it is omitted by default from
-`--yes` runs. The same flag can add the skill safely to an existing initialized
-project. The skill is recorded as kit-managed and its Claude mirror is generated
-by `drakom-ai sync`.
+Initialization also installs the `drakom-plan-audit` skill. Ask your agent to
+use it when you want to review or clean up local `.drakom-ai/plans/`.
 
 The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
 
@@ -92,16 +88,24 @@ For a fresh repository, `drakom-ai init .` creates:
     │   ├── SKILL.md
     │   └── references/
     │       └── skill-patterns.md
-    └── drakom-plan-audit/           # optional; selected during init or via --with-plan-audit
+    └── drakom-plan-audit/
         └── SKILL.md
+
+.claude/
+└── skills/                       # generated SKILL.md-only mirrors for Claude Code
+    ├── drakom-ai-setup/SKILL.md
+    ├── drakom-skill-author/SKILL.md
+    └── drakom-plan-audit/SKILL.md
 
 AGENTS.md
 CLAUDE.md
 .worktreeinclude
 ```
 
-`init` does not create Claude Code skill mirrors. Run `drakom-ai sync .` to
-generate them in `.claude/skills/`.
+`init` refuses to replace a hand-authored `.claude/skills/` entry that shares a
+kit skill's name; it reports a conflict and makes no changes. `init` mirrors only
+the kit's skills. Run `drakom-ai sync .` to mirror skills your project already
+has in `.agents/skills/`.
 
 `init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
 
@@ -163,7 +167,7 @@ Managed by Drakom AI Dev Kit:
 
 - `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`)
 - `drakom-skill-author` skill and its reference (`skill-patterns.md`)
-- Optional `drakom-plan-audit` skill, when selected
+- `drakom-plan-audit` skill
 - The managed block in `AGENTS.md`
 - Generated Claude skill mirrors
 - Generated MCP client blocks
@@ -233,7 +237,6 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI
 | `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
 | `drakom-ai init [path] --yes` | Apply safe initialization without a prompt; it refuses structured merges into existing entry points. |
 | `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. |
-| `drakom-ai init [path] --with-plan-audit` | Install the optional local plan audit skill, including in an initialized project. |
 | `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
 | `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. |
 | `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |

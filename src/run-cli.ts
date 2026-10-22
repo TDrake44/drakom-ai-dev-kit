@@ -17,7 +17,6 @@ export interface CliIo {
   stdout: TextWriter;
   stderr: TextWriter;
   confirm?: () => Promise<boolean>;
-  selectPlanAudit?: () => Promise<boolean>;
 }
 
 function assertTargetNotNewerThanCli(targetKitVersion: string, cliKitVersion: string): void {
@@ -44,29 +43,7 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     if (args.command === 'init') {
       const inventory = await inspectTarget(args.targetPath);
       const payload = await loadPackagePayload();
-      if (args.withPlanAudit && inventory.state !== null) {
-        assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
-      }
-      let withPlanAudit = args.withPlanAudit;
-      const planAuditSourceRel = payload.manifest.files.planAuditSkill;
-      if (planAuditSourceRel === undefined) {
-        throw new Error('Package payload manifest is missing the planAuditSkill file entry.');
-      }
-      const planAuditTarget = `.agents/${planAuditSourceRel}`;
-      const planAuditTargetDir = `${planAuditTarget.slice(0, planAuditTarget.lastIndexOf('/') + 1)}`;
-      if (
-        !withPlanAudit &&
-        !args.yes &&
-        !args.dryRun &&
-        inventory.state === null &&
-        !inventory.hasDrakomDirectory &&
-        !inventory.pathSet.has(planAuditTarget) &&
-        !inventory.pathSet.has(planAuditTargetDir) &&
-        io.selectPlanAudit !== undefined
-      ) {
-        withPlanAudit = await io.selectPlanAudit();
-      }
-      const plan = buildInitPlan(inventory, { skipMcp: args.skipMcp, withPlanAudit }, payload);
+      const plan = buildInitPlan(inventory, { skipMcp: args.skipMcp }, payload);
       io.stdout.write(renderPlan(plan));
       if (!args.skipMcp) {
         const discovered = discoverMcp(inventory);
@@ -105,9 +82,6 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         `Applied ${result.created.length} creates, ${result.updated.length} updates, and ${result.merged.length} structured merges.\n`,
       );
       io.stdout.write('Ask your coding agent to use $drakom-ai-setup to assess this repository.\n');
-      if (withPlanAudit) {
-        io.stdout.write('Ask your coding agent to use $drakom-plan-audit to review local plans.\n');
-      }
       return 0;
     }
 

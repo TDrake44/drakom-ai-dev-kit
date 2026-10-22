@@ -22,6 +22,7 @@ export const MANAGED_BLOCK = `<!-- drakom-ai:start -->
 Project-specific AI context is stored under \`${DRAKOM_DIR}/\`.
 Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
 Use \`$drakom-skill-author\` to find, write, check, refine, or retire project-owned skills.
+Use \`$drakom-plan-audit\` to audit or clean up local plans in \`${DRAKOM_DIR}/plans/\`.
 <!-- drakom-ai:end -->`;
 
 export const NOTICE =
@@ -144,7 +145,7 @@ function planWorktreeInclude(
 /** Purely derive an initialization plan from an already-captured inventory. */
 export function buildInitPlan(
   inventory: TargetInventory,
-  options: { skipMcp: boolean; withPlanAudit?: boolean },
+  options: { skipMcp: boolean },
   payload: PackagePayload,
 ): OperationPlan {
   const operations: Operation[] = [];
@@ -158,13 +159,6 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
-  const planAuditSourceRel = payload.manifest.files.planAuditSkill;
-  if (planAuditSourceRel === undefined) {
-    throw new Error('Package payload manifest is missing the planAuditSkill file entry.');
-  }
-  const planAuditTarget = `.agents/${planAuditSourceRel}`;
-  const planAuditSource = planAuditSourceRel;
-  const planAuditContent = options.withPlanAudit ? requirePayloadFile('planAuditSkill') : undefined;
   const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
   const rulesReadmeSource = 'templates/rules.README.md';
   const rulesReadmeContent = requirePayloadFile('rulesReadme');
@@ -197,72 +191,11 @@ export function buildInitPlan(
 
   if (inventory.state !== null) {
     planWorktreeInclude(inventory, operations, addCreate);
-    const managedPlanAudit = inventory.state.managedFiles[planAuditTarget];
-    if (planAuditContent === undefined) {
-      operations.push({
-        action: 'preserve',
-        path: stateTarget,
-        summary: 'Existing Drakom installation remains unchanged by this preview.',
-      });
-    } else if (managedPlanAudit !== undefined) {
-      if (inventoryHasPath(planAuditTarget)) {
-        operations.push({
-          action: 'preserve',
-          path: planAuditTarget,
-          summary: 'Optional plan audit skill is already kit-managed.',
-        });
-        operations.push({
-          action: 'preserve',
-          path: stateTarget,
-          summary: 'Existing Drakom installation already records the optional plan audit skill.',
-        });
-      } else {
-        operations.push({
-          action: 'conflict',
-          path: planAuditTarget,
-          summary: 'Kit-managed optional plan audit skill is missing; run sync to diagnose the installation.',
-        });
-        operations.push({
-          action: 'preserve',
-          path: stateTarget,
-          summary: 'Preserve installation state until the missing managed skill is resolved.',
-        });
-      }
-    } else if (inventoryHasPath(planAuditTarget)) {
-      operations.push({
-        action: 'conflict',
-        path: planAuditTarget,
-        summary: 'Unmanaged optional plan audit skill already exists; review ownership before installation.',
-      });
-      operations.push({
-        action: 'preserve',
-        path: stateTarget,
-        summary: 'Preserve installation state because the optional skill has an ownership conflict.',
-      });
-    } else {
-      addCreate(planAuditTarget, planAuditContent, 'Install the optional local plan audit skill.');
-      const currentStateContent = inventory.contents[stateTarget];
-      if (currentStateContent === undefined) {
-        throw new Error(`Initialized target is missing readable state at ${stateTarget}.`);
-      }
-      const nextState: InstallState = {
-        ...inventory.state,
-        managedFiles: {
-          ...inventory.state.managedFiles,
-          [planAuditTarget]: {
-            source: planAuditSource,
-            fingerprint: fingerprint(planAuditContent),
-          },
-        },
-      };
-      operations.push({
-        action: 'update',
-        path: stateTarget,
-        summary: 'Record kit ownership of the optional plan audit skill.',
-        content: serializeState(nextState),
-        before: currentStateContent,
-      });
-    }
+    operations.push({
+      action: 'preserve',
+      path: stateTarget,
+      summary: 'Existing Drakom installation remains unchanged; run "drakom-ai sync" to apply kit updates.',
+    });
   } else if (inventory.hasDrakomDirectory) {
     operations.push({
       action: 'conflict',
@@ -289,9 +222,6 @@ export function buildInitPlan(
     addCreate(specsReadmeTarget, specsReadmeContent, 'Explain how to store collaborative architecture specifications.');
     addCreate(setupTarget, setupContent, 'Install the kit-managed project assessment skill.');
     addCreate(assessmentTarget, assessmentContent, 'Install the setup skill assessment plan template.');
-    if (planAuditContent !== undefined) {
-      addCreate(planAuditTarget, planAuditContent, 'Install the optional local plan audit skill.');
-    }
 
     const agentsContent = inventory.contents['AGENTS.md'];
     if (agentsContent === undefined) {
@@ -334,9 +264,6 @@ export function buildInitPlan(
       [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
       [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
       [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
-      ...(planAuditContent === undefined
-        ? {}
-        : { [planAuditTarget]: { source: planAuditSource, fingerprint: fingerprint(planAuditContent) } }),
     };
     for (const entry of listPayloadDefaults(payload)) {
       if (!Object.hasOwn(managedFiles, entry.target)) {
@@ -356,6 +283,15 @@ export function buildInitPlan(
       managedSkillMirrors: {},
       managedMcpServers: {},
     };
+    const mirrorStart = operations.length;
+    const kitSkillPaths = new Set(Object.keys(managedFiles).filter((target) => target.endsWith('/SKILL.md')));
+    const canonicalSkillMirrorPaths = planSkillMirrors(inventory, state, operations, kitSkillPaths);
+    state.managedSkillMirrors = recordSkillMirrors(
+      inventory,
+      operations.slice(mirrorStart),
+      canonicalSkillMirrorPaths,
+      {},
+    );
     addCreate(stateTarget, serializeState(state), 'Record managed ownership after all other operations succeed.');
   }
 
@@ -552,7 +488,38 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
   }
 }
 
-function planSkillMirrors(inventory: TargetInventory, state: InstallState, operations: Operation[]): Set<string> {
+/** Derive mirror ownership records from planned mirror operations. */
+function recordSkillMirrors(
+  inventory: TargetInventory,
+  operations: Operation[],
+  canonicalSkillMirrorPaths: Set<string>,
+  recorded: Record<string, { fingerprint: string }>,
+): Record<string, { fingerprint: string }> {
+  const updatedSkillMirrors = { ...recorded };
+  for (const op of operations) {
+    if ((op.action === 'create' || op.action === 'update') && op.path.startsWith('.claude/skills/') && op.content) {
+      updatedSkillMirrors[op.path] = { fingerprint: fingerprint(op.content) };
+    } else if (op.action === 'delete' && op.path.startsWith('.claude/skills/')) {
+      delete updatedSkillMirrors[op.path];
+    } else if (op.action === 'preserve' && canonicalSkillMirrorPaths.has(op.path)) {
+      if (!(op.path in updatedSkillMirrors) && inventory.contents[op.path] !== undefined) {
+        updatedSkillMirrors[op.path] = { fingerprint: fingerprint(inventory.contents[op.path]!) };
+      }
+    }
+  }
+  return updatedSkillMirrors;
+}
+
+/**
+ * Plan Claude mirrors for canonical skills. When `onlySkillPaths` is given, mirror only those
+ * skills and leave project-owned skills and stale mirrors for `sync` to reconcile.
+ */
+function planSkillMirrors(
+  inventory: TargetInventory,
+  state: InstallState,
+  operations: Operation[],
+  onlySkillPaths?: Set<string>,
+): Set<string> {
   const canonicalSkillMirrorPaths = new Set<string>();
   if (state.features.skillMirrors !== false) {
     const canonicalSkills: Array<{ name: string; path: string; content: string }> = [];
@@ -565,6 +532,9 @@ function planSkillMirrors(inventory: TargetInventory, state: InstallState, opera
         (op) => (op.action === 'update' || op.action === 'create') && op.path === skillPath,
       );
       const effectiveContent = plannedWrite?.content ?? inventory.contents[skillPath];
+      if (onlySkillPaths !== undefined && !onlySkillPaths.has(skillPath)) {
+        continue;
+      }
       if (match?.[1] && effectiveContent !== undefined) {
         canonicalSkills.push({
           name: match[1],
@@ -654,7 +624,7 @@ function planSkillMirrors(inventory: TargetInventory, state: InstallState, opera
     }
 
     // Stale mirrors in .claude/skills/
-    for (const skillPath of inventory.skillFiles) {
+    for (const skillPath of onlySkillPaths === undefined ? inventory.skillFiles : []) {
       const match = skillPath.match(/^\.claude\/skills\/([^/]+)\/SKILL\.md$/);
       if (match?.[1]) {
         const mirrorName = match[1];
@@ -818,20 +788,12 @@ function planStateUpdate(
     }
   }
 
-  const updatedSkillMirrors: Record<string, { fingerprint: string }> = {
-    ...(state.managedSkillMirrors ?? {}),
-  };
-  for (const op of operations) {
-    if ((op.action === 'create' || op.action === 'update') && op.path.startsWith('.claude/skills/') && op.content) {
-      updatedSkillMirrors[op.path] = { fingerprint: fingerprint(op.content) };
-    } else if (op.action === 'delete' && op.path.startsWith('.claude/skills/')) {
-      delete updatedSkillMirrors[op.path];
-    } else if (op.action === 'preserve' && canonicalSkillMirrorPaths.has(op.path)) {
-      if (!(op.path in updatedSkillMirrors) && inventory.contents[op.path] !== undefined) {
-        updatedSkillMirrors[op.path] = { fingerprint: fingerprint(inventory.contents[op.path]!) };
-      }
-    }
-  }
+  const updatedSkillMirrors = recordSkillMirrors(
+    inventory,
+    operations,
+    canonicalSkillMirrorPaths,
+    state.managedSkillMirrors ?? {},
+  );
 
   const updatedState: InstallState = {
     ...state,
