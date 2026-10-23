@@ -18,6 +18,10 @@
       "source": "skills/drakom-ai-setup/references/rule-anatomy.md",
       "fingerprint": "sha256:e34fc102ce94125ce1411d594bb08cc6a75c4db99386b1c8918e392bb05eda71"
     },
+    ".agents/skills/drakom-plan-audit/SKILL.md": {
+      "source": "skills/drakom-plan-audit/SKILL.md",
+      "fingerprint": "sha256:bf4d2cf78d009e3f76d9bbd97ffc2bd495e545ea7f67a2daa7c49fcfb506c80b"
+    },
     ".agents/skills/drakom-skill-author/SKILL.md": {
       "source": "skills/drakom-skill-author/SKILL.md",
       "fingerprint": "sha256:a8c941774d43a5f56d8f9a1232a6f0f6c20c5da87c1b99b64b15c89ad2ba2d0e"
@@ -30,7 +34,7 @@
   "managedMcpServers": {},
   "managedBlocks": {
     "AGENTS.md#drakom-ai": {
-      "fingerprint": "sha256:31bab423cfb7d380df8e0511019fa28d64e782f6fe24a7b0718ffbd7ecde6f44"
+      "fingerprint": "sha256:9dfbcedd554c91e9aeda205fda7ef2bdad336d0aa63525c029dbdc6aa1b088c5"
     }
   },
   "managedSkillMirrors": {

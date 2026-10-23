@@ -285,7 +285,7 @@ test('packed artifact contains only required publishable runtime files and metad
     packedPaths.includes('payload/v1/skills/drakom-skill-author/references/skill-patterns.md'),
     'skill patterns reference missing',
   );
-  assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'optional plan audit skill missing');
+  assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'plan audit skill missing');
   assert.equal(
     packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'),
     false,
@@ -436,38 +436,23 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     const repeatInit = runDrakom(['init', '.', '--yes']);
     assert.equal(repeatInit.status, 0, repeatInit.stderr);
 
-    const optionalProject = path.join(consumer, 'optional-project');
-    await mkdir(optionalProject, { recursive: true });
-    const optionalInit = runDrakom(['init', optionalProject, '--yes', '--with-plan-audit']);
-    assert.equal(optionalInit.status, 0, optionalInit.stderr);
-    assert.match(optionalInit.stdout, /Ask your coding agent to use \$drakom-plan-audit/);
     assert.match(
-      await readFile(path.join(optionalProject, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
+      await readFile(path.join(consumer, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
       /classify\s+each plan/i,
     );
-    const optionalSync = runDrakom(['sync', optionalProject]);
-    assert.equal(optionalSync.status, 0, optionalSync.stderr);
     assert.match(
-      await readFile(path.join(optionalProject, '.claude', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
+      await readFile(path.join(consumer, '.claude', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
       /GENERATED MIRROR/,
     );
 
-    // 5. Before initial sync, sync --check reports drift because Claude mirror needs initial sync
-    const initialCheck = runDrakom(['sync', '.', '--check']);
-    assert.notEqual(initialCheck.status, 0, 'sync --check must report drift before initial mirror sync');
-
-    // 6. Synchronize initial mirrors
-    const syncRes = runDrakom(['sync', '.']);
-    assert.equal(syncRes.status, 0, syncRes.stderr);
-
-    // Mirror created
+    // 5. Init already created the Claude mirror
     const mirrorPath = path.join(consumer, '.claude', 'skills', 'drakom-ai-setup', 'SKILL.md');
     const mirrorContent = await readFile(mirrorPath, 'utf8');
     assert.match(mirrorContent, /GENERATED MIRROR/);
 
-    // 7. Post-sync clean check passes with exit code 0
+    // 6-7. A freshly initialized project passes sync --check without a prior sync
     const cleanCheck = runDrakom(['sync', '.', '--check']);
-    assert.equal(cleanCheck.status, 0, cleanCheck.stderr);
+    assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
 
     // 8. Idempotent sync
     const idempotentSync = runDrakom(['sync', '.']);

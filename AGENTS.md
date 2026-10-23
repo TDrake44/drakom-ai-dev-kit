@@ -72,4 +72,5 @@ pnpm sync:check
 Project-specific AI context is stored under `.drakom-ai/`.
 Use `$drakom-ai-setup` to assess or revise the project's agent configuration.
 Use `$drakom-skill-author` to find, write, check, refine, or retire project-owned skills.
+Use `$drakom-plan-audit` to audit or clean up local plans in `.drakom-ai/plans/`.
 <!-- drakom-ai:end -->

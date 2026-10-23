@@ -7,7 +7,6 @@ export type CliArguments =
       dryRun: boolean;
       yes: boolean;
       skipMcp: boolean;
-      withPlanAudit: boolean;
     }
   | { command: 'sync'; targetPath: string; dryRun: boolean; check: boolean }
   | { command: 'help'; topic: HelpTopic }
@@ -56,13 +55,16 @@ export function parseCliArgs(argv: string[]): CliArguments {
   }
 
   const commonFlags = new Set(['--dry-run']);
-  const commandFlags =
-    command === 'init' ? new Set(['--yes', '--skip-mcp', '--with-plan-audit']) : new Set(['--check']);
+  const flagsByCommand = { init: new Set(['--yes', '--skip-mcp']), sync: new Set(['--check']) };
+  const otherCommand = command === 'init' ? 'sync' : 'init';
   for (const flag of flags) {
-    if (!commonFlags.has(flag) && !commandFlags.has(flag)) {
-      const otherCommand = flag === '--check' ? 'sync' : 'init';
+    if (commonFlags.has(flag) || flagsByCommand[command].has(flag)) {
+      continue;
+    }
+    if (flagsByCommand[otherCommand].has(flag)) {
       throw new Error(`${flag} is available only with ${otherCommand}.`);
     }
+    throw new Error(`Unknown option ${flag}. Run "drakom-ai ${command} --help" for usage.`);
   }
 
   if (command === 'init') {
@@ -72,7 +74,6 @@ export function parseCliArgs(argv: string[]): CliArguments {
       dryRun: flags.has('--dry-run'),
       yes: flags.has('--yes'),
       skipMcp: flags.has('--skip-mcp'),
-      withPlanAudit: flags.has('--with-plan-audit'),
     };
   }
 

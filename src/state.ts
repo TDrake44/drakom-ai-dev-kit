@@ -225,6 +225,20 @@ export async function loadState(root: string): Promise<InstallState | null> {
   return validateState(parsed, statePath);
 }
 
+/** Serialize with a fixed key order so equal states always produce identical bytes. */
 export function serializeState(state: InstallState): string {
-  return `${JSON.stringify(state, null, 2)}\n`;
+  const ordered: InstallState = {
+    schemaVersion: state.schemaVersion,
+    kitVersion: state.kitVersion,
+    features: state.features,
+    managedFiles: state.managedFiles,
+    managedMcpServers: state.managedMcpServers,
+  };
+  if (state.managedBlocks !== undefined) {
+    ordered.managedBlocks = state.managedBlocks;
+  }
+  if (state.managedSkillMirrors !== undefined) {
+    ordered.managedSkillMirrors = state.managedSkillMirrors;
+  }
+  return `${JSON.stringify(ordered, null, 2)}\n`;
 }
