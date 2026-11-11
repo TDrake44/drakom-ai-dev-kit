@@ -430,6 +430,41 @@ test('init --dry-run is deterministic and makes zero filesystem changes', async 
   assert.deepEqual(await snapshot(root), before);
 });
 
+test('every mode ends with a truthful statement about whether anything was written', async () => {
+  const root = await createFixture();
+  const run = (/** @type {string[]} */ ...args) =>
+    spawnSync(process.execPath, [cliPath, ...args], { cwd: repositoryRoot, encoding: 'utf8' });
+
+  const dryInit = run('init', root, '--dry-run');
+  assert.equal(dryInit.status, 0, dryInit.stderr);
+  assert.match(dryInit.stdout, /Result: ready\.\n/);
+  assert.match(dryInit.stdout, /Dry run; no changes made\.\n$/);
+
+  const init = run('init', root, '--yes');
+  assert.equal(init.status, 0, init.stderr);
+  assert.match(init.stdout, /Result: ready\.\n/);
+  assert.match(init.stdout, /Applied \d+ creates/);
+  assert.doesNotMatch(init.stdout, /no changes made/);
+
+  const upToDate = run('sync', root);
+  assert.equal(upToDate.status, 0, upToDate.stderr);
+  assert.match(upToDate.stdout, /Installation is already up to date; no changes made\.\n$/);
+
+  const check = run('sync', root, '--check');
+  assert.equal(check.status, 0, check.stderr);
+  assert.match(check.stdout, /No drift detected; no changes made\.\n$/);
+
+  await rm(path.join(root, '.claude', 'skills', 'plan'), { recursive: true, force: true });
+  await rm(path.join(root, '.claude', 'skills', 'drakom-ai-setup'), { recursive: true, force: true });
+  const syncDry = run('sync', root, '--dry-run');
+  assert.match(syncDry.stdout, /Dry run; no changes made\.\n$/);
+  const sync = run('sync', root);
+  assert.equal(sync.status, 0, `${sync.stdout}${sync.stderr}`);
+  assert.match(sync.stdout, /Result: ready\.\n/);
+  assert.match(sync.stdout, /Synchronized: \d+ updated, \d+ created, \d+ deleted\./);
+  assert.doesNotMatch(sync.stdout, /no changes made/);
+});
+
 test('init --dry-run rejects missing targets without creating them', () => {
   const target = path.join(os.tmpdir(), `drakom-missing-${process.pid}-${Date.now()}`);
   const result = spawnSync(process.execPath, [cliPath, 'init', target, '--dry-run'], {

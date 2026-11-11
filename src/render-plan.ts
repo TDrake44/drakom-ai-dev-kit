@@ -28,6 +28,6 @@ export function renderPlan(plan: OperationPlan): string {
   for (const operation of plan.operations) {
     lines.push(`${labels[operation.action].padEnd(8)} ${operation.path} — ${operation.summary}`);
   }
-  lines.push('', plan.hasConflicts ? 'Result: review conflicts; no changes made.' : 'Result: ready; no changes made.');
+  lines.push('', plan.hasConflicts ? 'Result: review conflicts; no changes made.' : 'Result: ready.');
   return `${lines.join('\n')}\n`;
 }

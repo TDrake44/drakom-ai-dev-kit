@@ -363,7 +363,8 @@ test('pnpm dlx executes the packed artifact with zero network access', async () 
     );
     assert.equal(res.status, 0, `pnpm dlx failed: ${res.stderr}`);
     assert.match(res.stdout, /Drakom AI init plan/);
-    assert.match(res.stdout, /Result: ready; no changes made\./);
+    assert.match(res.stdout, /Result: ready\./);
+    assert.match(res.stdout, /Dry run; no changes made\./);
     const files = await readdir(target);
     assert.equal(
       files.filter((f) => f !== '.npmrc' && f !== 'package.json').length,
@@ -417,7 +418,8 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     // 2. Dry-run init makes zero changes
     const dryInit = runDrakom(['init', '.', '--dry-run']);
     assert.equal(dryInit.status, 0, dryInit.stderr);
-    assert.match(dryInit.stdout, /Result: ready; no changes made\./);
+    assert.match(dryInit.stdout, /Result: ready\./);
+    assert.match(dryInit.stdout, /Dry run; no changes made\./);
     assert.equal(await readFile(path.join(consumer, 'AGENTS.md'), 'utf8').catch(() => null), null);
 
     // 3. Fresh project init --yes
