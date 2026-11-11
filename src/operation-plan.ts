@@ -98,7 +98,58 @@ export function extractManagedBlock(content: string, identifier: string): string
 function describeSymlink(entry: SymlinkEntry): string {
   if (entry.status === 'outside') return `Symlink to ${entry.target}, which is outside the repository`;
   if (entry.status === 'broken') return `Symlink to ${entry.target}, which does not exist`;
-  return `Symlink to ${entry.target} (${entry.resolved})`;
+  return entry.resolved === entry.target
+    ? `Symlink to ${entry.target}`
+    : `Symlink to ${entry.target} (${entry.resolved})`;
+}
+
+/** Conflicts that already explain a symlink; the write guard leaves them as they are. */
+const symlinkConflicts = new WeakSet<Operation>();
+
+function symlinkConflict(linkPath: string, summary: string): Operation {
+  const operation: Operation = { action: 'conflict', path: linkPath, summary };
+  symlinkConflicts.add(operation);
+  return operation;
+}
+
+/** The outermost symlink at `targetPath` or among its ancestors, if any. */
+function findSymlinkOnPath(inventory: TargetInventory, targetPath: string): string | undefined {
+  const segments = targetPath.replace(/\/+$/, '').split('/');
+  for (let index = 1; index <= segments.length; index += 1) {
+    const candidate = segments.slice(0, index).join('/');
+    if (Object.hasOwn(inventory.symlinks, candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Never write through a symlink the planner did not recognise. Every operation other than a
+ * preserve or a warning whose path is, or sits under, a symlink becomes one conflict per link.
+ */
+function refuseUnrecognisedSymlinks(inventory: TargetInventory, operations: Operation[]): Operation[] {
+  const reported = new Set(operations.filter((op) => symlinkConflicts.has(op)).map((op) => op.path));
+  const guarded: Operation[] = [];
+  for (const operation of operations) {
+    if (symlinkConflicts.has(operation) || operation.action === 'preserve' || operation.action === 'warning') {
+      guarded.push(operation);
+      continue;
+    }
+    const linkPath = findSymlinkOnPath(inventory, operation.path);
+    const entry = linkPath === undefined ? undefined : inventory.symlinks[linkPath];
+    if (linkPath === undefined || entry === undefined) {
+      guarded.push(operation);
+      continue;
+    }
+    if (reported.has(linkPath)) continue;
+    reported.add(linkPath);
+    guarded.push(
+      symlinkConflict(
+        linkPath,
+        `${describeSymlink(entry)}; drakom-ai will not write through it. To fix, replace the link with a real file or directory, then rerun.`,
+      ),
+    );
+  }
+  return guarded;
 }
 
 /**
@@ -315,11 +366,12 @@ export function buildInitPlan(
           summary: 'Symlink to AGENTS.md already gives Claude the shared project context.',
         });
       } else {
-        operations.push({
-          action: 'conflict',
-          path: 'CLAUDE.md',
-          summary: `${describeSymlink(claudeLink)}, not AGENTS.md; drakom-ai will not write through it. To fix, point it at AGENTS.md, or replace it with a regular file so drakom-ai can add the AGENTS.md import.`,
-        });
+        operations.push(
+          symlinkConflict(
+            'CLAUDE.md',
+            `${describeSymlink(claudeLink)}, not AGENTS.md; drakom-ai will not write through it. To fix, point it at AGENTS.md, or replace it with a regular file so drakom-ai can add the AGENTS.md import.`,
+          ),
+        );
       }
     } else if (claudeContent === undefined) {
       addCreate('CLAUDE.md', '@AGENTS.md\n', 'Create a Claude import for the shared project context.');
@@ -373,14 +425,15 @@ export function buildInitPlan(
     path: '*',
     summary: 'Preserve all existing files not explicitly listed for a structured merge.',
   });
+  const guardedOperations = refuseUnrecognisedSymlinks(inventory, operations);
 
   return {
     command: 'init',
     root: inventory.root,
     targetStatus: inventory.status,
     detectedContext: [...inventory.contextFiles],
-    operations,
-    hasConflicts: operations.some(({ action }) => action === 'conflict'),
+    operations: guardedOperations,
+    hasConflicts: guardedOperations.some(({ action }) => action === 'conflict'),
   };
 }
 
@@ -655,7 +708,7 @@ function planSkillMirrors(
       if (link.kind === 'other') {
         if (!reportedLinks.has(link.linkPath)) {
           reportedLinks.add(link.linkPath);
-          operations.push({ action: 'conflict', path: link.linkPath, summary: link.summary });
+          operations.push(symlinkConflict(link.linkPath, link.summary));
         }
         continue;
       }
@@ -733,8 +786,10 @@ function planSkillMirrors(
       }
     }
 
-    // Stale mirrors in .claude/skills/
-    for (const skillPath of onlySkillPaths === undefined ? inventory.skillFiles : []) {
+    // Stale mirrors in .claude/skills/. Skip them when the canonical skills sit behind a symlink and
+    // cannot be read, since every mirror would then look stale; the write guard reports that link.
+    const canonicalSkillsReadable = findSymlinkOnPath(inventory, '.agents/skills') === undefined;
+    for (const skillPath of onlySkillPaths === undefined && canonicalSkillsReadable ? inventory.skillFiles : []) {
       const match = skillPath.match(/^\.claude\/skills\/([^/]+)\/SKILL\.md$/);
       if (match?.[1]) {
         const mirrorName = match[1];
@@ -943,7 +998,7 @@ function planStateUpdate(
 
 /** Purely derive a synchronization plan from an already-captured inventory. */
 export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayload): OperationPlan {
-  const operations: Operation[] = [];
+  let operations: Operation[] = [];
   const state = inventory.state;
   if (!state) {
     throw new Error('Target is not an initialized Drakom installation; run init first.');
@@ -954,7 +1009,9 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
   planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
   const nextManagedMcpServers = planMcp(inventory, state, operations);
-  const hasConflicts = planStateUpdate(
+  // Guard before the state update so that it sees the conflicts, and again after for the state file itself.
+  operations = refuseUnrecognisedSymlinks(inventory, operations);
+  planStateUpdate(
     inventory,
     state,
     payload,
@@ -969,12 +1026,13 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     path: '*',
     summary: 'Preserve all existing files not explicitly listed for updates.',
   });
+  operations = refuseUnrecognisedSymlinks(inventory, operations);
 
   return {
     command: 'sync',
     root: inventory.root,
     targetStatus: inventory.status,
     operations,
-    hasConflicts,
+    hasConflicts: operations.some(({ action }) => action === 'conflict'),
   };
 }

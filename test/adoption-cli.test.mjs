@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { applyPlan } from '../dist/apply-plan.js';
 import { parseCliArgs } from '../dist/cli-arguments.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
 import { inspectTarget } from '../dist/inspect-target.js';
@@ -962,6 +963,42 @@ test('init reports a CLAUDE.md symlink to another file as a conflict and makes z
   assert.deepEqual(await snapshot(root), before);
 });
 
+for (const { label, makeLinkTarget } of [
+  {
+    label: 'another file',
+    makeLinkTarget: async (/** @type {string} */ root) => {
+      await writeFile(path.join(root, 'real.md'), 'x\n', 'utf8');
+      return 'real.md';
+    },
+  },
+  {
+    label: 'CLAUDE.md',
+    makeLinkTarget: async (/** @type {string} */ root) => {
+      await writeFile(path.join(root, 'CLAUDE.md'), 'x\n', 'utf8');
+      return 'CLAUDE.md';
+    },
+  },
+]) {
+  test(`init refuses to write the managed block through an AGENTS.md symlink to ${label}`, async () => {
+    const root = await createFixture();
+    const linkTarget = await makeLinkTarget(root);
+    await symlink(linkTarget, path.join(root, 'AGENTS.md'), 'file');
+    const before = await snapshot(root);
+
+    const preview = spawnSync(process.execPath, [cliPath, 'init', root, '--dry-run'], { encoding: 'utf8' });
+    const applied = spawnSync(process.execPath, [cliPath, 'init', root], { encoding: 'utf8', input: 'y\n' });
+
+    assert.equal(preview.status, 2, preview.stdout);
+    assert.match(
+      preview.stdout,
+      new RegExp(`CONFLICT AGENTS\\.md — Symlink to ${linkTarget.replace('.', '\\.')}.*will not write through it.*replace`, 'i'),
+    );
+    assert.doesNotMatch(preview.stdout, /Unmanaged path already exists/);
+    assert.equal(applied.status, 2, applied.stdout);
+    assert.deepEqual(await snapshot(root), before);
+  });
+}
+
 test('init without --yes exits nonzero with guidance when input ends before an answer', async () => {
   const root = await createFixture();
   const before = await snapshot(root);
@@ -1680,11 +1717,114 @@ test('sync rejects operations that escape target root through a symlinked direct
     encoding: 'utf8',
   });
 
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /escapes the target through a symlink/i);
+  assert.equal(result.status, 2, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /CONFLICT \.claude — Symlink to .*outside the repository.*will not write through it/i);
   assert.equal(await readFile(canaryFile, 'utf8'), 'CANARY\n');
   const outsideFiles = await readdir(outsideDir);
   assert.deepEqual(outsideFiles, ['canary.txt']);
+});
+
+test('applying a plan refuses any target under a symlink and leaves the target untouched', async () => {
+  const root = await createFixture();
+  await mkdir(path.join(root, '.agents'));
+  await symlink('.agents', path.join(root, '.claude'), 'dir');
+  const outsideDir = await createFixture();
+  await symlink(outsideDir, path.join(root, 'outside'), 'dir');
+  const before = await snapshot(root);
+  /** @param {string} targetPath */
+  const planFor = (targetPath) => ({
+    command: /** @type {const} */ ('init'),
+    root,
+    targetStatus: /** @type {const} */ ('existing'),
+    operations: [
+      { action: /** @type {const} */ ('mkdir'), path: 'docs', summary: 'Plain directory.' },
+      { action: /** @type {const} */ ('create'), path: targetPath, summary: 'Hand-built.', content: 'x\n' },
+    ],
+    hasConflicts: false,
+  });
+
+  await assert.rejects(applyPlan(planFor('.claude/skills/x/SKILL.md')), /will not write through the symlink \.claude/i);
+  await assert.rejects(applyPlan(planFor('outside/x.md')), /escapes the target through a symlink/i);
+
+  assert.deepEqual(await snapshot(root), before);
+  assert.deepEqual(await readdir(outsideDir), []);
+});
+
+/** @type {Array<{ label: string, linkPath: string, arrange: (root: string) => Promise<void> }>} */
+const linkedKitDirectories = [
+  {
+    label: '.claude linked to .agents',
+    linkPath: '.claude',
+    arrange: async (root) => {
+      await mkdir(path.join(root, '.agents'));
+      await symlink('.agents', path.join(root, '.claude'), 'dir');
+    },
+  },
+  {
+    label: '.drakom-ai linked to another directory',
+    linkPath: DRAKOM_DIR,
+    arrange: async (root) => {
+      await mkdir(path.join(root, 'context'));
+      await symlink('context', path.join(root, DRAKOM_DIR), 'dir');
+    },
+  },
+  {
+    label: '.worktreeinclude linked to another file',
+    linkPath: '.worktreeinclude',
+    arrange: async (root) => {
+      await writeFile(path.join(root, 'include.txt'), '.env\n', 'utf8');
+      await symlink('include.txt', path.join(root, '.worktreeinclude'), 'file');
+    },
+  },
+];
+for (const { label, linkPath, arrange } of linkedKitDirectories) {
+  test(`init reports ${label} as one conflict and writes nothing`, async () => {
+    const root = await createFixture();
+    await arrange(root);
+    const before = await snapshot(root);
+
+    const result = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+
+    assert.equal(result.status, 2, `${result.stdout}${result.stderr}`);
+    const conflicts = result.stdout.split('\n').filter((line) => line.startsWith('CONFLICT'));
+    assert.equal(conflicts.length, 1, result.stdout);
+    assert.match(conflicts[0] ?? '', new RegExp(`^CONFLICT ${linkPath.replace('.', '\\.')} — Symlink to .*will not write through it`));
+    assert.deepEqual(await snapshot(root), before);
+  });
+}
+
+test('sync reports a .agents directory replaced by a symlink as one conflict and writes nothing', async () => {
+  const root = await createFixture();
+  assert.equal(spawnSync(process.execPath, [cliPath, 'init', root, '--yes']).status, 0);
+  await cp(path.join(root, '.agents'), path.join(root, 'shared-agents'), { recursive: true });
+  await rm(path.join(root, '.agents'), { recursive: true });
+  await symlink('shared-agents', path.join(root, '.agents'), 'dir');
+  const before = await snapshot(root);
+
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(sync.status, 2, `${sync.stdout}${sync.stderr}`);
+  assert.match(sync.stdout, /CONFLICT \.agents — Symlink to shared-agents.*will not write through it/);
+  assert.doesNotMatch(sync.stdout, /CONFLICT \.agents\//);
+  assert.doesNotMatch(sync.stdout, /DELETE/);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('sync reports a .drakom-ai directory linked back from elsewhere as a conflict and writes nothing', async () => {
+  const root = await createFixture();
+  assert.equal(spawnSync(process.execPath, [cliPath, 'init', root, '--yes']).status, 0);
+  await cp(path.join(root, DRAKOM_DIR), path.join(root, 'drakom-real'), { recursive: true });
+  await rm(path.join(root, DRAKOM_DIR), { recursive: true });
+  await symlink('drakom-real', path.join(root, DRAKOM_DIR), 'dir');
+  const before = await snapshot(root);
+
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(sync.status, 2, `${sync.stdout}${sync.stderr}`);
+  const conflicts = sync.stdout.split('\n').filter((line) => line.startsWith('CONFLICT'));
+  assert.deepEqual(conflicts.map((line) => line.split(' — ')[0]), [`CONFLICT ${DRAKOM_DIR}`]);
+  assert.match(conflicts[0] ?? '', /Symlink to drakom-real.*will not write through it/);
+  assert.deepEqual(await snapshot(root), before);
 });
 
 /** @param {string} root */
