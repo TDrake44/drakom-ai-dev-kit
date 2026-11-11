@@ -117,4 +117,4 @@ description: Review the branch diff against Acme rules before a pull request. Us
 4. Report findings by severity with file and line. Stop before posting any comment.
 ```
 
-After writing a skill, add its row to the `AGENTS.md` skill table, run `drakom-ai sync .` to generate its Claude mirror, and verify every referenced path and command.
+After writing a skill, add its row to the `AGENTS.md` skill table (creating the table outside the `drakom-ai:start`/`drakom-ai:end` managed block if it is missing, with approval), run `drakom-ai sync .` through the project's package runner (`pnpm drakom-ai sync .` or `npx @drakom/ai-dev-kit sync .`) to generate its Claude mirror, and verify every referenced path and command.

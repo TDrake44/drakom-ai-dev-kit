@@ -12,6 +12,8 @@ Turn recurring project workflows into short, project-owned skills, and keep them
 
 Every project skill lives at the canonical path `.agents/skills/<name>/SKILL.md`. It is project-owned and not managed by `drakom-ai sync`; sync only generates its Claude mirror. Never edit generated mirrors under `.claude/skills/`.
 
+Run the kit CLI through the project's package runner, because a bare `drakom-ai` is not on PATH: `pnpm drakom-ai <command>` when the kit is a dev dependency, otherwise `npx @drakom/ai-dev-kit <command>`. Below, `drakom-ai <command>` means this invocation.
+
 ## Find
 
 Propose a skill candidate only when the evidence shows at least two real occurrences of the workflow, or the user makes an explicit request for it. Look in:
@@ -43,7 +45,7 @@ Before asking for approval to install a draft:
 
 1. Walk the draft through a recent real task from the evidence and confirm each step would have produced the right result.
 2. Verify that every referenced path exists and every command runs with the repository's tooling.
-3. Draft a row for the project's `AGENTS.md` skill table naming the skill and its purpose. `AGENTS.md` outside the managed block is project-owned, so the row needs approval.
+3. Draft a row for the project's `AGENTS.md` skill table naming the skill and its purpose. `AGENTS.md` outside the managed block is project-owned, so the row needs approval. If there is no skill table (a fresh init writes only the managed block), create one outside the `drakom-ai:start`/`drakom-ai:end` markers; never edit inside them.
 4. After approved changes are written, run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` to generate Claude mirrors, and confirm the mirror appears.
 
 ## Refine or Retire
