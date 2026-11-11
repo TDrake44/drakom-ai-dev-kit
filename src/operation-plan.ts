@@ -1,6 +1,6 @@
 import { load as loadYaml } from 'js-yaml';
 
-import type { TargetInventory } from './inspect-target.js';
+import type { SymlinkEntry, TargetInventory } from './inspect-target.js';
 import { checkLiteralCredentials } from './mcp-discovery.js';
 import { generateMcpOperations, validateMcpRegistry } from './mcp-generation.js';
 import type { PackagePayload } from './package-payload.js';
@@ -92,6 +92,68 @@ export function extractManagedBlock(content: string, identifier: string): string
     block += '\n';
   }
   return block;
+}
+
+/** Say where a symlink leads, for conflict messages. */
+function describeSymlink(entry: SymlinkEntry): string {
+  if (entry.status === 'outside') return `Symlink to ${entry.target}, which is outside the repository`;
+  if (entry.status === 'broken') return `Symlink to ${entry.target}, which does not exist`;
+  return `Symlink to ${entry.target} (${entry.resolved})`;
+}
+
+/**
+ * Whether a symlink resolves to `canonicalPath`. A broken link counts only when it names that path
+ * exactly and the plan creates what it points to.
+ */
+function linksTo(entry: SymlinkEntry, canonicalPath: string, createdByPlan: boolean): boolean {
+  if (entry.resolved !== canonicalPath) return false;
+  return entry.status === 'inside' || (entry.status === 'broken' && createdByPlan);
+}
+
+type MirrorLink =
+  | { kind: 'none' }
+  | { kind: 'canonical'; linkPath: string; canonicalPath: string }
+  | { kind: 'other'; linkPath: string; summary: string };
+
+/**
+ * Classify the symlinks on the way to a skill's Claude mirror. A link at `.claude/skills` or at
+ * `.claude/skills/<name>` to the matching canonical directory delivers the skill already; any other
+ * link must never be written through.
+ */
+function findMirrorLink(inventory: TargetInventory, skillName: string, canonicalCreatedByPlan: boolean): MirrorLink {
+  const skillDir = `.claude/skills/${skillName}`;
+  const canonicalDir = `.agents/skills/${skillName}`;
+  const candidates: Array<{ linkPath: string; canonicalPath: string | null; remedy: string }> = [
+    {
+      linkPath: '.claude/skills',
+      canonicalPath: '.agents/skills',
+      remedy: 'point it at .agents/skills, or replace it with a real directory so drakom-ai can write the mirrors',
+    },
+    {
+      linkPath: skillDir,
+      canonicalPath: canonicalDir,
+      remedy: `point it at ${canonicalDir}, or remove it so drakom-ai can write the mirror`,
+    },
+    {
+      linkPath: `${skillDir}/SKILL.md`,
+      canonicalPath: null,
+      remedy: `link the folder ${skillDir} to ${canonicalDir} instead, or remove the link so drakom-ai can write the mirror`,
+    },
+  ];
+  for (const { linkPath, canonicalPath, remedy } of candidates) {
+    const entry = inventory.symlinks[linkPath];
+    if (entry === undefined) continue;
+    if (canonicalPath !== null && linksTo(entry, canonicalPath, canonicalCreatedByPlan)) {
+      return { kind: 'canonical', linkPath, canonicalPath };
+    }
+    const expected = canonicalPath === null ? 'a regular file' : `the canonical ${canonicalPath}`;
+    return {
+      kind: 'other',
+      linkPath,
+      summary: `${describeSymlink(entry)}, not ${expected}; drakom-ai will not write through it. To fix, ${remedy}.`,
+    };
+  }
+  return { kind: 'none' };
 }
 
 function planWorktreeInclude(
@@ -243,7 +305,23 @@ export function buildInitPlan(
     }
 
     const claudeContent = inventory.contents['CLAUDE.md'];
-    if (claudeContent === undefined) {
+    const claudeLink = inventory.symlinks['CLAUDE.md'];
+    if (claudeLink !== undefined) {
+      const agentsCreated = operations.some(({ action, path }) => action === 'create' && path === 'AGENTS.md');
+      if (linksTo(claudeLink, 'AGENTS.md', agentsCreated)) {
+        operations.push({
+          action: 'preserve',
+          path: 'CLAUDE.md',
+          summary: 'Symlink to AGENTS.md already gives Claude the shared project context.',
+        });
+      } else {
+        operations.push({
+          action: 'conflict',
+          path: 'CLAUDE.md',
+          summary: `${describeSymlink(claudeLink)}, not AGENTS.md; drakom-ai will not write through it. To fix, point it at AGENTS.md, or replace it with a regular file so drakom-ai can add the AGENTS.md import.`,
+        });
+      }
+    } else if (claudeContent === undefined) {
       addCreate('CLAUDE.md', '@AGENTS.md\n', 'Create a Claude import for the shared project context.');
     } else if (/^@AGENTS\.md\s*$/mu.test(claudeContent)) {
       operations.push({ action: 'preserve', path: 'CLAUDE.md', summary: 'Existing AGENTS.md import is already present.' });
@@ -285,13 +363,8 @@ export function buildInitPlan(
     };
     const mirrorStart = operations.length;
     const kitSkillPaths = new Set(Object.keys(managedFiles).filter((target) => target.endsWith('/SKILL.md')));
-    const canonicalSkillMirrorPaths = planSkillMirrors(inventory, state, operations, kitSkillPaths);
-    state.managedSkillMirrors = recordSkillMirrors(
-      inventory,
-      operations.slice(mirrorStart),
-      canonicalSkillMirrorPaths,
-      {},
-    );
+    const mirrorPlan = planSkillMirrors(inventory, state, operations, kitSkillPaths);
+    state.managedSkillMirrors = recordSkillMirrors(inventory, operations.slice(mirrorStart), mirrorPlan, {});
     addCreate(stateTarget, serializeState(state), 'Record managed ownership after all other operations succeed.');
   }
 
@@ -488,14 +561,25 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
   }
 }
 
+interface SkillMirrorPlan {
+  /** Mirror paths the plan manages as files. */
+  mirrorPaths: Set<string>;
+  /** Mirror paths that a symlink to the canonical skill replaces; their records are dropped. */
+  linkedMirrorPaths: Set<string>;
+}
+
 /** Derive mirror ownership records from planned mirror operations. */
 function recordSkillMirrors(
   inventory: TargetInventory,
   operations: Operation[],
-  canonicalSkillMirrorPaths: Set<string>,
+  mirrorPlan: SkillMirrorPlan,
   recorded: Record<string, { fingerprint: string }>,
 ): Record<string, { fingerprint: string }> {
+  const canonicalSkillMirrorPaths = mirrorPlan.mirrorPaths;
   const updatedSkillMirrors = { ...recorded };
+  for (const linkedPath of mirrorPlan.linkedMirrorPaths) {
+    delete updatedSkillMirrors[linkedPath];
+  }
   for (const op of operations) {
     if ((op.action === 'create' || op.action === 'update') && op.path.startsWith('.claude/skills/') && op.content) {
       updatedSkillMirrors[op.path] = { fingerprint: fingerprint(op.content) };
@@ -519,10 +603,11 @@ function planSkillMirrors(
   state: InstallState,
   operations: Operation[],
   onlySkillPaths?: Set<string>,
-): Set<string> {
+): SkillMirrorPlan {
   const canonicalSkillMirrorPaths = new Set<string>();
+  const linkedMirrorPaths = new Set<string>();
   if (state.features.skillMirrors !== false) {
-    const canonicalSkills: Array<{ name: string; path: string; content: string }> = [];
+    const canonicalSkills: Array<{ name: string; path: string; content: string; createdByPlan: boolean }> = [];
     const plannedCreates = operations
       .filter((op) => op.action === 'create' && !inventory.skillFiles.includes(op.path))
       .map((op) => op.path);
@@ -540,15 +625,40 @@ function planSkillMirrors(
           name: match[1],
           path: skillPath,
           content: effectiveContent,
+          createdByPlan: plannedCreates.includes(skillPath),
         });
       }
     }
 
     const canonicalNames = new Set(canonicalSkills.map((s) => s.name));
+    const reportedLinks = new Set<string>();
 
     for (const skill of canonicalSkills) {
       const targetDir = `.claude/skills/${skill.name}`;
       const targetFile = `${targetDir}/SKILL.md`;
+      const link = findMirrorLink(inventory, skill.name, skill.createdByPlan);
+      if (link.kind === 'canonical') {
+        linkedMirrorPaths.add(targetFile);
+        if (!reportedLinks.has(link.linkPath)) {
+          reportedLinks.add(link.linkPath);
+          const wholeDirectory = link.linkPath === '.claude/skills';
+          operations.push({
+            action: 'preserve',
+            path: link.linkPath,
+            summary: wholeDirectory
+              ? `Linked to the canonical ${link.canonicalPath}; Claude reads every skill through the link, so no mirrors are needed.`
+              : `Linked to the canonical ${link.canonicalPath}; Claude reads the skill through the link, so no mirror is needed.`,
+          });
+        }
+        continue;
+      }
+      if (link.kind === 'other') {
+        if (!reportedLinks.has(link.linkPath)) {
+          reportedLinks.add(link.linkPath);
+          operations.push({ action: 'conflict', path: link.linkPath, summary: link.summary });
+        }
+        continue;
+      }
       canonicalSkillMirrorPaths.add(targetFile);
       const expectedContent = createMirrorContent(skill.content);
 
@@ -665,9 +775,17 @@ function planSkillMirrors(
         }
       }
     }
+
+    // A record for a skill that is no longer canonical is also redundant once a canonical link covers its path.
+    for (const recordedPath of Object.keys(state.managedSkillMirrors ?? {})) {
+      const name = recordedPath.match(/^\.claude\/skills\/([^/]+)\/SKILL\.md$/)?.[1];
+      if (name !== undefined && !canonicalNames.has(name) && findMirrorLink(inventory, name, false).kind === 'canonical') {
+        linkedMirrorPaths.add(recordedPath);
+      }
+    }
   }
 
-  return canonicalSkillMirrorPaths;
+  return { mirrorPaths: canonicalSkillMirrorPaths, linkedMirrorPaths };
 }
 
 function planMcp(inventory: TargetInventory, state: InstallState, operations: Operation[]): Record<string, ManagedMcpServerState> {
@@ -757,7 +875,7 @@ function planStateUpdate(
   state: InstallState,
   payload: PackagePayload,
   operations: Operation[],
-  canonicalSkillMirrorPaths: Set<string>,
+  mirrorPlan: SkillMirrorPlan,
   nextManagedMcpServers: Record<string, ManagedMcpServerState>,
   addedManagedFiles: Record<string, ManagedFileState>,
 ): boolean {
@@ -788,12 +906,7 @@ function planStateUpdate(
     }
   }
 
-  const updatedSkillMirrors = recordSkillMirrors(
-    inventory,
-    operations,
-    canonicalSkillMirrorPaths,
-    state.managedSkillMirrors ?? {},
-  );
+  const updatedSkillMirrors = recordSkillMirrors(inventory, operations, mirrorPlan, state.managedSkillMirrors ?? {});
 
   const updatedState: InstallState = {
     ...state,
@@ -839,14 +952,14 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
   planManagedFiles(inventory, state, payload, operations);
   const addedManagedFiles = planNewDefaults(inventory, state, payload, operations);
   planManagedBlocks(inventory, state, operations);
-  const canonicalSkillMirrorPaths = planSkillMirrors(inventory, state, operations);
+  const mirrorPlan = planSkillMirrors(inventory, state, operations);
   const nextManagedMcpServers = planMcp(inventory, state, operations);
   const hasConflicts = planStateUpdate(
     inventory,
     state,
     payload,
     operations,
-    canonicalSkillMirrorPaths,
+    mirrorPlan,
     nextManagedMcpServers,
     addedManagedFiles,
   );
