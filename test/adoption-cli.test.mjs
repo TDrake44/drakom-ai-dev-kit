@@ -1736,7 +1736,7 @@ test('sync releases only the declared starter source, not another record at a st
   assert.equal(Object.hasOwn(stateAfter.managedFiles, specsReadmeTarget), false);
 });
 
-test('sync stops all writes when a managed block in AGENTS.md was locally modified', async () => {
+test('sync leaves a locally modified managed block in AGENTS.md untouched', async () => {
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
@@ -2336,7 +2336,7 @@ test('sync reports conflict and makes zero writes when an unrecorded Claude skil
   });
 
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/tester\/SKILL\.md.*unrecorded and does not match expected content/i);
+  assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/tester\/SKILL\.md.*unrecorded and does not match the canonical skill/i);
   assert.deepEqual(await snapshot(root), before);
 });
 

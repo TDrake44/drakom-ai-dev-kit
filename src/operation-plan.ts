@@ -509,14 +509,18 @@ function planNewDefaults(
 ): Record<string, ManagedFileState> {
   const addedManagedFiles: Record<string, ManagedFileState> = {};
   for (const entry of listPayloadDefaults(payload)) {
-    if (Object.hasOwn(state.managedFiles, entry.target) || compareVersions(entry.addedIn, state.kitVersion) <= 0) {
+    if (
+      Object.hasOwn(state.managedFiles, entry.target) ||
+      state.releasedFiles?.includes(entry.target) === true ||
+      compareVersions(entry.addedIn, state.kitVersion) <= 0
+    ) {
       continue;
     }
     if (inventory.pathSet.has(entry.target) || inventory.pathSet.has(`${entry.target}/`)) {
       operations.push({
         action: 'conflict',
         path: entry.target,
-        summary: `Unmanaged path occupies a default file added in kit version ${entry.addedIn}; move or remove it before synchronizing.`,
+        summary: `Unmanaged path occupies a default file added in kit version ${entry.addedIn}. Move or remove it, then run \`drakom-ai sync\` again to install the default.`,
       });
       continue;
     }
@@ -574,6 +578,8 @@ function resolutionHint(managedPath: string, options: { accept: boolean }): stri
 interface ManagedFilePlan {
   /** Records dropped from state; the files are left as they are. */
   released: Set<string>;
+  /** The released records that `--release` asked for; state remembers them so they stay released. */
+  releasedOnRequest: Set<string>;
   /** Records to rewrite without a file write: accepted edits and files that already match the kit. */
   recorded: Record<string, ManagedFileState>;
   /** Managed files left in conflict; their records and files are not touched. */
@@ -594,6 +600,7 @@ function planManagedFiles(
 ): ManagedFilePlan {
   const releasable = createOnceSources(payload);
   const released = new Set<string>();
+  const releasedOnRequest = new Set<string>();
   const recorded: Record<string, ManagedFileState> = {};
   const conflicted = new Set<string>();
   const payloadSourceToContent = payloadContentBySource(payload);
@@ -607,13 +614,16 @@ function planManagedFiles(
     const currentContent = inventory.contents[managedPath];
     if (resolutions.release.has(managedPath)) {
       released.add(managedPath);
+      releasedOnRequest.add(managedPath);
       operations.push({
         action: 'preserve',
         path: managedPath,
         summary:
-          currentContent === undefined && !inventory.pathSet.has(managedPath)
-            ? 'Released from kit management; the file stays absent and the kit will not recreate it.'
-            : 'Released from kit management; the file is left as it is and is now project-owned.',
+          currentContent !== undefined
+            ? 'Released from kit management; the file is left as it is and is now project-owned.'
+            : inventory.pathSet.has(managedPath) || inventory.pathSet.has(`${managedPath}/`)
+              ? 'Released from kit management; what is at this path is left as it is and is now project-owned.'
+              : 'Released from kit management; the file stays absent and the kit will not recreate it.',
       });
       continue;
     }
@@ -641,13 +651,9 @@ function planManagedFiles(
     const payloadFp = payloadContent === undefined ? undefined : fingerprint(payloadContent);
 
     if (payloadFp !== undefined && resolutions.accept.has(managedPath) && currentFp !== payloadFp) {
-      const acceptedEntry: ManagedFileState = {
-        source: entry.source,
-        fingerprint: currentFp,
-        acceptedKitFingerprint: payloadFp,
-      };
-      if (entry.fingerprint !== currentFp || entry.acceptedKitFingerprint !== payloadFp) {
-        recorded[managedPath] = acceptedEntry;
+      // The kit's version is the baseline, so a CLI that ignores the accepted edit sees a modified file.
+      if (entry.fingerprint !== payloadFp || entry.acceptedFingerprint !== currentFp) {
+        recorded[managedPath] = { source: entry.source, fingerprint: payloadFp, acceptedFingerprint: currentFp };
       }
       operations.push({
         action: 'preserve',
@@ -658,7 +664,7 @@ function planManagedFiles(
     }
 
     if (currentFp === payloadFp) {
-      if (entry.fingerprint !== currentFp || entry.acceptedKitFingerprint !== undefined) {
+      if (entry.fingerprint !== currentFp || entry.acceptedFingerprint !== undefined) {
         recorded[managedPath] = { source: entry.source, fingerprint: currentFp };
       }
       operations.push({
@@ -672,9 +678,10 @@ function planManagedFiles(
       continue;
     }
 
-    if (currentFp !== entry.fingerprint) {
+    const recordedContentFp = entry.acceptedFingerprint ?? entry.fingerprint;
+    if (currentFp !== recordedContentFp) {
       const what =
-        entry.acceptedKitFingerprint === undefined
+        entry.acceptedFingerprint === undefined
           ? 'Managed file was locally modified.'
           : 'Managed file was edited again after its local edit was accepted.';
       conflict(
@@ -692,8 +699,8 @@ function planManagedFiles(
       continue;
     }
 
-    if (entry.acceptedKitFingerprint !== undefined) {
-      if (entry.acceptedKitFingerprint === payloadFp) {
+    if (entry.acceptedFingerprint !== undefined) {
+      if (entry.fingerprint === payloadFp) {
         operations.push({
           action: 'preserve',
           path: managedPath,
@@ -716,7 +723,7 @@ function planManagedFiles(
       before: currentContent,
     });
   }
-  return { released, recorded, conflicted };
+  return { released, releasedOnRequest, recorded, conflicted };
 }
 
 /**
@@ -765,7 +772,7 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
         operations.push({
           action: 'conflict',
           path: filePath,
-          summary: `Managed block <!-- ${identifier}:start --> was removed; restore it before synchronizing.`,
+          summary: `Managed block <!-- ${identifier}:start --> was removed. Restore the block, markers included, from version control, then run \`drakom-ai sync\` again.`,
         });
         continue;
       }
@@ -781,7 +788,7 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
         operations.push({
           action: 'conflict',
           path: filePath,
-          summary: `Managed block <!-- ${identifier}:start --> was locally modified; resolve changes before synchronizing.`,
+          summary: `Managed block <!-- ${identifier}:start --> was locally modified. Restore the block between its markers from version control; content outside the markers is yours to edit.`,
         });
       } else {
         const canonicalBlock = `${MANAGED_BLOCK}\n`;
@@ -938,7 +945,7 @@ function planSkillMirrors(
             operations.push({
               action: 'conflict',
               path: targetFile,
-              summary: `Claude skill mirror for ${skill.name} was locally modified; resolve changes before synchronizing.`,
+              summary: `Claude skill mirror for ${skill.name} was locally modified. Mirrors are generated: move any edit you want to keep into ${skill.path}, delete the folder ${targetDir}, then run \`drakom-ai sync\` again to regenerate it.`,
             });
             continue;
           }
@@ -948,7 +955,7 @@ function planSkillMirrors(
             operations.push({
               action: 'conflict',
               path: targetFile,
-              summary: `Claude skill mirror for ${skill.name} is unrecorded and does not match expected content; resolve changes before synchronizing.`,
+              summary: `Claude skill mirror for ${skill.name} is unrecorded and does not match the canonical skill. Move any edit you want to keep into ${skill.path}, delete the folder ${targetDir}, then run \`drakom-ai sync\` again to regenerate it.`,
             });
             continue;
           }
@@ -996,7 +1003,7 @@ function planSkillMirrors(
                 operations.push({
                   action: 'conflict',
                   path: skillPath,
-                  summary: `Stale Claude skill mirror for ${mirrorName} was locally modified; resolve changes before deleting.`,
+                  summary: `Stale Claude skill mirror for ${mirrorName} was locally modified, so it is not deleted. Delete it yourself if it is no longer needed.`,
                 });
               } else {
                 operations.push({
@@ -1010,7 +1017,7 @@ function planSkillMirrors(
               operations.push({
                 action: 'conflict',
                 path: skillPath,
-                summary: `Stale Claude skill mirror for ${mirrorName} is unrecorded; resolve or remove it manually before synchronizing.`,
+                summary: `Stale Claude skill mirror for ${mirrorName} is unrecorded, so it is not deleted. Delete it yourself if it is no longer needed.`,
               });
             }
           } else {
@@ -1049,7 +1056,7 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
       operations.push({
         action: 'conflict',
         path: registryRelPath,
-        summary: `MCP source registry ${registryRelPath} is missing; restore it before synchronizing.`,
+        summary: `MCP source registry ${registryRelPath} is missing. Restore it, then run \`drakom-ai sync\` again.`,
       });
     } else {
       let parsedRegistry: unknown;
@@ -1184,6 +1191,9 @@ function planStateUpdate(
   if (updatedManagedBlocks !== undefined) {
     updatedState.managedBlocks = updatedManagedBlocks;
   }
+  if (managedFilePlan.releasedOnRequest.size > 0) {
+    updatedState.releasedFiles = [...(state.releasedFiles ?? []), ...managedFilePlan.releasedOnRequest];
+  }
 
   const newSerializedState = serializeState(updatedState);
   const currentSerializedState = inventory.contents[`${DRAKOM_DIR}/state.json`] ?? '';
@@ -1211,12 +1221,14 @@ function planStateUpdate(
 }
 
 /**
- * Hold back the Claude mirror of a kit skill whose canonical file is in conflict, so that an
- * unresolved edit or deletion is not copied to, or removed from, `.claude/skills/`.
+ * Hold back the Claude mirror of every skill whose canonical file was not settled by this plan: a
+ * managed file in conflict, or a write that was refused. An unresolved edit or deletion is then
+ * not copied to, or removed from, `.claude/skills/`, and no mirror is made for a skill that was
+ * not written.
  */
-function holdMirrorsOfConflictedSkills(operations: Operation[], conflictedManagedFiles: ReadonlySet<string>): void {
-  for (const managedPath of conflictedManagedFiles) {
-    const name = managedPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/)?.[1];
+function holdMirrorsOfUnsettledSkills(operations: Operation[], unsettledSkillFiles: Iterable<string>): void {
+  for (const skillPath of unsettledSkillFiles) {
+    const name = skillPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/)?.[1];
     if (name === undefined) continue;
     const mirrorPath = `.claude/skills/${name}/SKILL.md`;
     for (const [index, operation] of operations.entries()) {
@@ -1224,7 +1236,7 @@ function holdMirrorsOfConflictedSkills(operations: Operation[], conflictedManage
         operations[index] = {
           action: 'preserve',
           path: mirrorPath,
-          summary: `Claude skill mirror for ${name} is left as it is until the conflict on ${managedPath} is resolved.`,
+          summary: `Claude skill mirror for ${name} is left as it is until the conflict on ${skillPath} is resolved.`,
         };
       }
     }
@@ -1255,14 +1267,16 @@ export function buildSyncPlan(
   planDetachedFileWarnings(inventory, state, payload, operations);
   planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
-  holdMirrorsOfConflictedSkills(operations, managedFilePlan.conflicted);
   const mcpStart = operations.length;
   let nextManagedMcpServers = planMcp(inventory, state, operations);
   const mcpMutations = operations.slice(mcpStart).filter(isMutation);
 
   // Guard before the state update so that state records only what survives, and again after for the state file itself.
+  const planned = operations;
   operations = refuseUnrecognisedSymlinks(inventory, operations);
   const surviving = new Set(operations);
+  const refusedWrites = planned.filter((operation) => isMutation(operation) && !surviving.has(operation));
+  holdMirrorsOfUnsettledSkills(operations, [...managedFilePlan.conflicted, ...refusedWrites.map(({ path }) => path)]);
   if (mcpMutations.some((operation) => !surviving.has(operation))) {
     operations = operations.filter((operation) => !mcpMutations.includes(operation));
     nextManagedMcpServers = { ...state.managedMcpServers };

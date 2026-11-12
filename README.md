@@ -212,13 +212,18 @@ file, choose one:
 | To keep your edit and stay managed | `drakom-ai sync --accept <path>` |
 | To own the file yourself | `drakom-ai sync --release <path>` |
 
-- `--accept` records your version and the kit's current version of that file.
-  Your edit is kept, is not drift, and is never overwritten. When a later kit
-  release changes that file, `sync` reports a conflict again so you can merge
-  the kit's changes and accept again. A missing file cannot be accepted.
-- `--release` removes the file from `state.json` and leaves the file alone. It
-  also works for a managed file you deleted on purpose. The kit never updates
-  or recreates a released file.
+- `--accept` records your version (`acceptedFingerprint`) next to the kit's
+  current version of that file. Your edit is kept, is not drift, and is never
+  overwritten. When a later kit release changes that file, `sync` reports a
+  conflict again so you can merge the kit's changes and accept again. Only a
+  file with a local edit can be accepted: not a missing file, and not one that
+  is merely behind the kit version.
+- `--release` moves the file from `managedFiles` to `releasedFiles` in
+  `state.json` and leaves the file alone. It also works for a managed file you
+  deleted on purpose. The kit never updates or recreates a released file.
+- A kit CLI older than 0.6.0 does not know either record. It reports an accepted
+  file as a locally modified conflict and does not overwrite it. If it writes
+  `state.json`, it drops `releasedFiles`, so use one kit version across a team.
 - Both options are repeatable, apply to kit-managed files only (not skill
   mirrors, the `AGENTS.md` block, or MCP client files), and take paths relative
   to the target as printed in the plan. Any other path is an error.

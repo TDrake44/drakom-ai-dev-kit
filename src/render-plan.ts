@@ -14,8 +14,8 @@ const labels: Record<OperationAction, string> = {
 function renderResult(plan: OperationPlan): string {
   if (!plan.hasConflicts) return 'Result: ready.';
   if (plan.partialApply !== true) return 'Result: review conflicts; no changes made.';
-  const count = plan.operations.filter(({ action }) => action === 'conflict').length;
-  return `Result: ${count} ${count === 1 ? 'conflict' : 'conflicts'} to review; only the conflicting items are held back.`;
+  const count = new Set(plan.operations.filter(({ action }) => action === 'conflict').map(({ path }) => path)).size;
+  return `Result: ${count} conflicting ${count === 1 ? 'item' : 'items'} to review; only conflicting items are held back.`;
 }
 
 export function renderPlan(plan: OperationPlan): string {

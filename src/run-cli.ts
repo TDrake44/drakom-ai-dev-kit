@@ -118,7 +118,11 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       throw new Error('Target is not an initialized Drakom installation; run init first.');
     }
     assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
-    const resolutions = resolveManagedFileOptions(inventory, payload, args);
+    const resolutions = await resolveManagedFileOptions(inventory, payload, {
+      accept: args.accept,
+      release: args.release,
+      cwd: process.cwd(),
+    });
     const plan = buildSyncPlan(inventory, payload, resolutions);
     io.stdout.write(renderPlan(plan));
 
