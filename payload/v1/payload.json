@@ -13,6 +13,14 @@
     "skillPatterns": "skills/drakom-skill-author/references/skill-patterns.md",
     "specsReadme": "templates/specs.README.md"
   },
+  "createOnce": {
+    "rulesReadme": {
+      "target": ".drakom-ai/rules/README.md"
+    },
+    "specsReadme": {
+      "target": ".drakom-ai/specs/README.md"
+    }
+  },
   "defaults": {
     "planAuditSkill": {
       "target": ".agents/skills/drakom-plan-audit/SKILL.md",

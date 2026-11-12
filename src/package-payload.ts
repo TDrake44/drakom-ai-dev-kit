@@ -13,11 +13,20 @@ export interface PayloadDefault {
   addedIn: string;
 }
 
+/**
+ * A payload file that init creates once when its target is absent. It is project-owned from then on:
+ * state never records it, and sync never creates, updates, or checks it.
+ */
+export interface PayloadCreateOnce {
+  target: string;
+}
+
 export interface PayloadManifest {
   schemaVersion: 1;
   kitVersion: string;
   files: Record<string, string>;
   defaults: Record<string, PayloadDefault>;
+  createOnce: Record<string, PayloadCreateOnce>;
 }
 
 export interface PackagePayload {
@@ -55,12 +64,14 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
     files[name] = await readFile(path.join(payloadRoot, relativePath), 'utf8');
   }
 
+  const defaults = validateDefaults(parsed.defaults, manifestFiles);
   return {
     manifest: {
       schemaVersion: 1,
       kitVersion: parsed.kitVersion,
       files: manifestFiles,
-      defaults: validateDefaults(parsed.defaults, manifestFiles),
+      defaults,
+      createOnce: validateCreateOnce(parsed.createOnce, manifestFiles, defaults),
     },
     files,
   };
@@ -105,4 +116,36 @@ function validateDefaults(value: unknown, manifestFiles: Record<string, string>)
     defaults[name] = { target: entry.target, addedIn: entry.addedIn };
   }
   return defaults;
+}
+
+function validateCreateOnce(
+  value: unknown,
+  manifestFiles: Record<string, string>,
+  defaults: Record<string, PayloadDefault>,
+): Record<string, PayloadCreateOnce> {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new Error('Invalid package payload createOnce: expected an object.');
+  }
+  const createOnce: Record<string, PayloadCreateOnce> = {};
+  const targets = new Set(Object.values(defaults).map(({ target }) => target));
+  for (const [name, entry] of Object.entries(value).sort(([left], [right]) => left.localeCompare(right))) {
+    if (!Object.hasOwn(manifestFiles, name)) {
+      throw new Error(`Invalid payload createOnce ${name}: key is not declared in files.`);
+    }
+    if (Object.hasOwn(defaults, name)) {
+      throw new Error(`Invalid payload createOnce ${name}: key is already a kit-managed default.`);
+    }
+    if (!isRecord(entry) || typeof entry.target !== 'string' || !isCanonicalTargetPath(entry.target)) {
+      throw new Error(`Invalid payload createOnce ${name}: target must be a canonical, safe relative file path.`);
+    }
+    if (targets.has(entry.target)) {
+      throw new Error(`Invalid payload createOnce ${name}: target ${entry.target} is already declared.`);
+    }
+    targets.add(entry.target);
+    createOnce[name] = { target: entry.target };
+  }
+  return createOnce;
 }

@@ -176,6 +176,10 @@ Managed by Drakom AI Dev Kit:
 Owned by the project:
 
 - Rules in `.drakom-ai/rules/`
+- The starter `README.md` files in `.drakom-ai/rules/` and `.drakom-ai/specs/`:
+  `init` creates each once if it is absent. They are not recorded in
+  `state.json`, and `sync` never updates, checks, or recreates them, so edit or
+  delete them freely.
 - Task routes and all other `AGENTS.md` content
 - Project-authored canonical skills in `.agents/skills/`
 - MCP registry choices and all unmanaged client configuration

@@ -106,10 +106,18 @@ function isSkillFile(relativePath: string): boolean {
   );
 }
 
+export interface InspectOptions {
+  /**
+   * Managed files planning never reads, as target path to payload source. A recorded file is left
+   * unread only when its recorded source matches too.
+   */
+  unreadManagedFiles?: ReadonlyMap<string, string>;
+}
+
 /**
  * Inspect a target once so later planning can remain filesystem-pure.
  */
-export async function inspectTarget(targetPath: string): Promise<TargetInventory> {
+export async function inspectTarget(targetPath: string, options: InspectOptions = {}): Promise<TargetInventory> {
   const root = path.resolve(targetPath);
   let targetStat: Stats;
   try {
@@ -167,7 +175,8 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
     }
   }
   if (state) {
-    for (const managedPath of Object.keys(state.managedFiles)) {
+    for (const [managedPath, entry] of Object.entries(state.managedFiles)) {
+      if (options.unreadManagedFiles?.get(managedPath) === entry.source) continue;
       if (paths.includes(managedPath) && contents[managedPath] === undefined) {
         try {
           contents[managedPath] = await readFile(path.join(root, managedPath), 'utf8');

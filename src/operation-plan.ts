@@ -272,12 +272,6 @@ export function buildInitPlan(
   const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
-  const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
-  const rulesReadmeSource = 'templates/rules.README.md';
-  const rulesReadmeContent = requirePayloadFile('rulesReadme');
-  const specsReadmeTarget = `${DRAKOM_DIR}/specs/README.md`;
-  const specsReadmeSource = 'templates/specs.README.md';
-  const specsReadmeContent = requirePayloadFile('specsReadme');
   const assessmentTarget = '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md';
   const assessmentSource = 'skills/drakom-ai-setup/references/assessment-plan-template.md';
   const assessmentContent = requirePayloadFile('assessmentTemplate');
@@ -331,8 +325,17 @@ export function buildInitPlan(
     if (!options.skipMcp) {
       addCreate(`${DRAKOM_DIR}/mcp-servers.yaml`, mcpRegistryContent, 'Create the optional MCP source registry.');
     }
-    addCreate(rulesReadmeTarget, rulesReadmeContent, 'Explain how to add stable project-specific rules.');
-    addCreate(specsReadmeTarget, specsReadmeContent, 'Explain how to store collaborative architecture specifications.');
+    for (const entry of listCreateOnceFiles(payload)) {
+      if (inventory.pathSet.has(entry.target)) {
+        operations.push({
+          action: 'preserve',
+          path: entry.target,
+          summary: 'Existing starter file is project-owned; left as it is.',
+        });
+      } else {
+        addCreate(entry.target, entry.content, 'Create a starter file; it is project-owned from then on.');
+      }
+    }
     addCreate(setupTarget, setupContent, 'Install the kit-managed project assessment skill.');
     addCreate(assessmentTarget, assessmentContent, 'Install the setup skill assessment plan template.');
 
@@ -390,8 +393,6 @@ export function buildInitPlan(
     planWorktreeInclude(inventory, operations, addCreate);
 
     const managedFiles: Record<string, ManagedFileState> = {
-      [rulesReadmeTarget]: { source: rulesReadmeSource, fingerprint: fingerprint(rulesReadmeContent) },
-      [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: fingerprint(specsReadmeContent) },
       [setupTarget]: { source: setupSource, fingerprint: fingerprint(setupContent) },
       [assessmentTarget]: { source: assessmentSource, fingerprint: fingerprint(assessmentContent) },
     };
@@ -455,6 +456,28 @@ function listPayloadDefaults(payload: PackagePayload): ResolvedPayloadDefault[] 
   });
 }
 
+interface ResolvedCreateOnceFile {
+  target: string;
+  source: string;
+  content: string;
+}
+
+function listCreateOnceFiles(payload: PackagePayload): ResolvedCreateOnceFile[] {
+  return Object.entries(payload.manifest.createOnce).map(([name, entry]) => {
+    const source = payload.manifest.files[name];
+    const content = payload.files[name];
+    if (source === undefined || content === undefined) {
+      throw new Error(`Package payload is missing create-once file ${name}.`);
+    }
+    return { target: entry.target, source, content };
+  });
+}
+
+/** The payload's create-once files as target path to payload source; sync never reads or writes them. */
+export function createOnceSources(payload: PackagePayload): Map<string, string> {
+  return new Map(listCreateOnceFiles(payload).map(({ target, source }) => [target, source]));
+}
+
 /**
  * Install defaults introduced after the project's recorded kit version. A default the project
  * removed after reaching its `addedIn` version is never offered again.
@@ -489,12 +512,19 @@ function planNewDefaults(
   return addedManagedFiles;
 }
 
+/**
+ * Check each recorded managed file against the payload. Returns the records to release: kits up to
+ * 0.5.0 recorded the create-once files as managed, and a record whose path and source both match a
+ * create-once file is dropped without reading or changing the file.
+ */
 function planManagedFiles(
   inventory: TargetInventory,
   state: InstallState,
   payload: PackagePayload,
   operations: Operation[],
-): void {
+): Set<string> {
+  const releasable = createOnceSources(payload);
+  const released = new Set<string>();
   const payloadSourceToContent = new Map<string, string>();
   for (const [key, sourceRel] of Object.entries(payload.manifest.files)) {
     const fileContent = payload.files[key];
@@ -504,6 +534,16 @@ function planManagedFiles(
   }
 
   for (const [managedPath, entry] of Object.entries(state.managedFiles)) {
+    if (releasable.get(managedPath) === entry.source) {
+      released.add(managedPath);
+      operations.push({
+        action: 'preserve',
+        path: managedPath,
+        summary: 'Starter file is now project-owned; release it from kit management and leave the file as it is.',
+      });
+      continue;
+    }
+
     const currentContent = inventory.contents[managedPath];
     if (currentContent === undefined) {
       operations.push({
@@ -550,6 +590,7 @@ function planManagedFiles(
       });
     }
   }
+  return released;
 }
 
 function planManagedBlocks(inventory: TargetInventory, state: InstallState, operations: Operation[]): void {
@@ -933,9 +974,13 @@ function planStateUpdate(
   mirrorPlan: SkillMirrorPlan,
   nextManagedMcpServers: Record<string, ManagedMcpServerState>,
   addedManagedFiles: Record<string, ManagedFileState>,
+  releasedManagedFiles: Set<string>,
 ): boolean {
   const hasConflicts = operations.some((op) => op.action === 'conflict');
   const updatedManagedFiles: Record<string, ManagedFileState> = { ...state.managedFiles, ...addedManagedFiles };
+  for (const releasedPath of releasedManagedFiles) {
+    delete updatedManagedFiles[releasedPath];
+  }
   for (const op of operations) {
     if (op.action === 'update' && op.path in updatedManagedFiles && op.content) {
       const existing = updatedManagedFiles[op.path];
@@ -1004,7 +1049,7 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     throw new Error('Target is not an initialized Drakom installation; run init first.');
   }
 
-  planManagedFiles(inventory, state, payload, operations);
+  const releasedManagedFiles = planManagedFiles(inventory, state, payload, operations);
   const addedManagedFiles = planNewDefaults(inventory, state, payload, operations);
   planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
@@ -1019,6 +1064,7 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     mirrorPlan,
     nextManagedMcpServers,
     addedManagedFiles,
+    releasedManagedFiles,
   );
 
   operations.push({
