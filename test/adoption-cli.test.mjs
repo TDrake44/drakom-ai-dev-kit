@@ -98,7 +98,7 @@ async function snapshot(root) {
     entries.sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
       const absolutePath = path.join(directory, entry.name);
-      const relativePath = path.relative(root, absolutePath);
+      const relativePath = path.relative(root, absolutePath).split(path.sep).join('/');
       if (entry.isSymbolicLink()) {
         result[relativePath] = `symlink -> ${await readlink(absolutePath)}`;
       } else if (entry.isDirectory()) {

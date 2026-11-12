@@ -24,6 +24,18 @@ const corepackHome =
     'corepack',
   );
 
+/**
+ * Spawn a package-manager or bin shim. On Windows these are .cmd files, which Node only launches through a shell.
+ * @param {string} command
+ * @param {string[]} args
+ * @param {import('node:child_process').SpawnSyncOptionsWithStringEncoding} options
+ */
+function spawnTool(command, args, options) {
+  if (process.platform !== 'win32') return spawnSync(command, args, options);
+  const quote = (/** @type {string} */ value) => (/[\s&()^%!"]/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value);
+  return spawnSync(quote(command), args.map(quote), { ...options, shell: true });
+}
+
 async function pinnedPackageManager() {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
   return String(manifest.packageManager);
@@ -136,7 +148,7 @@ class SmokeHarness {
     await mkdir(this.npmCacheDir, { recursive: true });
 
     // 1. Pack the Drakom AI Dev Kit using pnpm pack --json
-    const packRes = spawnSync('pnpm', ['pack', '--json', '--pack-destination', this.packDir], {
+    const packRes = spawnTool('pnpm', ['pack', '--json', '--pack-destination', this.packDir], {
       cwd: repositoryRoot,
       encoding: 'utf8',
     });
@@ -212,7 +224,7 @@ class SmokeHarness {
   async writePinnedPackageJson(root, pkg) {
     const packageManager = await pinnedPackageManager();
     await writeFile(path.join(root, 'package.json'), JSON.stringify({ ...pkg, packageManager }, null, 2), 'utf8');
-    const res = spawnSync('pnpm', ['--version'], { cwd: root, env: this.pnpmEnv(), encoding: 'utf8', timeout: 30_000 });
+    const res = spawnTool('pnpm', ['--version'], { cwd: root, env: this.pnpmEnv(), encoding: 'utf8', timeout: 30_000 });
     assert.equal(
       `pnpm@${res.stdout?.trim()}`,
       packageManager,
@@ -344,7 +356,7 @@ test('pnpm dlx executes the packed artifact with zero network access', async () 
       'utf8',
     );
     await harness.writePinnedPackageJson(target, { name: 'dlx-target', private: true });
-    const res = spawnSync(
+    const res = spawnTool(
       'pnpm',
       [
         ...harness.pnpmConfigArgs(),
@@ -380,7 +392,7 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
   const consumer = await harness.createPnpmConsumer();
   try {
     // 1. Install packaged artifact offline
-    const installRes = spawnSync(
+    const installRes = spawnTool(
       'pnpm',
       [...harness.pnpmConfigArgs(), 'add', '-D', `file:${harness.kitTarball}`],
       {
@@ -391,7 +403,7 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     );
     assert.equal(installRes.status, 0, `pnpm add failed: ${installRes.stderr}`);
 
-    const binPath = path.join(consumer, 'node_modules', '.bin', 'drakom-ai');
+    const binPath = path.join(consumer, 'node_modules', '.bin', process.platform === 'win32' ? 'drakom-ai.cmd' : 'drakom-ai');
     await access(binPath);
 
     /**
@@ -400,7 +412,7 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
      * @param {string} [input]
      */
     const runDrakom = (args, input) =>
-      spawnSync('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', ...args], {
+      spawnTool('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', ...args], {
         cwd: consumer,
         env: harness.pnpmEnv(),
         encoding: 'utf8',
@@ -486,7 +498,7 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
 test('packed drakom-ai adopts existing projects with interactive approval and preserves unmanaged context', async () => {
   const consumer = await harness.createPnpmConsumer();
   try {
-    const installRes = spawnSync(
+    const installRes = spawnTool(
       'pnpm',
       [...harness.pnpmConfigArgs(), 'add', '-D', `file:${harness.kitTarball}`],
       {
@@ -511,7 +523,7 @@ test('packed drakom-ai adopts existing projects with interactive approval and pr
     await writeFile(path.join(consumer, '.mcp.json'), JSON.stringify({ mcpServers: { myServer: { command: 'echo' } } }), 'utf8');
 
     // Interactive init with approval ('y')
-    const initRes = spawnSync('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', 'init', '.'], {
+    const initRes = spawnTool('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', 'init', '.'], {
       cwd: consumer,
       env: harness.pnpmEnv(),
       encoding: 'utf8',
@@ -543,7 +555,7 @@ test('packed drakom-ai adopts existing projects with interactive approval and pr
 test('packed drakom-ai updates a prior-version fixture with genuinely older managed content and matching fingerprints', async () => {
   const consumer = await harness.createPnpmConsumer();
   try {
-    const installRes = spawnSync(
+    const installRes = spawnTool(
       'pnpm',
       [...harness.pnpmConfigArgs(), 'add', '-D', `file:${harness.kitTarball}`],
       {
@@ -556,7 +568,7 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
 
     /** @param {string[]} args */
     const runDrakom = (args) =>
-      spawnSync('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', ...args], {
+      spawnTool('pnpm', [...harness.pnpmConfigArgs(), 'drakom-ai', ...args], {
         cwd: consumer,
         env: harness.pnpmEnv(),
         encoding: 'utf8',
@@ -686,7 +698,7 @@ test('npm install installs packed artifact and provides additional runtime cover
       'utf8',
     );
 
-    const res = spawnSync(
+    const res = spawnTool(
       'npm',
       [
         'install',
@@ -714,7 +726,7 @@ test('npm install installs packed artifact and provides additional runtime cover
     const binPath = path.join(consumer, 'node_modules', '.bin', 'drakom-ai');
     await access(binPath);
 
-    const helpRes = spawnSync(binPath, ['--help'], {
+    const helpRes = spawnTool(binPath, ['--help'], {
       cwd: consumer,
       env: {
         ...process.env,
@@ -725,7 +737,7 @@ test('npm install installs packed artifact and provides additional runtime cover
     assert.equal(helpRes.status, 0, helpRes.stderr);
     assert.match(helpRes.stdout, /Usage: drakom-ai <command>/);
 
-    const initRes = spawnSync(binPath, ['init', '.', '--yes'], {
+    const initRes = spawnTool(binPath, ['init', '.', '--yes'], {
       cwd: consumer,
       env: {
         ...process.env,
