@@ -11,6 +11,13 @@ const labels: Record<OperationAction, string> = {
   warning: 'WARNING',
 };
 
+function renderResult(plan: OperationPlan): string {
+  if (!plan.hasConflicts) return 'Result: ready.';
+  if (plan.partialApply !== true) return 'Result: review conflicts; no changes made.';
+  const count = plan.operations.filter(({ action }) => action === 'conflict').length;
+  return `Result: ${count} ${count === 1 ? 'conflict' : 'conflicts'} to review; only the conflicting items are held back.`;
+}
+
 export function renderPlan(plan: OperationPlan): string {
   const lines = [
     `Drakom AI ${plan.command} plan`,
@@ -28,6 +35,6 @@ export function renderPlan(plan: OperationPlan): string {
   for (const operation of plan.operations) {
     lines.push(`${labels[operation.action].padEnd(8)} ${operation.path} — ${operation.summary}`);
   }
-  lines.push('', plan.hasConflicts ? 'Result: review conflicts; no changes made.' : 'Result: ready.');
+  lines.push('', renderResult(plan));
   return `${lines.join('\n')}\n`;
 }

@@ -33,6 +33,12 @@ export const WORKTREEINCLUDE_ENTRIES = [
   `${DRAKOM_DIR}/assets/*`,
 ];
 
+/** Payload files that every init installs and manages, as payload key to target path. */
+const INIT_MANAGED_TARGETS = {
+  setupSkill: '.agents/skills/drakom-ai-setup/SKILL.md',
+  assessmentTemplate: '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
+} as const;
+
 export const DEFAULT_WORKTREEINCLUDE = `${WORKTREEINCLUDE_ENTRIES.join('\n')}\n`;
 
 export type OperationAction =
@@ -61,6 +67,19 @@ export interface OperationPlan {
   detectedContext?: string[];
   operations: Operation[];
   hasConflicts: boolean;
+  /**
+   * True for a sync plan whose conflicts hold back only their own items, so the remaining
+   * operations can be applied. Absent or false means any conflict blocks the whole plan.
+   */
+  partialApply?: boolean;
+}
+
+/** Managed files the user resolved on this run, as validated root-relative POSIX paths. */
+export interface ManagedFileResolutions {
+  /** Keep the local edit; set by `sync --accept`. */
+  accept: ReadonlySet<string>;
+  /** Stop managing the file; set by `sync --release`. */
+  release: ReadonlySet<string>;
 }
 
 export function isGeneratedMirrorContent(content: string): boolean {
@@ -269,10 +288,10 @@ export function buildInitPlan(
     }
     return content;
   };
-  const setupTarget = '.agents/skills/drakom-ai-setup/SKILL.md';
+  const setupTarget = INIT_MANAGED_TARGETS.setupSkill;
   const setupSource = 'skills/drakom-ai-setup/SKILL.md';
   const setupContent = requirePayloadFile('setupSkill');
-  const assessmentTarget = '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md';
+  const assessmentTarget = INIT_MANAGED_TARGETS.assessmentTemplate;
   const assessmentSource = 'skills/drakom-ai-setup/references/assessment-plan-template.md';
   const assessmentContent = requirePayloadFile('assessmentTemplate');
   const localIgnoreContent = requirePayloadFile('localIgnore');
@@ -512,28 +531,93 @@ function planNewDefaults(
   return addedManagedFiles;
 }
 
+/** Payload file contents keyed by their payload-relative source path. */
+export function payloadContentBySource(payload: PackagePayload): Map<string, string> {
+  const contentBySource = new Map<string, string>();
+  for (const [key, sourceRel] of Object.entries(payload.manifest.files)) {
+    const fileContent = payload.files[key];
+    if (fileContent !== undefined) {
+      contentBySource.set(sourceRel, fileContent);
+    }
+  }
+  return contentBySource;
+}
+
 /**
- * Check each recorded managed file against the payload. Returns the records to release: kits up to
- * 0.5.0 recorded the create-once files as managed, and a record whose path and source both match a
- * create-once file is dropped without reading or changing the file.
+ * Every file the kit installs and keeps managed, keyed by target path. The create-once starter
+ * files are project-owned and are not included.
+ */
+export function listKitManagedFiles(payload: PackagePayload): Map<string, { source: string; content: string }> {
+  const kitFiles = new Map<string, { source: string; content: string }>();
+  for (const [name, target] of Object.entries(INIT_MANAGED_TARGETS)) {
+    const source = payload.manifest.files[name];
+    const content = payload.files[name];
+    if (source !== undefined && content !== undefined) {
+      kitFiles.set(target, { source, content });
+    }
+  }
+  for (const entry of listPayloadDefaults(payload)) {
+    if (!kitFiles.has(entry.target)) {
+      kitFiles.set(entry.target, { source: entry.source, content: entry.content });
+    }
+  }
+  return kitFiles;
+}
+
+function resolutionHint(managedPath: string, options: { accept: boolean }): string {
+  const release = `\`drakom-ai sync --release ${managedPath}\` to stop managing it`;
+  return options.accept
+    ? `run \`drakom-ai sync --accept ${managedPath}\` to keep your edit, or ${release}`
+    : `run ${release}`;
+}
+
+interface ManagedFilePlan {
+  /** Records dropped from state; the files are left as they are. */
+  released: Set<string>;
+  /** Records to rewrite without a file write: accepted edits and files that already match the kit. */
+  recorded: Record<string, ManagedFileState>;
+  /** Managed files left in conflict; their records and files are not touched. */
+  conflicted: Set<string>;
+}
+
+/**
+ * Check each recorded managed file against the payload. A conflict holds back only its own file.
+ * Records are released on request, and for the create-once files that kits up to 0.5.0 recorded as
+ * managed: a record whose path and source both match one is dropped without reading the file.
  */
 function planManagedFiles(
   inventory: TargetInventory,
   state: InstallState,
   payload: PackagePayload,
   operations: Operation[],
-): Set<string> {
+  resolutions: ManagedFileResolutions,
+): ManagedFilePlan {
   const releasable = createOnceSources(payload);
   const released = new Set<string>();
-  const payloadSourceToContent = new Map<string, string>();
-  for (const [key, sourceRel] of Object.entries(payload.manifest.files)) {
-    const fileContent = payload.files[key];
-    if (fileContent !== undefined) {
-      payloadSourceToContent.set(sourceRel, fileContent);
-    }
-  }
+  const recorded: Record<string, ManagedFileState> = {};
+  const conflicted = new Set<string>();
+  const payloadSourceToContent = payloadContentBySource(payload);
+  const kitVersion = payload.manifest.kitVersion;
+  const conflict = (managedPath: string, summary: string): void => {
+    conflicted.add(managedPath);
+    operations.push({ action: 'conflict', path: managedPath, summary });
+  };
 
   for (const [managedPath, entry] of Object.entries(state.managedFiles)) {
+    const currentContent = inventory.contents[managedPath];
+    if (resolutions.release.has(managedPath)) {
+      released.add(managedPath);
+      operations.push({
+        action: 'preserve',
+        path: managedPath,
+        summary:
+          currentContent === undefined && !inventory.pathSet.has(managedPath)
+            ? 'Released from kit management; the file stays absent and the kit will not recreate it.'
+            : 'Released from kit management; the file is left as it is and is now project-owned.',
+      });
+      continue;
+    }
+
     if (releasable.get(managedPath) === entry.source) {
       released.add(managedPath);
       operations.push({
@@ -544,53 +628,121 @@ function planManagedFiles(
       continue;
     }
 
-    const currentContent = inventory.contents[managedPath];
     if (currentContent === undefined) {
-      operations.push({
-        action: 'conflict',
-        path: managedPath,
-        summary: 'Managed file is missing; restore it before synchronizing.',
-      });
+      conflict(
+        managedPath,
+        `Managed file is missing. Restore it, or ${resolutionHint(managedPath, { accept: false })}.`,
+      );
       continue;
     }
 
     const currentFp = fingerprint(currentContent);
-    if (currentFp !== entry.fingerprint) {
+    const payloadContent = payloadSourceToContent.get(entry.source);
+    const payloadFp = payloadContent === undefined ? undefined : fingerprint(payloadContent);
+
+    if (payloadFp !== undefined && resolutions.accept.has(managedPath) && currentFp !== payloadFp) {
+      const acceptedEntry: ManagedFileState = {
+        source: entry.source,
+        fingerprint: currentFp,
+        acceptedKitFingerprint: payloadFp,
+      };
+      if (entry.fingerprint !== currentFp || entry.acceptedKitFingerprint !== payloadFp) {
+        recorded[managedPath] = acceptedEntry;
+      }
       operations.push({
-        action: 'conflict',
+        action: 'preserve',
         path: managedPath,
-        summary: 'Managed file was locally modified; resolve changes before synchronizing.',
+        summary: `Local edit accepted; it is kept until a kit version after ${kitVersion} changes this file.`,
       });
       continue;
     }
 
-    const payloadContent = payloadSourceToContent.get(entry.source);
-    if (payloadContent !== undefined) {
-      const payloadFp = fingerprint(payloadContent);
-      if (payloadFp !== currentFp) {
-        operations.push({
-          action: 'update',
-          path: managedPath,
-          summary: `Update managed file from kit version ${payload.manifest.kitVersion}.`,
-          content: payloadContent,
-          before: currentContent,
-        });
-      } else {
+    if (currentFp === payloadFp) {
+      if (entry.fingerprint !== currentFp || entry.acceptedKitFingerprint !== undefined) {
+        recorded[managedPath] = { source: entry.source, fingerprint: currentFp };
+      }
+      operations.push({
+        action: 'preserve',
+        path: managedPath,
+        summary:
+          entry.fingerprint === currentFp
+            ? 'Kit-managed file is up to date.'
+            : `Kit-managed file already matches kit version ${kitVersion}; record it as up to date.`,
+      });
+      continue;
+    }
+
+    if (currentFp !== entry.fingerprint) {
+      const what =
+        entry.acceptedKitFingerprint === undefined
+          ? 'Managed file was locally modified.'
+          : 'Managed file was edited again after its local edit was accepted.';
+      conflict(
+        managedPath,
+        `${what} Restore the kit version, or ${resolutionHint(managedPath, { accept: payloadFp !== undefined })}.`,
+      );
+      continue;
+    }
+
+    if (payloadContent === undefined) {
+      conflict(
+        managedPath,
+        `Managed file source ${entry.source} is missing from this kit version, so the kit no longer ships it. Review the upgrade notes, then delete the file or keep it, and ${resolutionHint(managedPath, { accept: false })}.`,
+      );
+      continue;
+    }
+
+    if (entry.acceptedKitFingerprint !== undefined) {
+      if (entry.acceptedKitFingerprint === payloadFp) {
         operations.push({
           action: 'preserve',
           path: managedPath,
-          summary: 'Kit-managed file is up to date.',
+          summary: 'Accepted local edit is kept; the kit has not changed this file since it was accepted.',
         });
+      } else {
+        conflict(
+          managedPath,
+          `Kit version ${kitVersion} changed this file, which has an accepted local edit. Compare it with the kit's copy (payload/v1/${entry.source} in the installed package) and merge what you want, then ${resolutionHint(managedPath, { accept: true })}; or restore the kit version.`,
+        );
       }
-    } else {
+      continue;
+    }
+
+    operations.push({
+      action: 'update',
+      path: managedPath,
+      summary: `Update managed file from kit version ${kitVersion}.`,
+      content: payloadContent,
+      before: currentContent,
+    });
+  }
+  return { released, recorded, conflicted };
+}
+
+/**
+ * Warn about kit files that exist in the target, are not managed there, and differ from the kit's
+ * version: released files, and files the project put at a kit path. Never a conflict or drift.
+ */
+function planDetachedFileWarnings(
+  inventory: TargetInventory,
+  state: InstallState,
+  payload: PackagePayload,
+  operations: Operation[],
+): void {
+  const reported = new Set(operations.map((operation) => operation.path));
+  for (const [target, kitFile] of listKitManagedFiles(payload)) {
+    const currentContent = inventory.contents[target];
+    if (Object.hasOwn(state.managedFiles, target) || reported.has(target) || currentContent === undefined) {
+      continue;
+    }
+    if (currentContent !== kitFile.content) {
       operations.push({
-        action: 'conflict',
-        path: managedPath,
-        summary: `Managed file source ${entry.source} is missing from this kit version; review the upgrade notes for manual cleanup steps before synchronizing.`,
+        action: 'warning',
+        path: target,
+        summary: `Not managed by the kit and differs from kit version ${payload.manifest.kitVersion}; it is project-owned, so sync leaves it alone and it will not receive kit updates.`,
       });
     }
   }
-  return released;
 }
 
 function planManagedBlocks(inventory: TargetInventory, state: InstallState, operations: Operation[]): void {
@@ -884,6 +1036,10 @@ function planSkillMirrors(
   return { mirrorPaths: canonicalSkillMirrorPaths, linkedMirrorPaths };
 }
 
+function isMutation({ action }: Operation): boolean {
+  return action === 'mkdir' || action === 'create' || action === 'update' || action === 'delete' || action === 'merge';
+}
+
 function planMcp(inventory: TargetInventory, state: InstallState, operations: Operation[]): Record<string, ManagedMcpServerState> {
   let nextManagedMcpServers: Record<string, ManagedMcpServerState> = { ...state.managedMcpServers };
   if (state.features.mcp !== false) {
@@ -948,8 +1104,13 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
           if (!hasRegistryErrors) {
             try {
               const mcpGenResult = generateMcpOperations(validation.registry, inventory, state);
-              operations.push(...mcpGenResult.operations);
-              nextManagedMcpServers = mcpGenResult.nextManagedMcpServers;
+              if (mcpGenResult.operations.some(({ action }) => action === 'conflict')) {
+                // Server records span every client file, so one MCP conflict holds back all MCP writes.
+                operations.push(...mcpGenResult.operations.filter((operation) => !isMutation(operation)));
+              } else {
+                operations.push(...mcpGenResult.operations);
+                nextManagedMcpServers = mcpGenResult.nextManagedMcpServers;
+              }
             } catch (err) {
               operations.push({
                 action: 'conflict',
@@ -966,6 +1127,10 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
   return nextManagedMcpServers;
 }
 
+/**
+ * Plan the state write for everything the plan applies. Records of conflicting items are left
+ * exactly as they were. Returns whether the state file needs a write.
+ */
 function planStateUpdate(
   inventory: TargetInventory,
   state: InstallState,
@@ -974,21 +1139,22 @@ function planStateUpdate(
   mirrorPlan: SkillMirrorPlan,
   nextManagedMcpServers: Record<string, ManagedMcpServerState>,
   addedManagedFiles: Record<string, ManagedFileState>,
-  releasedManagedFiles: Set<string>,
+  managedFilePlan: ManagedFilePlan,
+  keepKitVersion: boolean,
 ): boolean {
-  const hasConflicts = operations.some((op) => op.action === 'conflict');
-  const updatedManagedFiles: Record<string, ManagedFileState> = { ...state.managedFiles, ...addedManagedFiles };
-  for (const releasedPath of releasedManagedFiles) {
+  const updatedManagedFiles: Record<string, ManagedFileState> = {
+    ...state.managedFiles,
+    ...managedFilePlan.recorded,
+    ...addedManagedFiles,
+  };
+  for (const releasedPath of managedFilePlan.released) {
     delete updatedManagedFiles[releasedPath];
   }
   for (const op of operations) {
     if (op.action === 'update' && op.path in updatedManagedFiles && op.content) {
       const existing = updatedManagedFiles[op.path];
       if (existing) {
-        updatedManagedFiles[op.path] = {
-          ...existing,
-          fingerprint: fingerprint(op.content),
-        };
+        updatedManagedFiles[op.path] = { source: existing.source, fingerprint: fingerprint(op.content) };
       }
     }
   }
@@ -1010,7 +1176,7 @@ function planStateUpdate(
 
   const updatedState: InstallState = {
     ...state,
-    kitVersion: payload.manifest.kitVersion,
+    kitVersion: keepKitVersion ? state.kitVersion : payload.manifest.kitVersion,
     managedFiles: updatedManagedFiles,
     managedSkillMirrors: updatedSkillMirrors,
     managedMcpServers: nextManagedMcpServers,
@@ -1021,12 +1187,15 @@ function planStateUpdate(
 
   const newSerializedState = serializeState(updatedState);
   const currentSerializedState = inventory.contents[`${DRAKOM_DIR}/state.json`] ?? '';
+  const needsWrite = newSerializedState !== currentSerializedState;
 
-  if (newSerializedState !== currentSerializedState && !hasConflicts) {
+  if (needsWrite) {
     operations.push({
       action: 'update',
       path: `${DRAKOM_DIR}/state.json`,
-      summary: 'Update installation state with latest fingerprints and kit version.',
+      summary: operations.some(({ action }) => action === 'conflict')
+        ? 'Update installation state for the applied changes; records of conflicting items are left as they are.'
+        : 'Update installation state with latest fingerprints and kit version.',
       content: newSerializedState,
       before: currentSerializedState,
     });
@@ -1038,25 +1207,76 @@ function planStateUpdate(
     });
   }
 
-  return hasConflicts;
+  return needsWrite;
 }
 
-/** Purely derive a synchronization plan from an already-captured inventory. */
-export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayload): OperationPlan {
+/**
+ * Hold back the Claude mirror of a kit skill whose canonical file is in conflict, so that an
+ * unresolved edit or deletion is not copied to, or removed from, `.claude/skills/`.
+ */
+function holdMirrorsOfConflictedSkills(operations: Operation[], conflictedManagedFiles: ReadonlySet<string>): void {
+  for (const managedPath of conflictedManagedFiles) {
+    const name = managedPath.match(/^\.agents\/skills\/([^/]+)\/SKILL\.md$/)?.[1];
+    if (name === undefined) continue;
+    const mirrorPath = `.claude/skills/${name}/SKILL.md`;
+    for (const [index, operation] of operations.entries()) {
+      if (operation.path === mirrorPath && isMutation(operation)) {
+        operations[index] = {
+          action: 'preserve',
+          path: mirrorPath,
+          summary: `Claude skill mirror for ${name} is left as it is until the conflict on ${managedPath} is resolved.`,
+        };
+      }
+    }
+  }
+}
+
+const NO_RESOLUTIONS: ManagedFileResolutions = { accept: new Set(), release: new Set() };
+
+/**
+ * Purely derive a synchronization plan from an already-captured inventory. A conflict holds back
+ * only its own item (for MCP, all MCP client files); the rest of the plan can still be applied.
+ */
+export function buildSyncPlan(
+  inventory: TargetInventory,
+  payload: PackagePayload,
+  resolutions: ManagedFileResolutions = NO_RESOLUTIONS,
+): OperationPlan {
   let operations: Operation[] = [];
   const state = inventory.state;
   if (!state) {
     throw new Error('Target is not an initialized Drakom installation; run init first.');
   }
 
-  const releasedManagedFiles = planManagedFiles(inventory, state, payload, operations);
-  const addedManagedFiles = planNewDefaults(inventory, state, payload, operations);
+  const managedFilePlan = planManagedFiles(inventory, state, payload, operations, resolutions);
+  const defaultsStart = operations.length;
+  const plannedManagedFiles = planNewDefaults(inventory, state, payload, operations);
+  const defaultOperations = operations.slice(defaultsStart);
+  planDetachedFileWarnings(inventory, state, payload, operations);
   planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
-  const nextManagedMcpServers = planMcp(inventory, state, operations);
-  // Guard before the state update so that it sees the conflicts, and again after for the state file itself.
+  holdMirrorsOfConflictedSkills(operations, managedFilePlan.conflicted);
+  const mcpStart = operations.length;
+  let nextManagedMcpServers = planMcp(inventory, state, operations);
+  const mcpMutations = operations.slice(mcpStart).filter(isMutation);
+
+  // Guard before the state update so that state records only what survives, and again after for the state file itself.
   operations = refuseUnrecognisedSymlinks(inventory, operations);
-  planStateUpdate(
+  const surviving = new Set(operations);
+  if (mcpMutations.some((operation) => !surviving.has(operation))) {
+    operations = operations.filter((operation) => !mcpMutations.includes(operation));
+    nextManagedMcpServers = { ...state.managedMcpServers };
+  }
+  const addedManagedFiles: Record<string, ManagedFileState> = {};
+  for (const operation of defaultOperations) {
+    const added = plannedManagedFiles[operation.path];
+    if (operation.action === 'create' && surviving.has(operation) && added !== undefined) {
+      addedManagedFiles[operation.path] = added;
+    }
+  }
+  // A default that could not be installed is offered again only while the recorded version predates it.
+  const keepKitVersion = Object.keys(addedManagedFiles).length < defaultOperations.length;
+  const needsStateWrite = planStateUpdate(
     inventory,
     state,
     payload,
@@ -1064,7 +1284,8 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     mirrorPlan,
     nextManagedMcpServers,
     addedManagedFiles,
-    releasedManagedFiles,
+    managedFilePlan,
+    keepKitVersion,
   );
 
   operations.push({
@@ -1073,6 +1294,9 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     summary: 'Preserve all existing files not explicitly listed for updates.',
   });
   operations = refuseUnrecognisedSymlinks(inventory, operations);
+  const stateWritable =
+    !needsStateWrite ||
+    operations.some(({ action, path }) => action === 'update' && path === `${DRAKOM_DIR}/state.json`);
 
   return {
     command: 'sync',
@@ -1080,5 +1304,7 @@ export function buildSyncPlan(inventory: TargetInventory, payload: PackagePayloa
     targetStatus: inventory.status,
     operations,
     hasConflicts: operations.some(({ action }) => action === 'conflict'),
+    // Nothing may be applied when the state that would record it cannot be written.
+    partialApply: stateWritable,
   };
 }

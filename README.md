@@ -192,6 +192,43 @@ changes are edited minimally: unmanaged content and comments outside managed
 entries are kept. Single-line content on the lines an edit touches, or an
 entire minified file, may be reformatted.
 
+### Conflicts
+
+A conflict holds back only its own item. `sync` still applies every other
+update and records it in `state.json`, leaves the conflicting file and its
+record exactly as they were, and exits `2` until the conflict is resolved. Two
+exceptions are deliberately wider:
+
+- An MCP conflict holds back all generated MCP client files, because each
+  server's record spans every client file.
+- The Claude mirror of a kit skill is left alone while that skill is in conflict.
+
+Each conflict row names its next step. For an edited or deleted kit-managed
+file, choose one:
+
+| You want | Do this |
+| --- | --- |
+| The kit's version back | Restore the file (from Git, or from `payload/v1/` in the installed package) and run `drakom-ai sync`. |
+| To keep your edit and stay managed | `drakom-ai sync --accept <path>` |
+| To own the file yourself | `drakom-ai sync --release <path>` |
+
+- `--accept` records your version and the kit's current version of that file.
+  Your edit is kept, is not drift, and is never overwritten. When a later kit
+  release changes that file, `sync` reports a conflict again so you can merge
+  the kit's changes and accept again. A missing file cannot be accepted.
+- `--release` removes the file from `state.json` and leaves the file alone. It
+  also works for a managed file you deleted on purpose. The kit never updates
+  or recreates a released file.
+- Both options are repeatable, apply to kit-managed files only (not skill
+  mirrors, the `AGENTS.md` block, or MCP client files), and take paths relative
+  to the target as printed in the plan. Any other path is an error.
+- With `--dry-run`, both are previewed and nothing is written. They cannot be
+  combined with `--check`.
+
+A kit file that is present but not managed, and differs from the kit's version,
+is listed as a `WARNING` row. This is what a released file looks like. A
+warning is not drift and does not change the exit code.
+
 ## MCP Configuration
 
 Declare MCP servers once in `.drakom-ai/mcp-servers.yaml` and synchronize them
@@ -242,8 +279,18 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-man
 | `drakom-ai init [path] --yes` | Apply safe initialization without a prompt; it refuses structured merges into existing entry points. |
 | `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. |
 | `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
-| `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. |
+| `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. A conflict holds back only its own item. |
 | `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |
+| `drakom-ai sync [path] --accept <path>` | Keep a local edit to a kit-managed file until a later kit release changes that file. Repeatable. |
+| `drakom-ai sync [path] --release <path>` | Stop managing a kit-managed file and leave it as it is. Repeatable. |
+
+`sync` exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Everything is synchronized, or `--check` found no drift. |
+| `1` | The command could not run, for example an invalid option or path. |
+| `2` | A conflict remains (other changes may have been applied), or `--check` found drift. |
 
 ## Lifecycle
 
@@ -265,8 +312,10 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-man
 To upgrade, update the package and run `drakom-ai sync .`. Sync updates
 unmodified managed files and installs default files added in releases newer
 than the recorded `kitVersion`, then records the installed kit version.
-Kit-managed skills and their references are part of the kit and should not be
-removed; sync reports a conflict if one is missing. Sync refuses to run when
+Kit-managed skills and their references are part of the kit; sync reports a
+conflict if one is missing or edited (see [Conflicts](#conflicts)). The recorded
+`kitVersion` stays at the old release while a new default file cannot be
+installed because an unmanaged file is in its place. Sync refuses to run when
 the recorded `kitVersion` is newer than the installed kit.
 
 ## Development

@@ -11,6 +11,11 @@ export const STATE_SCHEMA_VERSION = 1;
 export interface ManagedFileState {
   source: string;
   fingerprint: string;
+  /**
+   * Set by `sync --accept`: the fingerprint of the kit's version of this file when the local edit
+   * recorded in `fingerprint` was accepted. The edit is kept while the kit's version still has it.
+   */
+  acceptedKitFingerprint?: string;
 }
 
 export interface ManagedMcpServerState {
@@ -128,11 +133,16 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
       typeof entry.source !== 'string' ||
       !isRelativePath(entry.source) ||
       typeof entry.fingerprint !== 'string' ||
-      !entry.fingerprint.startsWith('sha256:')
+      !entry.fingerprint.startsWith('sha256:') ||
+      (entry.acceptedKitFingerprint !== undefined &&
+        (typeof entry.acceptedKitFingerprint !== 'string' || !entry.acceptedKitFingerprint.startsWith('sha256:')))
     ) {
       throw new Error(`${statePath} has an invalid managedFiles entry for ${managedPath}.`);
     }
     managedFiles[managedPath] = { source: entry.source, fingerprint: entry.fingerprint };
+    if (entry.acceptedKitFingerprint !== undefined) {
+      managedFiles[managedPath].acceptedKitFingerprint = entry.acceptedKitFingerprint;
+    }
   }
   let managedBlocks: Record<string, { fingerprint: string }> | undefined;
   if (value.managedBlocks !== undefined) {
