@@ -42,6 +42,10 @@ The reference implementation uses Biome, TypeScript `checkJs`, and Node's
 built-in test runner. Replace these commands with the target project's native
 tooling when bootstrapping the architecture elsewhere.
 
+Run this repository's tests outside the sandbox when it blocks Node subprocesses
+with `EPERM`. Use `pnpm run test` with the approved command prefix where
+available; sandbox subprocess failures do not establish a project test failure.
+
 ```bash
 # 1. Formatting & Linting
 pnpm lint
@@ -50,7 +54,7 @@ pnpm lint
 pnpm typecheck
 
 # 3. Test Suite
-pnpm test
+pnpm run test
 
 # 4. Drakom AI Context & Tool Drift Verification
 pnpm sync:check
