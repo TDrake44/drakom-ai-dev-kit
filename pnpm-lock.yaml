@@ -30,9 +30,6 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6
-      '@types/punycode':
-        specifier: ^2.1.4
-        version: 2.1.4
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -182,9 +179,6 @@ packages:
 
   '@types/node@24.13.6':
     resolution: {integrity: sha512-SGrw/h3KPFshy3OE6ZL53LMBG5vGQQ8/gIpiqz/kRZhPJ7HgwCEs8LBuNtWLa8dvGZVpSF7+Bf+c11HUrCb/yg==}
-
-  '@types/punycode@2.1.4':
-    resolution: {integrity: sha512-trzh6NzBnq8yw5e35f8xe8VTYjqM3NE7bohBtvDVf/dtUer3zYTLK1Ka3DG3p7bdtoaOHZucma6FfVKlQ134pQ==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -573,8 +567,6 @@ snapshots:
   '@types/node@24.13.6':
     dependencies:
       undici-types: 7.18.2
-
-  '@types/punycode@2.1.4': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true

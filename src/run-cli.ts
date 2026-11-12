@@ -59,6 +59,9 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         }
       }
       if (args.dryRun || plan.hasConflicts) {
+        if (!plan.hasConflicts) {
+          io.stdout.write('Dry run; no changes made.\n');
+        }
         return plan.hasConflicts ? 2 : 0;
       }
 
@@ -118,6 +121,9 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     }
 
     if (args.dryRun || args.check) {
+      if (!plan.hasConflicts) {
+        io.stdout.write(args.check ? 'No drift detected; no changes made.\n' : 'Dry run; no changes made.\n');
+      }
       return plan.hasConflicts ? 2 : 0;
     }
 

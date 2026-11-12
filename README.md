@@ -13,7 +13,7 @@ I frequently bounce between **Claude Code**, **OpenAI Codex**, **Antigravity**, 
 
 **Drakom AI Dev Kit** is the packaged, portable version of the system I landed on:
 - **Instant Portability**: Spawns a lightweight, predictable structure (`plans/`, `specs/`, `assets/`, `rules/`) into any new or existing project with a single command.
-- **Zero Tool Lock-in**: Define agent rules and skills in one canonical place; sync scripts keep your tool-specific configs aligned automatically.
+- **Zero Tool Lock-in**: Define agent rules and skills in one canonical place; `drakom-ai sync` brings your tool-specific configs back into line, and `drakom-ai sync --check` detects drift.
 - **Lightweight & Modular**: Separates scratchpad thinking (`plans/`) from tracked architecture (`specs/`) and task-scoped rules without boilerplate bloat.
 
 Because I use this daily across all my personal projects, it is a living system that I'll continue to refine and polish as my workflows and the AI tooling landscape evolve.
@@ -221,12 +221,12 @@ project should not initialize MCP management.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
 
-When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex CLI tasks, or branch-isolated workspaces), Git only checks out tracked files. Because `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored to keep scratchpad work local, fresh worktrees naturally start without that active context.
+When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-managed worktrees in the ChatGPT desktop app, or branch-isolated workspaces), Git only checks out tracked files. Because `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored to keep scratchpad work local, fresh worktrees naturally start without that active context.
 
 `drakom-ai init` scaffolds a project-owned `.worktreeinclude` file at the repository root:
 
-- **Native Tool Support**: Recognized natively by **Claude Code** and **OpenAI Codex CLI** to automatically copy specified gitignored files into newly created worktree directories.
-- **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), custom checkout hooks, and Antigravity workspace runners.
+- **Native Tool Support**: Recognized natively by **Claude Code** and by Codex-managed worktrees in the **ChatGPT desktop app** (not worktrees you create yourself with Git on the command line) to automatically copy specified gitignored files into newly created worktree directories.
+- **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), and custom checkout hooks.
 - **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom AI Dev Kit drift warnings.
 
 ## CLI Reference
@@ -268,11 +268,6 @@ than the recorded `kitVersion`, then records the installed kit version.
 Kit-managed skills and their references are part of the kit and should not be
 removed; sync reports a conflict if one is missing. Sync refuses to run when
 the recorded `kitVersion` is newer than the installed kit.
-
-## Alternative Adoption Paths
-
-- [BOOTSTRAP.md](BOOTSTRAP.md) is a standalone architecture blueprint for a manual adoption.
-- A GitHub template repository can provide a preconfigured starting point.
 
 ## Development
 
