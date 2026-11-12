@@ -564,6 +564,10 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const oldAssessmentContent = '# Old Assessment Template v0.0.9\n';
     const oldSkillFp = sha256(oldSkillContent);
     const oldAssessmentFp = sha256(oldAssessmentContent);
+    // Kits up to 0.5.0 recorded both starter READMEs as managed. Here the project has edited one and deleted the other.
+    const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
+    const specsReadmeTarget = `${DRAKOM_DIR}/specs/README.md`;
+    const editedRulesReadme = '# Project Rules\n\nOur own notes.\n';
 
     // Setup v0.0.9 state and managed files
     await mkdir(path.join(consumer, DRAKOM_DIR), { recursive: true });
@@ -580,6 +584,8 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
       'utf8',
     );
     await writeFile(path.join(consumer, DRAKOM_DIR, 'mcp-servers.yaml'), 'servers: {}\n', 'utf8');
+    await mkdir(path.join(consumer, DRAKOM_DIR, 'rules'), { recursive: true });
+    await writeFile(path.join(consumer, rulesReadmeTarget), editedRulesReadme, 'utf8');
     await writeFile(path.join(consumer, DRAKOM_DIR, '.gitignore'), 'plans/*\nassets/*\n', 'utf8');
     await writeFile(path.join(consumer, 'AGENTS.md'), '<!-- drakom-ai:start -->\n## Drakom AI\n<!-- drakom-ai:end -->\n', 'utf8');
     await writeFile(path.join(consumer, 'CLAUDE.md'), '@AGENTS.md\n', 'utf8');
@@ -589,6 +595,8 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
       kitVersion: '0.0.9',
       features: { mcp: true, skillMirrors: true },
       managedFiles: {
+        [rulesReadmeTarget]: { source: 'templates/rules.README.md', fingerprint: sha256('# Old rules README\n') },
+        [specsReadmeTarget]: { source: 'templates/specs.README.md', fingerprint: sha256('# Old specs README\n') },
         '.agents/skills/drakom-ai-setup/SKILL.md': {
           source: 'skills/drakom-ai-setup/SKILL.md',
           fingerprint: oldSkillFp,
@@ -621,6 +629,9 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     // 3. sync performs genuine update
     const syncRes = runDrakom(['sync', '.']);
     assert.equal(syncRes.status, 0, syncRes.stderr);
+    for (const readme of [rulesReadmeTarget, specsReadmeTarget]) {
+      assert.match(syncRes.stdout, new RegExp(`PRESERVE +${readme.replaceAll('.', '\\.')} — .*project-owned`));
+    }
 
     // Updated content matches the current payload, not old content.
     const newSkillContent = await readFile(path.join(consumer, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'), 'utf8');
@@ -631,6 +642,12 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const updatedState = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));
     assert.equal(updatedState.kitVersion, await packageVersion());
     assert.equal(updatedState.managedFiles['.agents/skills/drakom-ai-setup/SKILL.md'].fingerprint, sha256(newSkillContent));
+
+    // The starter READMEs are released from state and left exactly as the project had them.
+    assert.equal(updatedState.managedFiles[rulesReadmeTarget], undefined);
+    assert.equal(updatedState.managedFiles[specsReadmeTarget], undefined);
+    assert.equal(await readFile(path.join(consumer, rulesReadmeTarget), 'utf8'), editedRulesReadme);
+    await assert.rejects(readFile(path.join(consumer, specsReadmeTarget), 'utf8'), { code: 'ENOENT' });
 
     // Default files added after the recorded version are installed and recorded by the same sync.
     const ruleAnatomyTarget = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';

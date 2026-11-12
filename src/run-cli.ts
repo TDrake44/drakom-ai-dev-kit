@@ -4,7 +4,7 @@ import { applyPlan } from './apply-plan.js';
 import { DRAKOM_DIR } from './constants.js';
 import { inspectTarget } from './inspect-target.js';
 import { discoverMcp, renderMcpComparisonReport } from './mcp-discovery.js';
-import { buildInitPlan, buildSyncPlan, compareVersions } from './operation-plan.js';
+import { buildInitPlan, buildSyncPlan, compareVersions, createOnceSources } from './operation-plan.js';
 import { loadPackageMetadata } from './package-metadata.js';
 import { loadPackagePayload } from './package-payload.js';
 import { renderPlan } from './render-plan.js';
@@ -96,14 +96,14 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
     }
 
     // args.command === 'sync'
-    const inventory = await inspectTarget(args.targetPath);
+    const payload = await loadPackagePayload();
+    const inventory = await inspectTarget(args.targetPath, { unreadManagedFiles: createOnceSources(payload) });
     if (inventory.state === null) {
       if (inventory.hasDrakomDirectory) {
         throw new Error(`Directory ${DRAKOM_DIR} exists without managed state; review ownership before synchronizing.`);
       }
       throw new Error('Target is not an initialized Drakom installation; run init first.');
     }
-    const payload = await loadPackagePayload();
     assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
     const plan = buildSyncPlan(inventory, payload);
     io.stdout.write(renderPlan(plan));

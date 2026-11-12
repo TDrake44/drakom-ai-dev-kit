@@ -28,6 +28,10 @@ const skillPatternsSource = 'skills/drakom-skill-author/references/skill-pattern
 const planAuditTarget = '.agents/skills/drakom-plan-audit/SKILL.md';
 const planAuditSource = 'skills/drakom-plan-audit/SKILL.md';
 const planAuditMirror = '.claude/skills/drakom-plan-audit/SKILL.md';
+const rulesReadmeTarget = `${DRAKOM_DIR}/rules/README.md`;
+const rulesReadmeSource = 'templates/rules.README.md';
+const specsReadmeTarget = `${DRAKOM_DIR}/specs/README.md`;
+const specsReadmeSource = 'templates/specs.README.md';
 
 test('publishes the strict TypeScript CLI from compiled dist output', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
@@ -212,7 +216,7 @@ test('--version prints without inspecting targets or prompting', async () => {
 /**
  * Payload manifest shape that kit-copy fixtures may alter. `defaults` is `unknown` so tests can
  * write malformed tables that the kit must reject.
- * @typedef {{ schemaVersion: number, kitVersion: string, files: Record<string, string>, defaults?: unknown }} FixtureManifest
+ * @typedef {{ schemaVersion: number, kitVersion: string, files: Record<string, string>, defaults?: unknown, createOnce?: unknown }} FixtureManifest
  */
 
 /**
@@ -394,6 +398,29 @@ test('builds and renders deterministic fresh-project plans', async () => {
   );
   assert.match(renderPlan(firstPlan), /CREATE .*drakom-ai-setup\/SKILL\.md/);
   assert.match(renderPlan(firstPlan), /PRESERVE .*existing files/i);
+});
+
+test('init preserves an existing starter README instead of reporting it as a conflict', async () => {
+  const root = await createFixture();
+  await mkdir(path.join(root, DRAKOM_DIR, 'rules'), { recursive: true });
+  await writeFile(path.join(root, rulesReadmeTarget), '# Our rules\n', 'utf8');
+  const inventory = await inspectTarget(root);
+  const payload = await loadPackagePayload();
+
+  const plan = buildInitPlan(inventory, { skipMcp: false }, payload);
+
+  const readmeOperations = plan.operations.filter(({ path: value }) => value === rulesReadmeTarget);
+  assert.deepEqual(
+    readmeOperations.map(({ action }) => action),
+    ['preserve'],
+  );
+  assert.match(readmeOperations[0]?.summary ?? '', /project-owned/i);
+  assert.equal(plan.operations.find(({ path: value }) => value === specsReadmeTarget)?.action, 'create');
+  // The existing directory still needs an ownership review; the README itself is not a conflict.
+  assert.deepEqual(
+    plan.operations.filter(({ action }) => action === 'conflict').map(({ path: value }) => value),
+    [DRAKOM_DIR],
+  );
 });
 
 test('fresh init plans the plan audit skill by default and records it as kit-managed', async () => {
@@ -771,9 +798,8 @@ test('init --yes creates fresh scaffolding, records state last, and is idempoten
   await readdir(path.join(root, DRAKOM_DIR, 'assets'));
   const state = JSON.parse(await readFile(path.join(root, DRAKOM_DIR, 'state.json'), 'utf8'));
   assert.equal(state.schemaVersion, 1);
+  // The starter READMEs are created once and are then project-owned, so state never records them.
   assert.deepEqual(Object.keys(state.managedFiles), [
-    `${DRAKOM_DIR}/rules/README.md`,
-    `${DRAKOM_DIR}/specs/README.md`,
     '.agents/skills/drakom-ai-setup/SKILL.md',
     '.agents/skills/drakom-ai-setup/references/assessment-plan-template.md',
     planAuditTarget,
@@ -1235,6 +1261,45 @@ test('the shipped payload manifest declares a valid defaults table', async () =>
   assert.equal(payload.manifest.files.skillPatterns, skillPatternsSource);
 });
 
+test('the shipped payload manifest declares the starter READMEs as create-once files', async () => {
+  const payload = await loadPackagePayload();
+
+  assert.deepEqual(payload.manifest.createOnce, {
+    rulesReadme: { target: rulesReadmeTarget },
+    specsReadme: { target: specsReadmeTarget },
+  });
+  assert.equal(payload.manifest.files.rulesReadme, rulesReadmeSource);
+  assert.equal(payload.manifest.files.specsReadme, specsReadmeSource);
+});
+
+test('payload create-once files are validated before any planning', async () => {
+  const target = await createInstalledFixture('0.3.0');
+  const cases = [
+    { createOnce: { missingKey: { target: '.drakom-ai/x.md' } }, error: /missingKey.*not.*files/i },
+    { createOnce: { rulesReadme: { target: '../escape.md' } }, error: /rulesReadme.*target/i },
+    { createOnce: { rulesReadme: { target: '.drakom-ai//rules/README.md' } }, error: /rulesReadme.*target/i },
+    {
+      createOnce: { rulesReadme: { target: rulesReadmeTarget }, specsReadme: { target: rulesReadmeTarget } },
+      error: /specsReadme.*already declared/i,
+    },
+    { createOnce: { ruleAnatomy: { target: '.drakom-ai/x.md' } }, error: /ruleAnatomy.*default/i },
+    { createOnce: { rulesReadme: { target: ruleAnatomyTarget } }, error: /rulesReadme.*already declared/i },
+    { createOnce: [], error: /createOnce/i },
+  ];
+  for (const { createOnce, error } of cases) {
+    const kitCli = await createKitCopy((manifest) => {
+      manifest.createOnce = createOnce;
+    });
+    const before = await snapshot(target);
+
+    const result = spawnSync(process.execPath, [kitCli, 'sync', target, '--check'], { encoding: 'utf8' });
+
+    assert.equal(result.status, 1, JSON.stringify(createOnce));
+    assert.match(result.stderr, error);
+    assert.deepEqual(await snapshot(target), before);
+  }
+});
+
 test('payload defaults are validated before any planning', async () => {
   const target = await createInstalledFixture('0.3.0');
   const cases = [
@@ -1499,6 +1564,121 @@ test('sync stops all writes when a managed file was locally modified', async () 
 
   assert.notEqual(syncResult.status, 0);
   assert.match(syncResult.stdout, /CONFLICT.*drakom-ai-setup\/SKILL\.md/);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+test('sync never checks, updates, or recreates the project-owned starter READMEs', async () => {
+  const root = await createFixture();
+  const init = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+  assert.equal(init.status, 0, init.stderr);
+  await writeFile(path.join(root, rulesReadmeTarget), '# Our rules\n\nextra\n', 'utf8');
+  await rm(path.join(root, specsReadmeTarget));
+  const before = await snapshot(root);
+
+  const check = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(check.status, 0, check.stdout + check.stderr);
+  assert.equal(sync.status, 0, sync.stdout + sync.stderr);
+  assert.doesNotMatch(sync.stdout, /README\.md/);
+  assert.match(sync.stdout, /already up to date; no changes made/);
+  assert.deepEqual(await snapshot(root), before);
+});
+
+/**
+ * Re-add the starter README entries that kits up to 0.5.0 recorded at init.
+ * @param {string} root
+ * @param {string} [kitVersion] optional kitVersion to record
+ */
+async function recordStarterReadmesAsManaged(root, kitVersion) {
+  const payload = await loadPackagePayload();
+  const crypto = await import('node:crypto');
+  /** @param {string} content */
+  const sha256 = (content) => `sha256:${crypto.createHash('sha256').update(content).digest('hex')}`;
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  state.managedFiles = {
+    [rulesReadmeTarget]: { source: rulesReadmeSource, fingerprint: sha256(payload.files.rulesReadme) },
+    [specsReadmeTarget]: { source: specsReadmeSource, fingerprint: sha256(payload.files.specsReadme) },
+    ...state.managedFiles,
+  };
+  if (kitVersion !== undefined) state.kitVersion = kitVersion;
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  return state;
+}
+
+test('sync releases starter README records from earlier kits without touching the files', async () => {
+  const variants = [
+    { name: 'untouched', kitVersion: undefined, prepare: async () => {} },
+    {
+      name: 'edited',
+      kitVersion: '0.4.0',
+      /** @param {string} root */
+      prepare: async (root) => writeFile(path.join(root, rulesReadmeTarget), '# Our rules\n', 'utf8'),
+    },
+    {
+      name: 'deleted',
+      kitVersion: undefined,
+      /** @param {string} root */
+      prepare: async (root) => rm(path.join(root, specsReadmeTarget)),
+    },
+  ];
+  for (const { name, kitVersion, prepare } of variants) {
+    const root = await createFixture();
+    const init = spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+    assert.equal(init.status, 0, init.stderr);
+    const legacyState = await recordStarterReadmesAsManaged(root, kitVersion);
+    await prepare(root);
+    const before = await snapshot(root);
+    const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+
+    const firstCheck = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+    assert.equal(firstCheck.status, 2, `${name}: ${firstCheck.stdout}`);
+    assert.deepEqual(await snapshot(root), before, name);
+
+    const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+    assert.equal(sync.status, 0, `${name}: ${sync.stdout}${sync.stderr}`);
+    for (const readme of [rulesReadmeTarget, specsReadmeTarget]) {
+      const lines = sync.stdout.split('\n').filter((line) => line.includes(` ${readme} `));
+      assert.equal(lines.length, 1, `${name}: ${sync.stdout}`);
+      assert.match(lines[0] ?? '', /^PRESERVE .*project-owned/, name);
+    }
+    assert.doesNotMatch(sync.stdout, /CONFLICT|CREATE|DELETE/, name);
+    assert.deepEqual(
+      sync.stdout.split('\n').filter((line) => line.startsWith('UPDATE')).map((line) => line.split(' ').filter(Boolean)[1]),
+      [`${DRAKOM_DIR}/state.json`],
+      name,
+    );
+    assert.match(sync.stdout, /Synchronized: 1 updated, 0 created, 0 deleted\./, name);
+
+    const after = await snapshot(root);
+    const { [`${DRAKOM_DIR}/state.json`]: _stateBefore, ...filesBefore } = before;
+    const { [`${DRAKOM_DIR}/state.json`]: _stateAfter, ...filesAfter } = after;
+    assert.deepEqual(filesAfter, filesBefore, name);
+    const state = JSON.parse(await readFile(statePath, 'utf8'));
+    const { [rulesReadmeTarget]: _rules, [specsReadmeTarget]: _specs, ...expectedManagedFiles } = legacyState.managedFiles;
+    assert.deepEqual(state.managedFiles, expectedManagedFiles, name);
+    assert.deepEqual(state.managedSkillMirrors, legacyState.managedSkillMirrors, name);
+    assert.deepEqual(state.managedBlocks, legacyState.managedBlocks, name);
+
+    const secondCheck = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
+    assert.equal(secondCheck.status, 0, `${name}: ${secondCheck.stdout}`);
+  }
+});
+
+test('sync releases only the declared starter source, not another record at a starter path', async () => {
+  const root = await createFixture();
+  spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { encoding: 'utf8' });
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const state = await recordStarterReadmesAsManaged(root);
+  state.managedFiles[rulesReadmeTarget].source = 'templates/obsolete.README.md';
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  const before = await snapshot(root);
+
+  const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
+
+  assert.equal(sync.status, 2, sync.stdout);
+  assert.match(sync.stdout, /CONFLICT.*rules\/README\.md.*missing from this kit version/);
   assert.deepEqual(await snapshot(root), before);
 });
 
