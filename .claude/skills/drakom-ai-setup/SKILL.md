@@ -24,6 +24,8 @@ Inspect only repository-local evidence unless the user explicitly broadens scope
 
 Do not inspect user-global AI or MCP configuration without explicit permission.
 
+Run the kit CLI through the project's package runner, because a bare `drakom-ai` is not on PATH: `pnpm drakom-ai <command>` when the kit is a dev dependency, otherwise `npx @drakom/ai-dev-kit <command>`. Later steps write `drakom-ai <command>` and mean this invocation.
+
 ## Decide What Deserves Context
 
 Separate durable constraints from repeatable procedures:
@@ -75,12 +77,12 @@ Stop and request explicit approval before creating or changing any project-owned
 Apply only the approved items while preserving unrelated content. Then:
 
 1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
-2. Create each approved skill by completing the drakom-skill-author Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md`, including its `AGENTS.md` skill table row and mirror sync.
-3. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. Do not globally load rules; companion deep-dive references may instead be routed on demand.
+2. Create each approved skill by completing the drakom-skill-author Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md`, including its `AGENTS.md` skill table row and mirror sync. If `AGENTS.md` has no skill table, the row needs a new one, created outside the managed block.
+3. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. If `AGENTS.md` has no Standards Index (a fresh init writes only the managed block), create one outside the managed block, after approval. Never edit inside the `drakom-ai:start`/`drakom-ai:end` markers; the kit overwrites them. Do not globally load rules; companion deep-dive references may instead be routed on demand.
 4. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
 5. Verify every referenced path exists or is explicitly marked as prospective.
 6. Verify every documented command against the repository's actual package manager and tooling.
 7. Verify every cross-file reference, skill name, and entry-point link resolves.
 8. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
-9. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .` when the installed CLI supports managed synchronization. If the installed release does not yet implement sync, report that verification as deferred rather than improvising a replacement updater.
+9. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .`.
 10. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.

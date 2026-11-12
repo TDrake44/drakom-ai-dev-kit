@@ -77,4 +77,4 @@ Run:
     npm test
 ```
 
-After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index and verify every referenced path and command.
+After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index (creating the section outside the `drakom-ai:start`/`drakom-ai:end` managed block if it is missing, with approval) and verify every referenced path and command.

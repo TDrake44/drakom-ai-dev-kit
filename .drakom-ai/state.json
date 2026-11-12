@@ -8,7 +8,7 @@
   "managedFiles": {
     ".agents/skills/drakom-ai-setup/SKILL.md": {
       "source": "skills/drakom-ai-setup/SKILL.md",
-      "fingerprint": "sha256:d54a50be7b9c3d18db08d9e2dbc7cdd21df3f4567b8dfc9351c4a1c44b9d883b"
+      "fingerprint": "sha256:ec1053af30b836c36fc4369335aa25707d8599ef885f78a719ad7c7cce780816"
     },
     ".agents/skills/drakom-ai-setup/references/assessment-plan-template.md": {
       "source": "skills/drakom-ai-setup/references/assessment-plan-template.md",
@@ -16,7 +16,7 @@
     },
     ".agents/skills/drakom-ai-setup/references/rule-anatomy.md": {
       "source": "skills/drakom-ai-setup/references/rule-anatomy.md",
-      "fingerprint": "sha256:e34fc102ce94125ce1411d594bb08cc6a75c4db99386b1c8918e392bb05eda71"
+      "fingerprint": "sha256:5e8d89293bc80eb7fd963fa69e212eb88473cfc01939d84f5b172075e2a2488f"
     },
     ".agents/skills/drakom-plan-audit/SKILL.md": {
       "source": "skills/drakom-plan-audit/SKILL.md",
@@ -24,11 +24,11 @@
     },
     ".agents/skills/drakom-skill-author/SKILL.md": {
       "source": "skills/drakom-skill-author/SKILL.md",
-      "fingerprint": "sha256:a8c941774d43a5f56d8f9a1232a6f0f6c20c5da87c1b99b64b15c89ad2ba2d0e"
+      "fingerprint": "sha256:8d922ecc9cb68ed373fe4f56d2535b587d65ce0e42b98af8dccfb18cdd1321f4"
     },
     ".agents/skills/drakom-skill-author/references/skill-patterns.md": {
       "source": "skills/drakom-skill-author/references/skill-patterns.md",
-      "fingerprint": "sha256:892af69843930fa33c81182aba402d09904c2418f81827e4ae8590b6414e0726"
+      "fingerprint": "sha256:b8b452a9df5caa11d27ef0c2bd00d3641ae6d95767cc60112f8476ae125c12ea"
     }
   },
   "managedMcpServers": {},
@@ -45,7 +45,7 @@
       "fingerprint": "sha256:0fd691db50396e0f0a472b38fcfd86ef69abfce3fc17ef4164b7777d9c524953"
     },
     ".claude/skills/drakom-ai-setup/SKILL.md": {
-      "fingerprint": "sha256:e70499a412ef5eb3057509f331b3707a86cb696d4a613a54a71996c3a1c67008"
+      "fingerprint": "sha256:eeff9b5d72c3d65918e452b568665ee02407ce12c79e7c5e7267e2772cd8f94d"
     },
     ".claude/skills/plan/SKILL.md": {
       "fingerprint": "sha256:1d989fa6b94eb787b268e0a38283067f877af42330687c9bb3665fd4933ee020"
@@ -57,7 +57,7 @@
       "fingerprint": "sha256:5216596371be2f34f9c6a4f2ca960d09a1c34f5fc414745cafe6dd2ad5a1fa83"
     },
     ".claude/skills/drakom-skill-author/SKILL.md": {
-      "fingerprint": "sha256:65dc6b345b5c5cd0b057668f9fbea3b06d1cca0ecbe53a41697874d041c2711b"
+      "fingerprint": "sha256:d337e92611f0c93ec9a3bd8f312d574d989027fa07899667b5eb064f685928c8"
     }
   }
 }
