@@ -60,8 +60,40 @@ function isStringMap(value: unknown): value is StringMap {
   );
 }
 
-const SENSITIVE_KEY_REGEX =
+// A credential word as one or more whole underscore-separated segments of the name.
+const SENSITIVE_WORD_REGEX =
   /^(.*_)?(API_KEY|APIKEY|SECRET|TOKEN|PASSWORD|PASSWD|AUTH|CREDENTIALS?|JWT|PRIVATE_KEY)(_.*)?$/i;
+
+// Final segments that say the value describes a credential (where it is, what kind it is)
+// rather than being one. Anything else after a credential word still counts as a credential.
+const DESCRIPTIVE_SUFFIXES = new Set([
+  'MODE',
+  'TYPE',
+  'METHOD',
+  'SCHEME',
+  'PROVIDER',
+  'URL',
+  'URI',
+  'ENDPOINT',
+  'FILE',
+  'PATH',
+  'DIR',
+  'NAME',
+  'ENABLED',
+  'TTL',
+  'TIMEOUT',
+]);
+
+/**
+ * True when an env or URL parameter name reads as a credential: it holds a credential word as a
+ * whole segment (`GITHUB_TOKEN`, `AUTH`) and does not end in a descriptive segment (`AUTH_MODE`,
+ * `TOKEN_URL`). When in doubt it answers true; `notSecret` is the way out of a false positive.
+ */
+export function isSensitiveName(name: string): boolean {
+  if (!SENSITIVE_WORD_REGEX.test(name)) return false;
+  const finalSegment = name.slice(name.lastIndexOf('_') + 1).toUpperCase();
+  return !DESCRIPTIVE_SUFFIXES.has(finalSegment);
+}
 
 const SENSITIVE_HEADER_REGEX =
   /^(authorization|api-key|x-api-key|token|auth|x-auth-token)$/i;
@@ -76,22 +108,52 @@ function isAuthVariableReference(value: string): boolean {
 const TOKEN_PATTERN_REGEX =
   /(?:sk-[a-zA-Z0-9_-]{10,}|ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9_-]{20,}|xox[baprs]-[a-zA-Z0-9_-]{10,})/;
 
+function hasUrlUserinfo(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.username.length > 0 || parsed.password.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export interface CredentialCheckResult {
+  hasCredentials: boolean;
+  /** Where the credential is, as a path that is safe to print; never the value. */
+  field?: string;
+  /**
+   * `name`: an env or header value judged by its name, which `notSecret` can clear.
+   * `value`: an env or header value that is itself token-shaped or carries URL credentials.
+   * Absent for URLs and arguments.
+   */
+  reason?: 'name' | 'value';
+}
+
+const NO_EXEMPTIONS: ReadonlySet<string> = new Set();
+
+/**
+ * Looks for literal credentials in a server definition. `notSecret` holds field paths, in the
+ * form this function reports them, whose name-based check is skipped; value-based checks are not.
+ * It is passed in rather than read from `raw`, so a key in a client file cannot switch checks off.
+ */
 export function checkLiteralCredentials(
   raw: unknown,
   prefix = '',
-): { hasCredentials: boolean; field?: string } {
+  notSecret: ReadonlySet<string> = NO_EXEMPTIONS,
+): CredentialCheckResult {
   if (!isRecord(raw)) return { hasCredentials: false };
 
   // 1. Check env
   if (isRecord(raw.env)) {
     for (const [key, val] of Object.entries(raw.env)) {
-      if (typeof val === 'string' && val.length > 0) {
-        if (SENSITIVE_KEY_REGEX.test(key) && !isVariableReference(val)) {
-          return { hasCredentials: true, field: `${prefix}env.${key}` };
-        }
-        if (TOKEN_PATTERN_REGEX.test(val) && !isVariableReference(val)) {
-          return { hasCredentials: true, field: `${prefix}env.${key}` };
-        }
+      if (typeof val !== 'string' || val.length === 0 || isVariableReference(val)) continue;
+      const field = `${prefix}env.${key}`;
+      const wordInName = SENSITIVE_WORD_REGEX.test(key);
+      if (TOKEN_PATTERN_REGEX.test(val) || (wordInName && hasUrlUserinfo(val))) {
+        return { hasCredentials: true, field, reason: 'value' };
+      }
+      if (isSensitiveName(key) && !notSecret.has(field)) {
+        return { hasCredentials: true, field, reason: 'name' };
       }
     }
   }
@@ -107,15 +169,13 @@ export function checkLiteralCredentials(
 
   if (headers) {
     for (const [key, val] of Object.entries(headers)) {
-      if (typeof val === 'string' && val.length > 0) {
-        if (SENSITIVE_HEADER_REGEX.test(key)) {
-          if (!isVariableReference(val) && !isAuthVariableReference(val)) {
-            return { hasCredentials: true, field: `${prefix}headers.${key}` };
-          }
-        }
-        if (TOKEN_PATTERN_REGEX.test(val) && !isVariableReference(val)) {
-          return { hasCredentials: true, field: `${prefix}headers.${key}` };
-        }
+      if (typeof val !== 'string' || val.length === 0 || isVariableReference(val)) continue;
+      const field = `${prefix}headers.${key}`;
+      if (TOKEN_PATTERN_REGEX.test(val)) {
+        return { hasCredentials: true, field, reason: 'value' };
+      }
+      if (SENSITIVE_HEADER_REGEX.test(key) && !isAuthVariableReference(val) && !notSecret.has(field)) {
+        return { hasCredentials: true, field, reason: 'name' };
       }
     }
   }
@@ -137,10 +197,7 @@ export function checkLiteralCredentials(
         return { hasCredentials: true, field: `${prefix}url.userinfo` };
       }
       for (const [paramName, paramVal] of parsedUrl.searchParams) {
-        if (
-          SENSITIVE_KEY_REGEX.test(paramName) &&
-          !isVariableReference(paramVal)
-        ) {
+        if (isSensitiveName(paramName) && !isVariableReference(paramVal)) {
           return { hasCredentials: true, field: `${prefix}url.param.${paramName}` };
         }
       }
@@ -168,7 +225,7 @@ export function checkLiteralCredentials(
   // 5. Check overrides recursively
   if (isRecord(raw.overrides)) {
     for (const [tool, overrideConfig] of Object.entries(raw.overrides)) {
-      const overrideCred = checkLiteralCredentials(overrideConfig, `${prefix}overrides.${tool}.`);
+      const overrideCred = checkLiteralCredentials(overrideConfig, `${prefix}overrides.${tool}.`, notSecret);
       if (overrideCred.hasCredentials) {
         return overrideCred;
       }

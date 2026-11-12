@@ -2,6 +2,19 @@ export type StringMap = Record<string, string>;
 
 export type McpClient = 'claude' | 'vscode' | 'antigravity' | 'codex';
 
+/** Every supported client, in the order their files are generated and recorded. */
+export const MCP_CLIENTS: readonly McpClient[] = ['claude', 'vscode', 'antigravity', 'codex'];
+
+/** A map in a client override: a `null` value removes that key from the base server's map. */
+export type RemovableStringMap = Record<string, string | null>;
+
+export interface OverrideHttpConfig {
+  url: string;
+  type?: string | undefined;
+  /** `null` removes the base server's headers. */
+  headers?: RemovableStringMap | null | undefined;
+}
+
 export interface HttpConfig {
   url: string;
   type?: string | undefined;
@@ -11,14 +24,16 @@ export interface HttpConfig {
 export interface ClientOverrideConfig {
   command?: string | undefined;
   args?: string[] | undefined;
-  env?: StringMap | undefined;
-  http?: HttpConfig | undefined;
+  /** `null` removes the base server's env. */
+  env?: RemovableStringMap | null | undefined;
+  http?: OverrideHttpConfig | undefined;
   url?: string | undefined;
   serverUrl?: string | undefined;
   httpUrl?: string | undefined;
   type?: string | undefined;
   transport?: string | undefined;
-  headers?: StringMap | undefined;
+  /** `null` removes the base server's headers. */
+  headers?: RemovableStringMap | null | undefined;
   timeout?: number | undefined;
 }
 
@@ -28,10 +43,16 @@ export interface BaseServerConfig {
   env?: StringMap | undefined;
   http?: HttpConfig | undefined;
   overrides?: Record<string, ClientOverrideConfig> | undefined;
+  /** Clients this server is not generated for. */
+  skip?: McpClient[] | undefined;
+  /** Field paths, as the credential check prints them, that hold plain values rather than credentials. */
+  notSecret?: string[] | undefined;
 }
 
 export interface McpRegistry {
   servers: Record<string, BaseServerConfig>;
+  /** Clients to generate configuration for; absent means every client. */
+  clients?: McpClient[] | undefined;
 }
 
 export interface NormalizedStdioServer {

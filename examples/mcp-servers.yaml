@@ -1,5 +1,10 @@
 # Copy the servers you need into .drakom-ai/mcp-servers.yaml, then run:
 #   pnpm sync
+
+# Optional: generate configuration for these clients only. Omit the key to use
+# all four (claude, vscode, antigravity, codex).
+# clients: [claude, vscode, codex]
+
 servers:
   project-tools:
     command: node
@@ -17,3 +22,27 @@ servers:
         serverUrl: https://mcp.example.com/docs
         transport: http
         timeout: 30000
+
+  # A server that reads a secret from the environment. Antigravity cannot expand
+  # ${VAR}, so this server is not generated for it.
+  issue-tracker:
+    http:
+      url: https://mcp.example.com/issues
+      headers:
+        Authorization: "Bearer ${ISSUE_TRACKER_TOKEN}"
+    skip: [antigravity]
+
+  # The other way to satisfy Antigravity: an override removes the field with
+  # null. `notSecret` lists fields whose name looks like a credential but whose
+  # value is not one, using the path the credential conflict prints.
+  search:
+    command: node
+    args: ['./scripts/mcp/search.mjs']
+    env:
+      SEARCH_API_KEY: ${SEARCH_API_KEY}
+      AUTH: none
+    notSecret: [env.AUTH]
+    overrides:
+      antigravity:
+        env:
+          SEARCH_API_KEY: null

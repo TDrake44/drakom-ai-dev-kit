@@ -1,8 +1,19 @@
-import type { BaseServerConfig, ClientOverrideConfig, HttpConfig, McpClient, McpRegistry, StringMap } from './mcp-types.js';
+import {
+  MCP_CLIENTS,
+  type BaseServerConfig,
+  type ClientOverrideConfig,
+  type HttpConfig,
+  type McpClient,
+  type McpRegistry,
+  type OverrideHttpConfig,
+  type RemovableStringMap,
+  type StringMap,
+} from './mcp-types.js';
 import { isRecord } from './util.js';
 import { findUnsupportedVarRefInValue } from './mcp-variables.js';
 
-const SERVER_KEYS = new Set(['command', 'args', 'env', 'http', 'overrides']);
+const ROOT_KEYS = new Set(['clients', 'servers']);
+const SERVER_KEYS = new Set(['command', 'args', 'env', 'http', 'overrides', 'skip', 'notSecret']);
 const OVERRIDE_KEYS = new Set([
   'command',
   'args',
@@ -16,7 +27,9 @@ const OVERRIDE_KEYS = new Set([
   'timeout',
 ]);
 const HTTP_KEYS = new Set(['url', 'type', 'headers']);
-const CLIENTS = new Set<string>(['claude', 'vscode', 'antigravity', 'codex']);
+const CLIENTS = new Set<string>(MCP_CLIENTS);
+// The field paths the credential check prints for the values it judges by name.
+const NOT_SECRET_PATH_REGEX = new RegExp(`^(?:overrides\\.(${MCP_CLIENTS.join('|')})\\.)?(env|headers)\\.(.+)$`);
 
 export type McpValidationResult =
   | { valid: true; registry: McpRegistry }
@@ -46,17 +59,33 @@ function isStringMap(value: unknown): value is StringMap {
   return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
 }
 
+/** A map as an override may give it: `null`, for the whole map or for one value, removes it. */
+function isRemovableStringMap(value: unknown): value is RemovableStringMap | null {
+  return (
+    value === null ||
+    (isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string' || entry === null))
+  );
+}
+
 function copyStringMap(value: StringMap): StringMap {
   return { ...value };
 }
 
-function validateHttp(value: unknown, label: string): string | undefined {
+function copyRemovableStringMap(value: RemovableStringMap | null): RemovableStringMap | null {
+  return value === null ? null : { ...value };
+}
+
+function validateHttp(value: unknown, label: string, inOverride = false): string | undefined {
   if (!isRecord(value)) return `${label} must be an object`;
   const key = unsupportedKey(value, HTTP_KEYS);
   if (key) return `${label} contains unsupported field "${key}"`;
   if (!isNonEmptyString(value.url)) return `${label}.url must be a non-empty string`;
   if (value.type !== undefined && typeof value.type !== 'string') return `${label}.type must be a string`;
-  if (value.headers !== undefined && !isStringMap(value.headers)) {
+  if (inOverride) {
+    if (value.headers !== undefined && !isRemovableStringMap(value.headers)) {
+      return `${label}.headers must be a mapping of string to string or null`;
+    }
+  } else if (value.headers !== undefined && !isStringMap(value.headers)) {
     return `${label}.headers must be a mapping of string to string`;
   }
   return undefined;
@@ -67,6 +96,27 @@ function toHttpConfig(value: Record<string, unknown>, url: string): HttpConfig {
   if (typeof value.type === 'string') http.type = value.type;
   if (isStringMap(value.headers)) http.headers = copyStringMap(value.headers);
   return http;
+}
+
+function toOverrideHttpConfig(value: Record<string, unknown>, url: string): OverrideHttpConfig {
+  const http: OverrideHttpConfig = { url };
+  if (typeof value.type === 'string') http.type = value.type;
+  if (value.headers !== undefined && isRemovableStringMap(value.headers)) {
+    http.headers = copyRemovableStringMap(value.headers);
+  }
+  return http;
+}
+
+/** Reads a list of client names. A string result is the problem, worded to follow the field name. */
+function readClientList(value: unknown): McpClient[] | string {
+  if (!isStringArray(value)) return 'must be a list of client names';
+  const clients: McpClient[] = [];
+  for (const entry of value) {
+    if (!isMcpClient(entry)) return `contains unknown client "${entry}"; the clients are ${MCP_CLIENTS.join(', ')}`;
+    if (clients.includes(entry)) return `lists "${entry}" more than once`;
+    clients.push(entry);
+  }
+  return clients;
 }
 
 function validateOverride(
@@ -82,9 +132,9 @@ function validateOverride(
   if (key) return `${label} contains unsupported field "${key}"`;
   if (value.command !== undefined && !isNonEmptyString(value.command)) return `${label} command must be a non-empty string`;
   if (value.args !== undefined && !isStringArray(value.args)) return `${label} args must be an array of strings`;
-  if (value.env !== undefined && !isStringMap(value.env)) return `${label} env must be a mapping of string to string`;
+  if (value.env !== undefined && !isRemovableStringMap(value.env)) return `${label} env must be a mapping of string to string or null`;
   if (value.http !== undefined) {
-    const error = validateHttp(value.http, `${label} http`);
+    const error = validateHttp(value.http, `${label} http`, true);
     if (error) return error;
   }
   for (const field of ['url', 'serverUrl', 'type', 'transport'] as const) {
@@ -93,7 +143,7 @@ function validateOverride(
   if (value.timeout !== undefined && (typeof value.timeout !== 'number' || !Number.isFinite(value.timeout) || value.timeout < 0)) {
     return `${label} timeout must be a non-negative number`;
   }
-  if (value.headers !== undefined && !isStringMap(value.headers)) return `${label} headers must be a mapping of string to string`;
+  if (value.headers !== undefined && !isRemovableStringMap(value.headers)) return `${label} headers must be a mapping of string to string or null`;
 
   const hasCommand = typeof value.command === 'string';
   const hasHttp = value.http !== undefined || typeof value.url === 'string' || typeof value.serverUrl === 'string';
@@ -113,20 +163,58 @@ function toOverrideConfig(value: Record<string, unknown>): ClientOverrideConfig 
   const override: ClientOverrideConfig = {};
   if (typeof value.command === 'string') override.command = value.command;
   if (isStringArray(value.args)) override.args = [...value.args];
-  if (isStringMap(value.env)) override.env = copyStringMap(value.env);
+  if (value.env !== undefined && isRemovableStringMap(value.env)) override.env = copyRemovableStringMap(value.env);
   if (isRecord(value.http) && isNonEmptyString(value.http.url)) {
-    override.http = toHttpConfig(value.http, value.http.url);
+    override.http = toOverrideHttpConfig(value.http, value.http.url);
   }
   if (typeof value.url === 'string') override.url = value.url;
   if (typeof value.serverUrl === 'string') override.serverUrl = value.serverUrl;
   if (typeof value.type === 'string') override.type = value.type;
   if (typeof value.transport === 'string') override.transport = value.transport;
   if (typeof value.timeout === 'number') override.timeout = value.timeout;
-  if (isStringMap(value.headers)) override.headers = copyStringMap(value.headers);
+  if (value.headers !== undefined && isRemovableStringMap(value.headers)) {
+    override.headers = copyRemovableStringMap(value.headers);
+  }
   return override;
 }
 
-function validateServer(serverName: string, value: unknown): BaseServerConfig | string {
+function setsString(map: RemovableStringMap | null | undefined, key: string): boolean {
+  return map !== null && map !== undefined && Object.hasOwn(map, key) && typeof map[key] === 'string';
+}
+
+/** True when a path already matched by NOT_SECRET_PATH_REGEX names a value the server sets. */
+function notSecretPathMatchesField(server: BaseServerConfig, match: RegExpMatchArray): boolean {
+  const [, client, kind, name] = match;
+  if (name === undefined) return false;
+  if (client === undefined) {
+    return kind === 'env' ? setsString(server.env, name) : setsString(server.http?.headers, name);
+  }
+  const override = server.overrides !== undefined && Object.hasOwn(server.overrides, client) ? server.overrides[client] : undefined;
+  if (override === undefined) return false;
+  if (kind === 'env') return setsString(override.env, name);
+  return setsString(override.headers, name) || setsString(override.http?.headers, name);
+}
+
+function validateNotSecret(serverName: string, value: unknown, server: BaseServerConfig): string[] | string {
+  const label = `MCP server "${serverName}" notSecret`;
+  if (!isStringArray(value)) return `${label} must be a list of field paths such as env.NAME`;
+  for (const entry of value) {
+    const match = entry.match(NOT_SECRET_PATH_REGEX);
+    if (!match) {
+      return `${label} entry "${entry}" is not supported; use env.NAME or headers.NAME, or overrides.<client>.env.NAME or overrides.<client>.headers.NAME for a value set in an override`;
+    }
+    if (!notSecretPathMatchesField(server, match)) {
+      return `${label} lists "${entry}", which matches no field of this server; write the path exactly as the credential conflict prints it`;
+    }
+  }
+  return [...value];
+}
+
+function validateServer(
+  serverName: string,
+  value: unknown,
+  selectedClients: readonly McpClient[],
+): BaseServerConfig | string {
   if (!isRecord(value)) return `MCP server "${serverName}" definition must be an object`;
   const key = unsupportedKey(value, SERVER_KEYS);
   if (key) return `MCP server "${serverName}" contains unsupported field "${key}"`;
@@ -168,25 +256,47 @@ function validateServer(serverName: string, value: unknown): BaseServerConfig | 
     }
     typed.overrides = overrides;
   }
+  if (value.skip !== undefined) {
+    const skip = readClientList(value.skip);
+    if (typeof skip === 'string') return `MCP server "${serverName}" skip ${skip}`;
+    if (selectedClients.every((client) => skip.includes(client))) {
+      return `MCP server "${serverName}" skips every selected client (${selectedClients.join(', ')}), so no client would get it; remove the server or shorten its skip list`;
+    }
+    typed.skip = skip;
+  }
+  if (value.notSecret !== undefined) {
+    const notSecret = validateNotSecret(serverName, value.notSecret, typed);
+    if (typeof notSecret === 'string') return notSecret;
+    typed.notSecret = notSecret;
+  }
   return typed;
 }
 
 export function validateMcpRegistry(raw: unknown): McpValidationResult {
   if (raw === null || raw === undefined) return { valid: true, registry: { servers: {} } };
   if (!isRecord(raw)) return validationError('MCP registry must be a YAML mapping or empty');
-  const rootKey = unsupportedKey(raw, new Set(['servers']));
+  const rootKey = unsupportedKey(raw, ROOT_KEYS);
   if (rootKey) return validationError(`unsupported field "${rootKey}" at registry root`);
-  if (raw.servers === null || raw.servers === undefined) return { valid: true, registry: { servers: {} } };
+
+  const registry: McpRegistry = { servers: {} };
+  if (raw.clients !== undefined) {
+    if (!isStringArray(raw.clients) || raw.clients.length === 0) {
+      return validationError(`clients must be a non-empty list of client names (${MCP_CLIENTS.join(', ')})`);
+    }
+    const clients = readClientList(raw.clients);
+    if (typeof clients === 'string') return validationError(`clients ${clients}`);
+    registry.clients = clients;
+  }
+  if (raw.servers === null || raw.servers === undefined) return { valid: true, registry };
   if (!isRecord(raw.servers)) return validationError('servers must be a mapping of server names to definitions');
 
-  const servers: Record<string, BaseServerConfig> = {};
   for (const [name, definition] of Object.entries(raw.servers)) {
     if (name.trim().length === 0) return validationError('server name must be a non-empty string');
     // Plain assignment would set the prototype instead of adding the server, silently dropping it.
     if (name === '__proto__') return validationError('server name "__proto__" is reserved; rename the server');
-    const server = validateServer(name, definition);
+    const server = validateServer(name, definition, registry.clients ?? MCP_CLIENTS);
     if (typeof server === 'string') return validationError(server);
-    servers[name] = server;
+    registry.servers[name] = server;
   }
-  return { valid: true, registry: { servers } };
+  return { valid: true, registry };
 }

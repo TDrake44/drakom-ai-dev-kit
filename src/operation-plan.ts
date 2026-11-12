@@ -1047,10 +1047,29 @@ function isMutation({ action }: Operation): boolean {
   return action === 'mkdir' || action === 'create' || action === 'update' || action === 'delete' || action === 'merge';
 }
 
-function planMcp(inventory: TargetInventory, state: InstallState, operations: Operation[]): Record<string, ManagedMcpServerState> {
+/** How to get out of a literal-credential conflict, worded for the kind of finding. */
+function credentialRemedy(field: string, reason: 'name' | 'value' | undefined): string {
+  const useReference = `Secrets must never enter YAML or state: replace the value with a \${VAR} reference`;
+  if (reason === 'name') return `${useReference}, or, if it is not a secret, add "${field}" to the server's notSecret list.`;
+  if (reason === 'value') {
+    return `${useReference}. The value looks like a token or carries URL credentials, so notSecret does not apply.`;
+  }
+  return `${useReference}.`;
+}
+
+interface McpPlan {
+  nextManagedMcpServers: Record<string, ManagedMcpServerState>;
+  /** True when this plan turns MCP management on for a project initialized with `--skip-mcp`. */
+  turnsMcpOn: boolean;
+}
+
+function planMcp(inventory: TargetInventory, state: InstallState, operations: Operation[]): McpPlan {
   let nextManagedMcpServers: Record<string, ManagedMcpServerState> = { ...state.managedMcpServers };
-  if (state.features.mcp !== false) {
-    const registryRelPath = `${DRAKOM_DIR}/mcp-servers.yaml`;
+  const registryRelPath = `${DRAKOM_DIR}/mcp-servers.yaml`;
+  // A project initialized with --skip-mcp opts in by adding the registry file.
+  const optingIn = state.features.mcp === false && inventory.contents[registryRelPath] !== undefined;
+  let generated = false;
+  if (state.features.mcp !== false || optingIn) {
     const registryYaml = inventory.contents[registryRelPath];
     if (registryYaml === undefined) {
       operations.push({
@@ -1097,12 +1116,12 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
         } else {
           let hasRegistryErrors = false;
           for (const [serverName, serverDef] of Object.entries(validation.registry.servers)) {
-            const cred = checkLiteralCredentials(serverDef);
+            const cred = checkLiteralCredentials(serverDef, '', new Set(serverDef.notSecret));
             if (cred.hasCredentials) {
               operations.push({
                 action: 'conflict',
                 path: registryRelPath,
-                summary: `MCP registry server "${serverName}" contains literal credentials in ${cred.field}. Secrets must never enter YAML or state.`,
+                summary: `MCP registry server "${serverName}" contains literal credentials in ${cred.field}. ${credentialRemedy(cred.field ?? '', cred.reason)}`,
               });
               hasRegistryErrors = true;
             }
@@ -1117,6 +1136,7 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
               } else {
                 operations.push(...mcpGenResult.operations);
                 nextManagedMcpServers = mcpGenResult.nextManagedMcpServers;
+                generated = true;
               }
             } catch (err) {
               operations.push({
@@ -1131,7 +1151,7 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
     }
   }
 
-  return nextManagedMcpServers;
+  return { nextManagedMcpServers, turnsMcpOn: optingIn && generated };
 }
 
 /**
@@ -1144,7 +1164,7 @@ function planStateUpdate(
   payload: PackagePayload,
   operations: Operation[],
   mirrorPlan: SkillMirrorPlan,
-  nextManagedMcpServers: Record<string, ManagedMcpServerState>,
+  mcpPlan: McpPlan,
   addedManagedFiles: Record<string, ManagedFileState>,
   managedFilePlan: ManagedFilePlan,
   keepKitVersion: boolean,
@@ -1186,8 +1206,11 @@ function planStateUpdate(
     kitVersion: keepKitVersion ? state.kitVersion : payload.manifest.kitVersion,
     managedFiles: updatedManagedFiles,
     managedSkillMirrors: updatedSkillMirrors,
-    managedMcpServers: nextManagedMcpServers,
+    managedMcpServers: mcpPlan.nextManagedMcpServers,
   };
+  if (mcpPlan.turnsMcpOn) {
+    updatedState.features = { ...state.features, mcp: true };
+  }
   if (updatedManagedBlocks !== undefined) {
     updatedState.managedBlocks = updatedManagedBlocks;
   }
@@ -1200,12 +1223,15 @@ function planStateUpdate(
   const needsWrite = newSerializedState !== currentSerializedState;
 
   if (needsWrite) {
+    const stateSummary = operations.some(({ action }) => action === 'conflict')
+      ? 'Update installation state for the applied changes; records of conflicting items are left as they are.'
+      : 'Update installation state with latest fingerprints and kit version.';
     operations.push({
       action: 'update',
       path: `${DRAKOM_DIR}/state.json`,
-      summary: operations.some(({ action }) => action === 'conflict')
-        ? 'Update installation state for the applied changes; records of conflicting items are left as they are.'
-        : 'Update installation state with latest fingerprints and kit version.',
+      summary: mcpPlan.turnsMcpOn
+        ? `Turn on MCP management, because ${DRAKOM_DIR}/mcp-servers.yaml now exists. ${stateSummary}`
+        : stateSummary,
       content: newSerializedState,
       before: currentSerializedState,
     });
@@ -1268,7 +1294,7 @@ export function buildSyncPlan(
   planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
   const mcpStart = operations.length;
-  let nextManagedMcpServers = planMcp(inventory, state, operations);
+  let mcpPlan = planMcp(inventory, state, operations);
   const mcpMutations = operations.slice(mcpStart).filter(isMutation);
 
   // Guard before the state update so that state records only what survives, and again after for the state file itself.
@@ -1279,7 +1305,7 @@ export function buildSyncPlan(
   holdMirrorsOfUnsettledSkills(operations, [...managedFilePlan.conflicted, ...refusedWrites.map(({ path }) => path)]);
   if (mcpMutations.some((operation) => !surviving.has(operation))) {
     operations = operations.filter((operation) => !mcpMutations.includes(operation));
-    nextManagedMcpServers = { ...state.managedMcpServers };
+    mcpPlan = { nextManagedMcpServers: { ...state.managedMcpServers }, turnsMcpOn: false };
   }
   const addedManagedFiles: Record<string, ManagedFileState> = {};
   for (const operation of defaultOperations) {
@@ -1296,7 +1322,7 @@ export function buildSyncPlan(
     payload,
     operations,
     mirrorPlan,
-    nextManagedMcpServers,
+    mcpPlan,
     addedManagedFiles,
     managedFilePlan,
     keepKitVersion,
