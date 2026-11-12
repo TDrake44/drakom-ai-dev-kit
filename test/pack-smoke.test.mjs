@@ -180,10 +180,10 @@ class SmokeHarness {
   hooks: {
     readPackage(pkg) {
       if (pkg.dependencies) {
-        if (pkg.dependencies['argparse']) pkg.dependencies['argparse'] = 'file:${this.argparseTarball}';
-        if (pkg.dependencies['js-yaml']) pkg.dependencies['js-yaml'] = 'file:${this.jsyamlTarball}';
-        if (pkg.dependencies['smol-toml']) pkg.dependencies['smol-toml'] = 'file:${this.smoltomlTarball}';
-        if (pkg.dependencies['jsonc-parser']) pkg.dependencies['jsonc-parser'] = 'file:${this.jsoncParserTarball}';
+        if (pkg.dependencies['argparse']) pkg.dependencies['argparse'] = ${JSON.stringify(`file:${this.argparseTarball}`)};
+        if (pkg.dependencies['js-yaml']) pkg.dependencies['js-yaml'] = ${JSON.stringify(`file:${this.jsyamlTarball}`)};
+        if (pkg.dependencies['smol-toml']) pkg.dependencies['smol-toml'] = ${JSON.stringify(`file:${this.smoltomlTarball}`)};
+        if (pkg.dependencies['jsonc-parser']) pkg.dependencies['jsonc-parser'] = ${JSON.stringify(`file:${this.jsoncParserTarball}`)};
       }
       return pkg;
     }
@@ -342,7 +342,10 @@ test('packed artifact contains only required publishable runtime files and metad
   // Verify CLI executable permissions and shebang in unpacked package
   const cliFile = path.join(harness.unpackedDir, 'package', 'dist', 'cli.js');
   const cliStat = await stat(cliFile);
-  assert.notEqual(cliStat.mode & 0o111, 0, 'dist/cli.js must be executable');
+  // Windows has no POSIX exec bits; the package manager generates .cmd shims there.
+  if (process.platform !== 'win32') {
+    assert.notEqual(cliStat.mode & 0o111, 0, 'dist/cli.js must be executable');
+  }
   const cliContent = await readFile(cliFile, 'utf8');
   assert.ok(cliContent.startsWith('#!/usr/bin/env node'), 'dist/cli.js must have node shebang');
 });
