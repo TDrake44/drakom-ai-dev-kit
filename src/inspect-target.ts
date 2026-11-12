@@ -1,4 +1,4 @@
-import { lstat, readFile, readdir } from 'node:fs/promises';
+import { lstat, readFile, readdir, readlink, realpath } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
 
@@ -33,6 +33,20 @@ const mcpPaths = new Set([
   '.codex/config.toml',
 ]);
 
+/** A symbolic link found during inspection; links are recorded but never walked or read through. */
+export interface SymlinkEntry {
+  /** The link text exactly as stored, for messages. */
+  target: string;
+  /** Where the link resolves: inside the root, outside it, or nowhere. */
+  status: 'inside' | 'outside' | 'broken';
+  /**
+   * POSIX root-relative path of the link's destination. For `inside`, the fully resolved real path;
+   * for `broken`, the lexical destination when it stays inside the root, so planning can recognize a
+   * link to a path that the plan itself creates. Null when the destination is outside the root.
+   */
+  resolved: string | null;
+}
+
 export interface TargetInventory {
   root: string;
   status: 'fresh' | 'existing' | 'initialized';
@@ -43,7 +57,33 @@ export interface TargetInventory {
   mcpFiles: string[];
   hasDrakomDirectory: boolean;
   contents: Record<string, string>;
+  /** Symbolic links keyed by root-relative POSIX path. */
+  symlinks: Record<string, SymlinkEntry>;
   state: InstallState | null;
+}
+
+function toRootRelative(root: string, absolutePath: string): string | null {
+  const relative = path.relative(root, absolutePath);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(path.sep).join('/');
+}
+
+async function describeSymlink(root: string, realRoot: string, absolutePath: string): Promise<SymlinkEntry> {
+  const target = await readlink(absolutePath);
+  let realTarget: string;
+  try {
+    realTarget = await realpath(absolutePath);
+  } catch {
+    return {
+      target,
+      status: 'broken',
+      resolved: toRootRelative(root, path.resolve(path.dirname(absolutePath), target)),
+    };
+  }
+  const resolved = toRootRelative(realRoot, realTarget);
+  return resolved === null ? { target, status: 'outside', resolved } : { target, status: 'inside', resolved };
 }
 
 function isContextFile(relativePath: string): boolean {
@@ -86,6 +126,8 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
 
   const paths: string[] = [];
   const contents: Record<string, string> = {};
+  const symlinks: Record<string, SymlinkEntry> = {};
+  const realRoot = await realpath(root);
 
   async function visit(directory: string, relativeDirectory: string): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -96,7 +138,9 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
         : entry.name;
       const absolutePath = path.join(directory, entry.name);
       paths.push(entry.isDirectory() ? `${relativePath}/` : relativePath);
-      if (entry.isDirectory() && !isSkippedDirectory(entry.name, relativePath)) {
+      if (entry.isSymbolicLink()) {
+        symlinks[relativePath] = await describeSymlink(root, realRoot, absolutePath);
+      } else if (entry.isDirectory() && !isSkippedDirectory(entry.name, relativePath)) {
         await visit(absolutePath, relativePath);
       } else if (
         entry.isFile() &&
@@ -151,6 +195,7 @@ export async function inspectTarget(targetPath: string): Promise<TargetInventory
     mcpFiles: existingMcpFiles,
     hasDrakomDirectory,
     contents,
+    symlinks,
     state,
   };
 }

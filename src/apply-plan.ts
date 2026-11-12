@@ -22,10 +22,20 @@ async function validatePathContainment(root: string, relativePath: string): Prom
   for (const segment of segments) {
     current = path.join(current, segment);
     try {
-      await lstat(current);
-      const realCurrent = await realpath(current);
-      if (realCurrent !== realRoot && !realCurrent.startsWith(`${realRoot}${path.sep}`)) {
+      const entry = await lstat(current);
+      const realCurrent = await realpath(current).catch((error: unknown) => {
+        if (entry.isSymbolicLink() && isMissing(error)) return null;
+        throw error;
+      });
+      if (realCurrent !== null && realCurrent !== realRoot && !realCurrent.startsWith(`${realRoot}${path.sep}`)) {
         throw new Error(`Operation path escapes the target through a symlink: ${relativePath}`);
+      }
+      // Backstop for a planning mistake: planning never targets a path at or under a symlink.
+      if (entry.isSymbolicLink()) {
+        const linkPath = path.relative(root, current).split(path.sep).join('/');
+        throw new Error(
+          `Preflight failed: ${relativePath} is at or under a symlink; drakom-ai will not write through the symlink ${linkPath}.`,
+        );
       }
     } catch (error) {
       if (isMissing(error)) {

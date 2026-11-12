@@ -13,10 +13,13 @@ interface TextWriter {
   write(content: string): boolean;
 }
 
+/** A confirmation result: approved, declined, or `no-answer` when input ended before any answer. */
+export type ConfirmAnswer = boolean | 'no-answer';
+
 export interface CliIo {
   stdout: TextWriter;
   stderr: TextWriter;
-  confirm?: () => Promise<boolean>;
+  confirm?: () => Promise<ConfirmAnswer>;
 }
 
 function assertTargetNotNewerThanCli(targetKitVersion: string, cliKitVersion: string): void {
@@ -71,7 +74,14 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
         return 2;
       }
       if (!args.yes) {
-        if (io.confirm === undefined || !(await io.confirm())) {
+        const answer = io.confirm === undefined ? false : await io.confirm();
+        if (answer === 'no-answer') {
+          io.stderr.write(
+            'No answer to the prompt because input ended; no changes made. Use --yes to apply without a prompt, or --dry-run to preview.\n',
+          );
+          return 2;
+        }
+        if (!answer) {
           io.stdout.write('Initialization cancelled; no changes made.\n');
           return 0;
         }
