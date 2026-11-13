@@ -12,7 +12,16 @@ import {
   type ManagedFileState,
   type ManagedMcpServerState,
 } from './state.js';
-import { fingerprint, lineEnding, matchesFingerprint, sameText, toLf, withLineEnding } from './util.js';
+import {
+  fingerprint,
+  fingerprintMatch,
+  hasMixedLineEndings,
+  lineEnding,
+  matchesFingerprint,
+  sameText,
+  toLf,
+  withLineEnding,
+} from './util.js';
 
 export { compareVersions, DRAKOM_DIR };
 
@@ -666,8 +675,8 @@ function planManagedFiles(
     if (payloadFp !== undefined && resolutions.accept.has(managedPath) && currentFp !== payloadFp) {
       // The kit's version is the baseline, so a CLI that ignores the accepted edit sees a modified file.
       if (
-        !matchesFingerprint(payloadContent ?? '', entry.fingerprint) ||
-        !matchesFingerprint(currentContent, entry.acceptedFingerprint)
+        fingerprintMatch(payloadContent ?? '', entry.fingerprint) !== 'current' ||
+        fingerprintMatch(currentContent, entry.acceptedFingerprint) !== 'current'
       ) {
         recorded[managedPath] = { source: entry.source, fingerprint: payloadFp, acceptedFingerprint: currentFp };
       }
@@ -681,15 +690,16 @@ function planManagedFiles(
 
     // Line endings alone are not an edit: a checkout with core.autocrlf turns kit files into CRLF.
     if (currentFp === payloadFp) {
-      const upToDate = matchesFingerprint(currentContent, entry.fingerprint);
-      if (!upToDate || entry.acceptedFingerprint !== undefined) {
+      const match = fingerprintMatch(currentContent, entry.fingerprint);
+      // A legacy match is re-recorded so the record holds on any checkout of the file.
+      if (match !== 'current' || entry.acceptedFingerprint !== undefined) {
         recorded[managedPath] = { source: entry.source, fingerprint: currentFp };
       }
       operations.push({
         action: 'preserve',
         path: managedPath,
         summary:
-          upToDate
+          match !== undefined
             ? 'Kit-managed file is up to date.'
             : `Kit-managed file already matches kit version ${kitVersion}; record it as up to date.`,
       });
@@ -719,6 +729,12 @@ function planManagedFiles(
 
     if (entry.acceptedFingerprint !== undefined) {
       if (matchesFingerprint(payloadContent, entry.fingerprint)) {
+        if (
+          fingerprintMatch(payloadContent, entry.fingerprint) !== 'current' ||
+          fingerprintMatch(currentContent, entry.acceptedFingerprint) !== 'current'
+        ) {
+          recorded[managedPath] = { source: entry.source, fingerprint: fingerprint(payloadContent), acceptedFingerprint: currentFp };
+        }
         operations.push({
           action: 'preserve',
           path: managedPath,
@@ -771,7 +787,12 @@ function planDetachedFileWarnings(
   }
 }
 
-function planManagedBlocks(inventory: TargetInventory, state: InstallState, operations: Operation[]): void {
+/**
+ * Plan managed block updates. Returns the keys of up-to-date blocks whose record matches only as a
+ * legacy hash of CRLF bytes, so the state records the current fingerprint in its place.
+ */
+function planManagedBlocks(inventory: TargetInventory, state: InstallState, operations: Operation[]): Set<string> {
+  const legacyRecords = new Set<string>();
   if (state.managedBlocks) {
     for (const [blockKey, entry] of Object.entries(state.managedBlocks)) {
       const [filePath, identifier] = blockKey.split('#');
@@ -821,6 +842,7 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
             before: fileContent,
           });
         } else {
+          if (fingerprintMatch(block, entry.fingerprint) === 'legacy') legacyRecords.add(blockKey);
           operations.push({
             action: 'preserve',
             path: filePath,
@@ -830,6 +852,7 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
       }
     }
   }
+  return legacyRecords;
 }
 
 interface SkillMirrorPlan {
@@ -837,6 +860,8 @@ interface SkillMirrorPlan {
   mirrorPaths: Set<string>;
   /** Mirror paths that a symlink to the canonical skill replaces; their records are dropped. */
   linkedMirrorPaths: Set<string>;
+  /** Up-to-date mirrors whose record does not hold on every checkout; their current fingerprint is recorded. */
+  rerecordedMirrorPaths: Set<string>;
 }
 
 /** Derive mirror ownership records from planned mirror operations. */
@@ -857,7 +882,8 @@ function recordSkillMirrors(
     } else if (op.action === 'delete' && op.path.startsWith('.claude/skills/')) {
       delete updatedSkillMirrors[op.path];
     } else if (op.action === 'preserve' && canonicalSkillMirrorPaths.has(op.path)) {
-      if (!(op.path in updatedSkillMirrors) && inventory.contents[op.path] !== undefined) {
+      const rerecord = mirrorPlan.rerecordedMirrorPaths.has(op.path);
+      if ((rerecord || !(op.path in updatedSkillMirrors)) && inventory.contents[op.path] !== undefined) {
         updatedSkillMirrors[op.path] = { fingerprint: fingerprint(inventory.contents[op.path]!) };
       }
     }
@@ -877,6 +903,7 @@ function planSkillMirrors(
 ): SkillMirrorPlan {
   const canonicalSkillMirrorPaths = new Set<string>();
   const linkedMirrorPaths = new Set<string>();
+  const rerecordedMirrorPaths = new Set<string>();
   if (state.features.skillMirrors !== false) {
     const canonicalSkills: Array<{ name: string; path: string; content: string; createdByPlan: boolean }> = [];
     const plannedCreates = operations
@@ -957,8 +984,11 @@ function planSkillMirrors(
         }
 
         const recordedMirror = state.managedSkillMirrors?.[targetFile];
+        const recordMatch = fingerprintMatch(currentTargetContent, recordedMirror?.fingerprint);
         if (recordedMirror !== undefined) {
-          if (!matchesFingerprint(currentTargetContent, recordedMirror.fingerprint)) {
+          // A mirror that matches the expected content apart from line endings holds no local edit,
+          // even when its record was hashed over other bytes, such as the mixed endings 0.5.0 wrote.
+          if (recordMatch === undefined && !sameText(currentTargetContent, expectedContent)) {
             operations.push({
               action: 'conflict',
               path: targetFile,
@@ -977,8 +1007,10 @@ function planSkillMirrors(
           }
         }
 
-        // A mirror that differs only in line endings is up to date, like the skill it mirrors.
-        if (!sameText(currentTargetContent, expectedContent)) {
+        // A mirror that differs only in line endings is up to date, like the skill it mirrors, unless
+        // its line endings are mixed; then it is rewritten in the skill's line ending.
+        const mixed = currentTargetContent !== expectedContent && hasMixedLineEndings(currentTargetContent);
+        if (!sameText(currentTargetContent, expectedContent) || mixed) {
           operations.push({
             action: 'update',
             path: targetFile,
@@ -987,6 +1019,7 @@ function planSkillMirrors(
             before: currentTargetContent,
           });
         } else {
+          if (recordedMirror !== undefined && recordMatch !== 'current') rerecordedMirrorPaths.add(targetFile);
           operations.push({
             action: 'preserve',
             path: targetFile,
@@ -1056,7 +1089,7 @@ function planSkillMirrors(
     }
   }
 
-  return { mirrorPaths: canonicalSkillMirrorPaths, linkedMirrorPaths };
+  return { mirrorPaths: canonicalSkillMirrorPaths, linkedMirrorPaths, rerecordedMirrorPaths };
 }
 
 function isMutation({ action }: Operation): boolean {
@@ -1187,6 +1220,7 @@ function planStateUpdate(
   addedManagedFiles: Record<string, ManagedFileState>,
   managedFilePlan: ManagedFilePlan,
   keepKitVersion: boolean,
+  legacyBlockRecords: ReadonlySet<string>,
 ): boolean {
   const updatedManagedFiles: Record<string, ManagedFileState> = {
     ...state.managedFiles,
@@ -1209,6 +1243,9 @@ function planStateUpdate(
     ? { ...state.managedBlocks }
     : undefined;
   if (updatedManagedBlocks) {
+    for (const blockKey of legacyBlockRecords) {
+      updatedManagedBlocks[blockKey] = { fingerprint: fingerprint(`${MANAGED_BLOCK}\n`) };
+    }
     for (const op of operations) {
       if (op.action === 'update' && op.path === 'AGENTS.md') {
         updatedManagedBlocks['AGENTS.md#drakom-ai'] = {
@@ -1311,7 +1348,7 @@ export function buildSyncPlan(
   const plannedManagedFiles = planNewDefaults(inventory, state, payload, operations);
   const defaultOperations = operations.slice(defaultsStart);
   planDetachedFileWarnings(inventory, state, payload, operations);
-  planManagedBlocks(inventory, state, operations);
+  const legacyBlockRecords = planManagedBlocks(inventory, state, operations);
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
   const mcpStart = operations.length;
   let mcpPlan = planMcp(inventory, state, operations);
@@ -1350,6 +1387,7 @@ export function buildSyncPlan(
     addedManagedFiles,
     managedFilePlan,
     keepKitVersion,
+    legacyBlockRecords,
   );
 
   operations.push({

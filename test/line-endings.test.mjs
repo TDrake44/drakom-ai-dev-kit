@@ -8,7 +8,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { DRAKOM_DIR } from '../dist/constants.js';
-import { createMirrorContent, MANAGED_BLOCK } from '../dist/operation-plan.js';
+import { createMirrorContent, MANAGED_BLOCK, NOTICE } from '../dist/operation-plan.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
@@ -16,9 +16,20 @@ const statePath = `${DRAKOM_DIR}/state.json`;
 const setupSkill = '.agents/skills/drakom-ai-setup/SKILL.md';
 const setupMirror = '.claude/skills/drakom-ai-setup/SKILL.md';
 
-/** @param {string} content */
+/**
+ * A hash of the exact bytes, as 0.5.0 and earlier recorded it.
+ * @param {string} content
+ */
 function fingerprint(content) {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`;
+}
+
+/**
+ * The fingerprint this version records: CRLF read as LF.
+ * @param {string} content
+ */
+function lfFingerprint(content) {
+  return fingerprint(content.replaceAll('\r\n', '\n'));
 }
 
 /** @param {string} text */
@@ -101,6 +112,34 @@ async function convertTreeToCrlf(root) {
   }
 }
 
+/**
+ * Convert every file to LF, as a checkout on Linux or macOS does.
+ * @param {string} root
+ */
+async function convertTreeToLf(root) {
+  for (const relativePath of await listFiles(root)) {
+    await write(root, relativePath, (await read(root, relativePath)).replaceAll('\r\n', '\n'));
+  }
+}
+
+/**
+ * After a fresh checkout as all-LF and as all-CRLF, the installation is clean with no write.
+ * @param {string} root
+ */
+async function assertCleanOnEveryCheckout(root) {
+  for (const [label, convert] of /** @type {const} */ ([['LF', convertTreeToLf], ['CRLF', convertTreeToCrlf]])) {
+    await convert(root);
+    const check = drakom(['sync', root, '--check']);
+    assert.equal(check.status, 0, `${label} checkout: ${check.stdout}${check.stderr}`);
+  }
+}
+
+/** A Claude mirror as 0.5.0 wrote it for a CRLF skill: an LF notice inside CRLF text. @param {string} skill */
+function mixedMirrorOf(skill) {
+  const frontmatter = skill.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0] ?? '';
+  return `${frontmatter}\n${NOTICE}\n\n${skill.slice(frontmatter.length)}`;
+}
+
 /** @param {string} root */
 async function snapshot(root) {
   /** @type {Record<string, string>} */
@@ -157,30 +196,63 @@ test('an installation converted to CRLF by a checkout is up to date, with no con
   assert.deepEqual(await snapshot(root), before);
 });
 
-test('fingerprints that earlier versions recorded over CRLF content stay valid', async (t) => {
+test('fingerprints that 0.5.0 recorded over CRLF bytes are re-recorded once, then every checkout is clean', async (t) => {
   const root = await tempTarget(t);
   const init = drakom(['init', root, '--yes']);
   assert.equal(init.status, 0, init.stderr);
-  // What an earlier version recorded: an accepted edit and a mirror, both hashed as CRLF bytes.
+  // What 0.5.0 recorded: an accepted CRLF edit, a kit file it found matching the CRLF payload of a
+  // Windows checkout, and the mixed-ending mirror of a CRLF skill, all hashed as their exact bytes.
   const editedSkill = toCrlf('---\nname: drakom-ai-setup\ndescription: Edited locally\n---\n\n# Mine\n');
   await write(root, setupSkill, editedSkill);
-  const mixedMirror = toCrlf(await read(root, setupMirror)).replace('\r\n', '\n');
-  await write(root, setupMirror, mixedMirror);
+  await write(root, setupMirror, mixedMirrorOf(editedSkill));
+  const ruleAnatomy = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
+  const crlfAnatomy = toCrlf(await read(root, ruleAnatomy));
+  await write(root, ruleAnatomy, crlfAnatomy);
   const state = JSON.parse(await read(root, statePath));
   state.managedFiles[setupSkill].acceptedFingerprint = fingerprint(editedSkill);
-  state.managedSkillMirrors[setupMirror].fingerprint = fingerprint(mixedMirror);
+  state.managedFiles[ruleAnatomy].fingerprint = fingerprint(crlfAnatomy);
+  state.managedSkillMirrors[setupMirror].fingerprint = fingerprint(mixedMirrorOf(editedSkill));
+  await write(root, 'AGENTS.md', toCrlf(await read(root, 'AGENTS.md')));
+  state.managedBlocks['AGENTS.md#drakom-ai'].fingerprint = fingerprint(toCrlf(`${MANAGED_BLOCK}\n`));
   await write(root, statePath, `${JSON.stringify(state, null, 2)}\n`);
-  // The mirror of the accepted edit is regenerated once; after that the installation is stable.
-  const first = drakom(['sync', root]);
-  assert.equal(first.status, 0, first.stdout + first.stderr);
-  assert.doesNotMatch(first.stdout, /CONFLICT/);
-  const before = await snapshot(root);
+
+  const heal = drakom(['sync', root]);
+
+  assert.equal(heal.status, 0, heal.stdout + heal.stderr);
+  assert.doesNotMatch(heal.stdout, /CONFLICT/);
+  assert.match(heal.stdout, /UPDATE\s+\.claude\/skills\/drakom-ai-setup\/SKILL\.md/);
+  assertOnlyCrlf(await read(root, setupMirror), setupMirror);
+  const healed = JSON.parse(await read(root, statePath));
+  assert.equal(healed.managedFiles[setupSkill].acceptedFingerprint, lfFingerprint(editedSkill));
+  assert.equal(healed.managedFiles[ruleAnatomy].fingerprint, lfFingerprint(crlfAnatomy));
+  assert.equal(healed.managedSkillMirrors[setupMirror].fingerprint, lfFingerprint(mixedMirrorOf(editedSkill)));
+  assert.equal(healed.managedBlocks['AGENTS.md#drakom-ai'].fingerprint, lfFingerprint(`${MANAGED_BLOCK}\n`));
+  await assertCleanOnEveryCheckout(root);
+});
+
+test('a mixed-ending 0.5.0 mirror that a checkout already converted is re-recorded, not a conflict', async (t) => {
+  const root = await tempTarget(t);
+  const init = drakom(['init', root, '--yes']);
+  assert.equal(init.status, 0, init.stderr);
+  const skill = toCrlf('---\nname: mine\ndescription: Mine\n---\n\n# Mine\n');
+  const mirror = '.claude/skills/mine/SKILL.md';
+  await write(root, '.agents/skills/mine/SKILL.md', skill);
+  await write(root, mirror, mixedMirrorOf(skill));
+  const state = JSON.parse(await read(root, statePath));
+  state.managedSkillMirrors[mirror] = { fingerprint: fingerprint(mixedMirrorOf(skill)) };
+  await write(root, statePath, `${JSON.stringify(state, null, 2)}\n`);
+  // The shared state is checked out on another machine, where the mirror's bytes are all LF.
+  await convertTreeToLf(root);
 
   const check = drakom(['sync', root, '--check']);
+  const heal = drakom(['sync', root]);
 
-  assert.equal(check.status, 0, check.stdout + check.stderr);
-  assert.equal(JSON.parse(before[statePath]).managedFiles[setupSkill].acceptedFingerprint, fingerprint(editedSkill));
-  assert.deepEqual(await snapshot(root), before);
+  assert.equal(check.status, 2, check.stdout + check.stderr);
+  assert.doesNotMatch(check.stdout, /CONFLICT/);
+  assert.equal(heal.status, 0, heal.stdout + heal.stderr);
+  assert.match(heal.stdout, /UPDATE\s+\.drakom-ai\/state\.json/);
+  assert.equal(JSON.parse(await read(root, statePath)).managedSkillMirrors[mirror].fingerprint, lfFingerprint(mixedMirrorOf(skill)));
+  await assertCleanOnEveryCheckout(root);
 });
 
 test('an outdated managed block in a CRLF AGENTS.md is replaced with a CRLF block', async (t) => {
@@ -211,13 +283,33 @@ test('a managed file the kit updates keeps its CRLF line endings', async (t) => 
   await write(root, setupSkill, toCrlf(olderKitFile));
   const state = JSON.parse(await read(root, statePath));
   state.managedFiles[setupSkill].fingerprint = fingerprint(olderKitFile);
+  // The state file was converted to CRLF by the same checkout.
+  await write(root, statePath, toCrlf(`${JSON.stringify(state, null, 2)}\n`));
+
+  const sync = drakom(['sync', root]);
+
+  assert.equal(sync.status, 0, sync.stdout + sync.stderr);
+  assert.match(sync.stdout, /UPDATE\s+\.agents\/skills\/drakom-ai-setup\/SKILL\.md/);
+  assert.match(sync.stdout, /UPDATE\s+\.drakom-ai\/state\.json/);
+  assertOnlyCrlf(await read(root, setupSkill), setupSkill);
+  assertOnlyCrlf(await read(root, statePath), statePath);
+  const check = drakom(['sync', root, '--check']);
+  assert.equal(check.status, 0, check.stdout + check.stderr);
+});
+
+test('one stray CRLF line does not turn an LF file into CRLF', async (t) => {
+  const root = await tempTarget(t);
+  const init = drakom(['init', root, '--yes']);
+  assert.equal(init.status, 0, init.stderr);
+  const olderKitFile = '---\r\nname: drakom-ai-setup\ndescription: An older kit version\n---\n\n# Setup\n';
+  await write(root, setupSkill, olderKitFile);
+  const state = JSON.parse(await read(root, statePath));
+  state.managedFiles[setupSkill].fingerprint = fingerprint(olderKitFile);
   await write(root, statePath, `${JSON.stringify(state, null, 2)}\n`);
 
   const sync = drakom(['sync', root]);
 
   assert.equal(sync.status, 0, sync.stdout + sync.stderr);
   assert.match(sync.stdout, /UPDATE\s+\.agents\/skills\/drakom-ai-setup\/SKILL\.md/);
-  assertOnlyCrlf(await read(root, setupSkill), setupSkill);
-  const check = drakom(['sync', root, '--check']);
-  assert.equal(check.status, 0, check.stdout + check.stderr);
+  assert.doesNotMatch(await read(root, setupSkill), /\r/);
 });
