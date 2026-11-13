@@ -5,7 +5,7 @@ import { DRAKOM_DIR } from './constants.js';
 import type { TargetInventory } from './inspect-target.js';
 import { createOnceSources, payloadContentBySource, type ManagedFileResolutions } from './operation-plan.js';
 import type { PackagePayload } from './package-payload.js';
-import { fingerprint } from './util.js';
+import { matchesFingerprint, sameText } from './util.js';
 
 const mcpClientFiles = new Set(['.mcp.json', '.vscode/mcp.json', '.agents/mcp_config.json', '.codex/config.toml']);
 
@@ -171,12 +171,12 @@ export async function resolveManagedFileOptions(
         `--accept ${managedPath}: this kit version no longer ships it (source ${entry.source}), so there is no kit version to keep your edit against. Run ${releaseCommand} to keep the file as project-owned.`,
       );
     }
-    if (currentContent === kitContent) {
+    if (sameText(currentContent, kitContent)) {
       throw new Error(
         `--accept ${managedPath}: the file matches the kit version, so there is no local edit to accept. Run \`drakom-ai sync\` without --accept.`,
       );
     }
-    if (entry.acceptedFingerprint === undefined && fingerprint(currentContent) === entry.fingerprint) {
+    if (entry.acceptedFingerprint === undefined && matchesFingerprint(currentContent, entry.fingerprint)) {
       throw new Error(
         `--accept ${managedPath}: the file has no local edit to accept; it is only behind the kit version. Run \`drakom-ai sync\` to take the update, or ${releaseCommand} to stop managing it.`,
       );

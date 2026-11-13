@@ -45,7 +45,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-payload-version.mjs && pnpm sync",
     "typecheck": "pnpm build && tsc -p jsconfig.json",
-    "test:unit": "node --test test/adoption-cli.test.mjs test/managed-file-conflicts.test.mjs test/mcp-adoption.test.mjs test/mcp-client-output.test.mjs test/mcp-codex-block.test.mjs test/mcp-client-selection.test.mjs test/release-workflow.test.mjs",
+    "test:unit": "node --test test/adoption-cli.test.mjs test/managed-file-conflicts.test.mjs test/mcp-adoption.test.mjs test/mcp-client-output.test.mjs test/mcp-codex-block.test.mjs test/mcp-client-selection.test.mjs test/release-workflow.test.mjs test/line-endings.test.mjs test/symlinked-target.test.mjs",
     "test:smoke": "node --test test/pack-smoke.test.mjs",
     "test": "pnpm build && pnpm run test:unit && pnpm run test:smoke",
     "sync": "pnpm build && node dist/cli.js sync .",

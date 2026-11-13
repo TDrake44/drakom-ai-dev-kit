@@ -1,4 +1,4 @@
-import { lstat, readFile, readdir, readlink, realpath } from 'node:fs/promises';
+import { lstat, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
 
@@ -48,7 +48,10 @@ export interface SymlinkEntry {
 }
 
 export interface TargetInventory {
+  /** The target directory, with a symlink at the typed path resolved. */
   root: string;
+  /** The target path as typed, made absolute; set only when it is a symlink and so differs from `root`. */
+  typedRoot?: string;
   status: 'fresh' | 'existing' | 'initialized';
   paths: string[];
   pathSet: Set<string>;
@@ -116,23 +119,47 @@ export interface InspectOptions {
   alsoRead?: Iterable<string>;
 }
 
+function isMissingPath(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+/**
+ * The directory to work in. A symlink at the typed path is resolved, so the target can be reached
+ * through a link; a link to anything but a directory is an error that says where it points.
+ */
+async function resolveTargetRoot(typedRoot: string): Promise<string> {
+  let targetStat: Stats;
+  try {
+    targetStat = await lstat(typedRoot);
+  } catch (error) {
+    if (isMissingPath(error)) throw new Error(`Target path does not exist: ${typedRoot}`);
+    throw error;
+  }
+  if (targetStat.isDirectory()) return typedRoot;
+  if (!targetStat.isSymbolicLink()) throw new Error(`Target path is not a directory: ${typedRoot}`);
+
+  const linkTarget = await readlink(typedRoot);
+  let resolved: string;
+  try {
+    resolved = await realpath(typedRoot);
+  } catch (error) {
+    if (isMissingPath(error)) {
+      throw new Error(`Target path ${typedRoot} is a symlink to ${linkTarget}, which does not exist.`);
+    }
+    throw error;
+  }
+  if (!(await stat(resolved)).isDirectory()) {
+    throw new Error(`Target path ${typedRoot} is a symlink to ${linkTarget}, which is not a directory.`);
+  }
+  return resolved;
+}
+
 /**
  * Inspect a target once so later planning can remain filesystem-pure.
  */
 export async function inspectTarget(targetPath: string, options: InspectOptions = {}): Promise<TargetInventory> {
-  const root = path.resolve(targetPath);
-  let targetStat: Stats;
-  try {
-    targetStat = await lstat(root);
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(`Target path does not exist: ${root}`);
-    }
-    throw error;
-  }
-  if (!targetStat.isDirectory()) {
-    throw new Error(`Target path is not a directory: ${root}`);
-  }
+  const typedRoot = path.resolve(targetPath);
+  const root = await resolveTargetRoot(typedRoot);
 
   const paths: string[] = [];
   const contents: Record<string, string> = {};
@@ -207,6 +234,7 @@ export async function inspectTarget(targetPath: string, options: InspectOptions 
 
   return {
     root,
+    ...(root === typedRoot ? {} : { typedRoot }),
     status: state ? 'initialized' : isEffectivelyEmpty ? 'fresh' : 'existing',
     paths,
     pathSet,

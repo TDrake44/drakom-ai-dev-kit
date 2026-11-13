@@ -12,7 +12,7 @@ import {
   type ManagedFileState,
   type ManagedMcpServerState,
 } from './state.js';
-import { fingerprint } from './util.js';
+import { fingerprint, lineEnding, matchesFingerprint, sameText, toLf, withLineEnding } from './util.js';
 
 export { compareVersions, DRAKOM_DIR };
 
@@ -62,6 +62,8 @@ export interface Operation {
 export interface OperationPlan {
   command: 'init' | 'sync';
   root: string;
+  /** The target path as typed, when it is a symlink that resolved to `root`. */
+  typedRoot?: string;
   targetStatus: TargetInventory['status'];
   /** Existing agent context paths found during init inspection, in inventory order; never their contents. */
   detectedContext?: string[];
@@ -88,11 +90,13 @@ export function isGeneratedMirrorContent(content: string): boolean {
   return body === NOTICE || body.startsWith(`${NOTICE}\n`) || body.startsWith(`${NOTICE}\r\n`);
 }
 
+/** A Claude mirror of a canonical skill, in the skill's line ending. */
 export function createMirrorContent(content: string, noticeMarker: string = NOTICE): string {
+  const eol = lineEnding(content);
   const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0];
-  if (!frontmatter) return `${noticeMarker}\n\n${content}`;
+  if (!frontmatter) return `${noticeMarker}${eol}${eol}${content}`;
 
-  return `${frontmatter}\n${noticeMarker}\n\n${content.slice(frontmatter.length)}`;
+  return `${frontmatter}${eol}${noticeMarker}${eol}${eol}${content.slice(frontmatter.length)}`;
 }
 
 export function extractManagedBlock(content: string, identifier: string): string | null {
@@ -111,6 +115,12 @@ export function extractManagedBlock(content: string, identifier: string): string
     block += '\n';
   }
   return block;
+}
+
+/** Append a section after a blank line, in the file's line ending; the existing text is kept as it is. */
+function appendSection(existing: string, section: string): string {
+  const eol = lineEnding(existing);
+  return `${existing.trimEnd()}${eol}${eol}${withLineEnding(section, eol)}${eol}`;
 }
 
 /** Say where a symlink leads, for conflict messages. */
@@ -262,7 +272,9 @@ function planWorktreeInclude(
       });
     } else {
       const trimmed = worktreeContent.trimEnd();
-      const content = trimmed.length === 0 ? `${missingLines.join('\n')}\n` : `${trimmed}\n${missingLines.join('\n')}\n`;
+      const eol = lineEnding(worktreeContent);
+      const added = `${missingLines.join(eol)}${eol}`;
+      const content = trimmed.length === 0 ? added : `${trimmed}${eol}${added}`;
       operations.push({
         action: 'merge',
         path: worktreePath,
@@ -372,7 +384,7 @@ export function buildInitPlan(
         action: 'merge',
         path: 'AGENTS.md',
         summary: 'Append the managed Drakom routing block while preserving existing content.',
-        content: `${agentsContent.trimEnd()}\n\n${MANAGED_BLOCK}\n`,
+        content: appendSection(agentsContent, MANAGED_BLOCK),
         before: agentsContent,
       });
     }
@@ -404,7 +416,7 @@ export function buildInitPlan(
         action: 'merge',
         path: 'CLAUDE.md',
         summary: 'Append an AGENTS.md import while preserving custom Claude instructions.',
-        content: `${claudeContent.trimEnd()}\n\n@AGENTS.md\n`,
+        content: appendSection(claudeContent, '@AGENTS.md'),
         before: claudeContent,
       });
     }
@@ -450,6 +462,7 @@ export function buildInitPlan(
   return {
     command: 'init',
     root: inventory.root,
+    ...(inventory.typedRoot === undefined ? {} : { typedRoot: inventory.typedRoot }),
     targetStatus: inventory.status,
     detectedContext: [...inventory.contextFiles],
     operations: guardedOperations,
@@ -652,7 +665,10 @@ function planManagedFiles(
 
     if (payloadFp !== undefined && resolutions.accept.has(managedPath) && currentFp !== payloadFp) {
       // The kit's version is the baseline, so a CLI that ignores the accepted edit sees a modified file.
-      if (entry.fingerprint !== payloadFp || entry.acceptedFingerprint !== currentFp) {
+      if (
+        !matchesFingerprint(payloadContent ?? '', entry.fingerprint) ||
+        !matchesFingerprint(currentContent, entry.acceptedFingerprint)
+      ) {
         recorded[managedPath] = { source: entry.source, fingerprint: payloadFp, acceptedFingerprint: currentFp };
       }
       operations.push({
@@ -663,15 +679,17 @@ function planManagedFiles(
       continue;
     }
 
+    // Line endings alone are not an edit: a checkout with core.autocrlf turns kit files into CRLF.
     if (currentFp === payloadFp) {
-      if (entry.fingerprint !== currentFp || entry.acceptedFingerprint !== undefined) {
+      const upToDate = matchesFingerprint(currentContent, entry.fingerprint);
+      if (!upToDate || entry.acceptedFingerprint !== undefined) {
         recorded[managedPath] = { source: entry.source, fingerprint: currentFp };
       }
       operations.push({
         action: 'preserve',
         path: managedPath,
         summary:
-          entry.fingerprint === currentFp
+          upToDate
             ? 'Kit-managed file is up to date.'
             : `Kit-managed file already matches kit version ${kitVersion}; record it as up to date.`,
       });
@@ -679,7 +697,7 @@ function planManagedFiles(
     }
 
     const recordedContentFp = entry.acceptedFingerprint ?? entry.fingerprint;
-    if (currentFp !== recordedContentFp) {
+    if (!matchesFingerprint(currentContent, recordedContentFp)) {
       const what =
         entry.acceptedFingerprint === undefined
           ? 'Managed file was locally modified.'
@@ -700,7 +718,7 @@ function planManagedFiles(
     }
 
     if (entry.acceptedFingerprint !== undefined) {
-      if (entry.fingerprint === payloadFp) {
+      if (matchesFingerprint(payloadContent, entry.fingerprint)) {
         operations.push({
           action: 'preserve',
           path: managedPath,
@@ -719,7 +737,8 @@ function planManagedFiles(
       action: 'update',
       path: managedPath,
       summary: `Update managed file from kit version ${kitVersion}.`,
-      content: payloadContent,
+      // The whole file is replaced, in the line ending it already uses.
+      content: withLineEnding(payloadContent, lineEnding(currentContent)),
       before: currentContent,
     });
   }
@@ -742,7 +761,7 @@ function planDetachedFileWarnings(
     if (Object.hasOwn(state.managedFiles, target) || reported.has(target) || currentContent === undefined) {
       continue;
     }
-    if (currentContent !== kitFile.content) {
+    if (!sameText(currentContent, kitFile.content)) {
       operations.push({
         action: 'warning',
         path: target,
@@ -777,12 +796,10 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
         continue;
       }
 
-      const blockFp = fingerprint(block);
-      const normalizedBlock = block.replace(/\r\n/g, '\n');
+      const normalizedBlock = toLf(block);
       const normalizedBlockWithNl = normalizedBlock.endsWith('\n') ? normalizedBlock : `${normalizedBlock}\n`;
-      const isMatch = [blockFp, fingerprint(normalizedBlock), fingerprint(normalizedBlockWithNl)].includes(
-        entry.fingerprint,
-      );
+      const isMatch =
+        matchesFingerprint(block, entry.fingerprint) || fingerprint(normalizedBlockWithNl) === entry.fingerprint;
 
       if (!isMatch) {
         operations.push({
@@ -792,9 +809,10 @@ function planManagedBlocks(inventory: TargetInventory, state: InstallState, oper
         });
       } else {
         const canonicalBlock = `${MANAGED_BLOCK}\n`;
-        const canonicalFp = fingerprint(canonicalBlock);
-        if (blockFp !== canonicalFp && fingerprint(normalizedBlockWithNl) !== canonicalFp) {
-          const updatedContent = fileContent.replace(block, () => canonicalBlock);
+        if (normalizedBlockWithNl !== canonicalBlock) {
+          // Only the block is replaced, in the line ending the file already uses.
+          const replacement = withLineEnding(canonicalBlock, lineEnding(fileContent));
+          const updatedContent = fileContent.replace(block, () => replacement);
           operations.push({
             action: 'update',
             path: filePath,
@@ -939,9 +957,8 @@ function planSkillMirrors(
         }
 
         const recordedMirror = state.managedSkillMirrors?.[targetFile];
-        const currentTargetFp = fingerprint(currentTargetContent);
         if (recordedMirror !== undefined) {
-          if (currentTargetFp !== recordedMirror.fingerprint) {
+          if (!matchesFingerprint(currentTargetContent, recordedMirror.fingerprint)) {
             operations.push({
               action: 'conflict',
               path: targetFile,
@@ -950,8 +967,7 @@ function planSkillMirrors(
             continue;
           }
         } else {
-          const isExactMatch = currentTargetContent === expectedContent;
-          if (!isExactMatch) {
+          if (!sameText(currentTargetContent, expectedContent)) {
             operations.push({
               action: 'conflict',
               path: targetFile,
@@ -961,7 +977,8 @@ function planSkillMirrors(
           }
         }
 
-        if (currentTargetContent !== expectedContent) {
+        // A mirror that differs only in line endings is up to date, like the skill it mirrors.
+        if (!sameText(currentTargetContent, expectedContent)) {
           operations.push({
             action: 'update',
             path: targetFile,
@@ -997,9 +1014,8 @@ function planSkillMirrors(
           const content = inventory.contents[skillPath] ?? '';
           if (isGeneratedMirrorContent(content)) {
             const recordedMirror = state.managedSkillMirrors?.[skillPath];
-            const currentFp = fingerprint(content);
             if (recordedMirror !== undefined) {
-              if (currentFp !== recordedMirror.fingerprint) {
+              if (!matchesFingerprint(content, recordedMirror.fingerprint)) {
                 operations.push({
                   action: 'conflict',
                   path: skillPath,
@@ -1223,7 +1239,8 @@ function planStateUpdate(
 
   const newSerializedState = serializeState(updatedState);
   const currentSerializedState = inventory.contents[`${DRAKOM_DIR}/state.json`] ?? '';
-  const needsWrite = newSerializedState !== currentSerializedState;
+  // A state file that a checkout turned into CRLF is not rewritten for its line endings alone.
+  const needsWrite = !sameText(newSerializedState, currentSerializedState);
 
   if (needsWrite) {
     const stateSummary = operations.some(({ action }) => action === 'conflict')
@@ -1235,7 +1252,7 @@ function planStateUpdate(
       summary: mcpPlan.turnsMcpOn
         ? `Turn on MCP management, because ${DRAKOM_DIR}/mcp-servers.yaml now exists. ${stateSummary}`
         : stateSummary,
-      content: newSerializedState,
+      content: withLineEnding(newSerializedState, lineEnding(currentSerializedState)),
       before: currentSerializedState,
     });
   } else {
@@ -1348,6 +1365,7 @@ export function buildSyncPlan(
   return {
     command: 'sync',
     root: inventory.root,
+    ...(inventory.typedRoot === undefined ? {} : { typedRoot: inventory.typedRoot }),
     targetStatus: inventory.status,
     operations,
     hasConflicts: operations.some(({ action }) => action === 'conflict'),
