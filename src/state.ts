@@ -206,6 +206,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
 
 export async function loadState(root: string): Promise<InstallState | null> {
   const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const displayPath = statePath.split(path.sep).join('/');
   let source: string;
   try {
     source = await readFile(statePath, 'utf8');
@@ -220,9 +221,9 @@ export async function loadState(root: string): Promise<InstallState | null> {
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new Error(`${statePath} must contain valid JSON.`);
+    throw new Error(`${displayPath} must contain valid JSON.`);
   }
-  return validateState(parsed, statePath);
+  return validateState(parsed, displayPath);
 }
 
 /** Serialize with a fixed key order so equal states always produce identical bytes. */

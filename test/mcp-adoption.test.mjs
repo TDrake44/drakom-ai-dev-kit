@@ -63,7 +63,7 @@ async function snapshot(root) {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       const absolutePath = path.join(directory, entry.name);
-      const relativePath = path.relative(root, absolutePath);
+      const relativePath = path.relative(root, absolutePath).split(path.sep).join('/');
       if (entry.isDirectory()) {
         result[`${relativePath}/`] = 'directory';
         await visit(absolutePath);
