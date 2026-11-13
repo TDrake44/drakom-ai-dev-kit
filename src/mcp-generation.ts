@@ -1,6 +1,14 @@
 import { isDeepStrictEqual } from 'node:util';
 import { parse as parseToml } from 'smol-toml';
 
+import {
+  CODEX_BLOCK_END,
+  CODEX_BLOCK_START,
+  extractCodexServerText,
+  locateCodexBlock,
+  removeCodexServerFromToml,
+  type CodexBlockLocation,
+} from './codex-toml.js';
 import { DRAKOM_DIR } from './constants.js';
 import type { TargetInventory } from './inspect-target.js';
 import { parseJsonc, setJsonValue } from './json-text.js';
@@ -27,10 +35,7 @@ export {
 } from './mcp-renderers.js';
 export { validateMcpRegistry, type McpValidationResult } from './mcp-registry.js';
 
-export const CODEX_BLOCK_START = '# BEGIN Drakom AI Development Context MCP servers';
-export const CODEX_BLOCK_END = '# END Drakom AI Development Context MCP servers';
-export const LEGACY_CODEX_BLOCK_START = '# BEGIN AI Framework Blueprint MCP servers';
-export const LEGACY_CODEX_BLOCK_END = '# END AI Framework Blueprint MCP servers';
+export { CODEX_BLOCK_END, CODEX_BLOCK_START, removeCodexServerFromToml } from './codex-toml.js';
 
 const REGISTRY_PATH = `${DRAKOM_DIR}/mcp-servers.yaml`;
 
@@ -281,96 +286,6 @@ function prepareJsonTarget(
   return { operations, targetFingerprints };
 }
 
-interface CodexBlockExtraction {
-  startMarker: string;
-  endMarker: string;
-  block: string;
-  unmanaged: string;
-}
-
-function extractCodexBlock(text: string): CodexBlockExtraction | null {
-  let startMarker = CODEX_BLOCK_START;
-  let endMarker = CODEX_BLOCK_END;
-  let startIndex = text.indexOf(startMarker);
-  let endIndex = text.indexOf(endMarker);
-
-  if (startIndex === -1 && endIndex === -1) {
-    startMarker = LEGACY_CODEX_BLOCK_START;
-    endMarker = LEGACY_CODEX_BLOCK_END;
-    startIndex = text.indexOf(startMarker);
-    endIndex = text.indexOf(endMarker);
-  }
-
-  if (startIndex === -1 && endIndex === -1) return null;
-  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-    throw new Error('Managed MCP block in .codex/config.toml is malformed');
-  }
-
-  const endWithNewline = text.indexOf('\n', endIndex + endMarker.length);
-  const blockEnd = endWithNewline === -1 ? text.length : endWithNewline + 1;
-  const block = text.slice(startIndex, blockEnd);
-  const unmanaged = text.slice(0, startIndex) + text.slice(blockEnd);
-  return { startMarker, endMarker, block, unmanaged };
-}
-
-/** Matches the header of a server's table or of one of its sub-tables. */
-function codexServerHeaderRegex(serverName: string): RegExp {
-  const escapedName = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(
-    `^\\s*\\[\\s*mcp_servers\\s*\\.\\s*(?:"${escapedName}"|'${escapedName}'|${escapedName})(?:\\s*\\.[^\\]]+)?\\s*\\]`,
-  );
-}
-
-/**
- * The lines of one server's tables inside a managed block, as written, without the block markers.
- * Comment lines directly above a table header belong to that table, so they travel with it.
- */
-function extractCodexServerText(block: string, serverName: string, eol: string): string {
-  const serverHeaderRegex = codexServerHeaderRegex(serverName);
-  const lines = block.split(/\r?\n/);
-  const isMarker = (line: string): boolean => line.startsWith('# BEGIN ') || line.startsWith('# END ');
-  const isComment = (line: string): boolean => /^\s*#/.test(line) && !isMarker(line);
-  // For each line, whether it belongs to this server; decided table by table.
-  const kept: string[] = [];
-  let keeping = false;
-  for (const [index, line] of lines.entries()) {
-    if (isMarker(line)) keeping = false;
-    else if (/^\s*\[/.test(line)) keeping = serverHeaderRegex.test(line);
-    else if (isComment(line)) {
-      // A comment run that ends at a table header belongs to that table.
-      let next = index + 1;
-      while (next < lines.length && isComment(lines[next] ?? '')) next += 1;
-      const nextLine = lines[next] ?? '';
-      if (/^\s*\[/.test(nextLine)) keeping = serverHeaderRegex.test(nextLine);
-    }
-    if (keeping) kept.push(line);
-  }
-  return kept.join(eol).trim();
-}
-
-export function removeCodexServerFromToml(text: string, serverName: string): string {
-  const lines = text.split('\n');
-  const result: string[] = [];
-  let skipping = false;
-  const serverHeaderRegex = codexServerHeaderRegex(serverName);
-  const anyHeaderRegex = /^\s*\[/;
-
-  for (const line of lines) {
-    if (serverHeaderRegex.test(line)) {
-      skipping = true;
-      continue;
-    } else if (anyHeaderRegex.test(line)) {
-      skipping = false;
-    }
-
-    if (!skipping) {
-      result.push(line);
-    }
-  }
-
-  return result.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
 interface CodexTargetPreparation {
   operations: Operation[];
   targetFingerprints: Record<string, string>;
@@ -383,6 +298,36 @@ function renderCodexSnippet(serverName: string, serverDef: BaseServerConfig): st
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`MCP server "${serverName}": ${detail}`);
   }
+}
+
+/** The `mcp_servers` tables of TOML text, or nothing when the text has none or does not parse. */
+function codexServersOf(text: string): Record<string, unknown> {
+  try {
+    const parsed = parseToml(text);
+    return isRecord(parsed.mcp_servers) ? parsed.mcp_servers : {};
+  } catch {
+    return {};
+  }
+}
+
+/** A Codex config as parsed, without the named servers: what the kit must leave as it found it. */
+function codexSettingsOutside(text: string, serverNames: ReadonlySet<string>): Record<string, unknown> | undefined {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseToml(text);
+  } catch {
+    return undefined;
+  }
+  const allServers = isRecord(parsed.mcp_servers) ? parsed.mcp_servers : {};
+  const servers = Object.entries(allServers).filter(([name]) => !serverNames.has(name));
+  const rest = Object.entries(parsed).filter(([key]) => key !== 'mcp_servers');
+  return Object.fromEntries(servers.length === 0 ? rest : [...rest, ['mcp_servers', Object.fromEntries(servers)]]);
+}
+
+/** Ends non-empty text with a blank line, in the file's line ending, so a table can follow it. */
+function withBlankLineEnd(text: string, eol: string): string {
+  if (text.trim().length === 0 || /\n[ \t]*\r?\n$/.test(text)) return text;
+  return text.endsWith('\n') ? `${text}${eol}` : `${text}${eol}${eol}`;
 }
 
 function prepareCodexTarget(
@@ -411,9 +356,9 @@ function prepareCodexTarget(
     }
   }
 
-  let extracted: CodexBlockExtraction | null;
+  let located: CodexBlockLocation | null;
   try {
-    extracted = extractCodexBlock(existing);
+    located = locateCodexBlock(existing);
   } catch {
     operations.push(
       unusableTarget(targetPath, selection, 'malformed managed block markers', 'restore or remove corrupted block markers.'),
@@ -421,21 +366,23 @@ function prepareCodexTarget(
     return { operations, targetFingerprints };
   }
   // Without a managed block there is nothing of the kit's left in a deselected client's file.
-  if (!selection.selected && !extracted) {
+  if (!selection.selected && !located) {
     return { operations, targetFingerprints };
   }
 
-  let unmanaged = existing;
+  // The block is rewritten where it is: the text on either side of it is the user's.
+  let before = located ? located.before : existing;
+  let after = located ? located.after : '';
   const eol = existing.includes('\r\n') ? '\r\n' : '\n';
   // Released entries that were edited: their text leaves the managed block and stays in the file.
   const keptEntries: string[] = [];
-  if (extracted) {
-    unmanaged = extracted.unmanaged;
+  const keptNames = new Set<string>();
+  let blockServers: Record<string, unknown> = {};
+  if (located) {
     // Check if previously managed servers were manually edited inside the block
-    let parsedBlock: Record<string, unknown> = {};
     try {
-      const p = parseToml(extracted.block);
-      if (isRecord(p)) parsedBlock = p;
+      const parsedBlock = parseToml(located.block);
+      if (isRecord(parsedBlock.mcp_servers)) blockServers = parsedBlock.mcp_servers;
     } catch {
       operations.push(
         unusableTarget(targetPath, selection, 'managed MCP block contains invalid TOML syntax', `fix syntax in ${targetPath}.`),
@@ -443,13 +390,13 @@ function prepareCodexTarget(
       return { operations, targetFingerprints };
     }
 
-    const blockServers = isRecord(parsedBlock.mcp_servers) ? parsedBlock.mcp_servers : {};
     for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
       const prevFp = serverState.targetFingerprints[targetPath];
       if (prevFp !== undefined) {
         if (selection.released.has(serverName)) {
           if (Object.hasOwn(blockServers, serverName) && fingerprintObject(blockServers[serverName]) !== prevFp) {
-            keptEntries.push(extractCodexServerText(extracted.block, serverName, eol));
+            keptEntries.push(extractCodexServerText(located.block, serverName, eol));
+            keptNames.add(serverName);
             operations.push(releasedEditedEntry(targetPath, serverName, selection, 'kept, outside the managed block,'));
           }
           continue;
@@ -476,111 +423,125 @@ function prepareCodexTarget(
     }
   }
 
-  // Check if unmanaged section defines any of the generated servers
-  let parsedUnmanaged: Record<string, unknown> = {};
-  if (unmanaged.trim().length > 0) {
+  // Check if the text outside the block defines any of the generated servers, in any TOML form
+  const outside = `${before}${after}`;
+  if (outside.trim().length > 0) {
     try {
-      const p = parseToml(unmanaged);
-      if (isRecord(p)) parsedUnmanaged = p;
+      parseToml(outside);
     } catch {
       operations.push(unusableTarget(targetPath, selection, 'invalid TOML in unmanaged section', `fix syntax in ${targetPath}.`));
       return { operations, targetFingerprints };
     }
   }
+  const outsideServers = codexServersOf(outside);
 
-  const unmanagedServers = parsedUnmanaged.mcp_servers;
-  if (isRecord(unmanagedServers)) {
-    for (const [serverName, serverDef] of Object.entries(generatedServers)) {
-      const prevFp = managedTargetFingerprint(state, serverName, targetPath);
-      if (Object.hasOwn(unmanagedServers, serverName) && prevFp === undefined) {
-        const expectedSnippet = renderCodexSnippet(serverName, serverDef);
-        let parsedExpectedServer: Record<string, unknown> | null = null;
-        try {
-          const parsedSnippet = parseToml(expectedSnippet);
-          if (isRecord(parsedSnippet) && isRecord(parsedSnippet.mcp_servers)) {
-            parsedExpectedServer = parsedSnippet.mcp_servers[serverName] as Record<string, unknown>;
-          }
-        } catch {
-          // Ignore
-        }
-        if (
-          !parsedExpectedServer ||
-          !isDeepStrictEqual(sortKeys(unmanagedServers[serverName]), sortKeys(parsedExpectedServer))
-        ) {
-          operations.push({
-            action: 'conflict',
-            path: targetPath,
-            summary: `Cannot safely update ${targetPath}: would replace an existing unmanaged MCP server "${serverName}". Safe next action: rename server or resolve configuration differences.`,
-          });
-        } else {
-          unmanaged = removeCodexServerFromToml(unmanaged, serverName);
-        }
-      }
-    }
-  }
+  const snippets: Record<string, string> = {};
+  for (const [serverName, serverDef] of Object.entries(generatedServers)) {
+    const snippet = renderCodexSnippet(serverName, serverDef);
+    snippets[serverName] = snippet;
+    const expectedServer = codexServersOf(snippet)[serverName];
+    targetFingerprints[serverName] = fingerprintObject(isRecord(expectedServer) ? expectedServer : {});
+    if (!Object.hasOwn(outsideServers, serverName)) continue;
 
-  for (const [name, serverDef] of Object.entries(generatedServers)) {
-    const snippet = renderCodexSnippet(name, serverDef);
-    let parsedSnippetServer: Record<string, unknown> = {};
-    try {
-      const p = parseToml(snippet);
-      if (isRecord(p) && isRecord(p.mcp_servers) && isRecord(p.mcp_servers[name])) {
-        parsedSnippetServer = p.mcp_servers[name] as Record<string, unknown>;
+    const outsideServer = outsideServers[serverName];
+    const prevFp = managedTargetFingerprint(state, serverName, targetPath);
+    if (prevFp === undefined) {
+      if (!isRecord(expectedServer) || !isDeepStrictEqual(sortKeys(outsideServer), sortKeys(expectedServer))) {
+        operations.push({
+          action: 'conflict',
+          path: targetPath,
+          summary: `Cannot safely update ${targetPath}: would replace an existing unmanaged MCP server "${serverName}". Safe next action: rename server or resolve configuration differences.`,
+        });
+        continue;
       }
-    } catch {
-      // Ignore
+    } else if (located) {
+      // Its place in the block was checked above; anything outside is the user's addition to it.
+      continue;
+    } else if (fingerprintObject(outsideServer) !== prevFp) {
+      // Recorded as the kit's, but the file has no managed block: the markers were removed or are an older kind.
+      operations.push({
+        action: 'conflict',
+        path: targetPath,
+        summary: `Cannot safely update ${targetPath}: managed MCP server "${serverName}" is defined outside the managed block and is not what the kit wrote. Safe next action: remove "${serverName}" from ${targetPath} so the kit can write it again, or rename the server in ${DRAKOM_DIR}/mcp-servers.yaml.`,
+      });
+      continue;
     }
-    targetFingerprints[name] = fingerprintObject(parsedSnippetServer);
+
+    // An identical definition is taken over: it leaves the user's text and is written in the block.
+    before = removeCodexServerFromToml(before, serverName);
+    after = removeCodexServerFromToml(after, serverName);
+    if (Object.hasOwn(codexServersOf(`${before}${after}`), serverName)) {
+      operations.push({
+        action: 'conflict',
+        path: targetPath,
+        summary: `Cannot safely update ${targetPath}: MCP server "${serverName}" is already defined there, inside an inline table the kit cannot rewrite. Safe next action: write it as a [mcp_servers.${serverName}] table, or remove it so the kit can write it.`,
+      });
+    }
   }
 
   if (operations.some((op) => op.action === 'conflict')) {
     return { operations, targetFingerprints };
   }
 
-  // If there are no servers to generate and no previously managed servers:
-  // - If target doesn't exist, do not create it.
-  // - If target exists without a managed block, or only has a legacy blueprint block, leave it preserved.
+  // With no servers to generate and none managed before, a file without a managed block is left alone
+  // and a missing file is not created.
   if (
     Object.keys(generatedServers).length === 0 &&
-    Object.keys(state.managedMcpServers).length === 0
+    Object.keys(state.managedMcpServers).length === 0 &&
+    !located
   ) {
-    if (!targetExists || !extracted || extracted.startMarker === LEGACY_CODEX_BLOCK_START) {
-      if (targetExists) {
-        operations.push({
-          action: 'preserve',
-          path: targetPath,
-          summary: `MCP client configuration ${targetPath} is up to date.`,
-        });
-      }
-      return { operations, targetFingerprints };
+    if (targetExists) {
+      operations.push({
+        action: 'preserve',
+        path: targetPath,
+        summary: `MCP client configuration ${targetPath} is up to date.`,
+      });
     }
+    return { operations, targetFingerprints };
   }
 
-  let generatedBlockBody = '';
-  for (const [name, serverDef] of Object.entries(generatedServers)) {
-    generatedBlockBody += `${renderCodexSnippet(name, serverDef)}\n`;
+  // The block takes the file's line ending, so a CRLF file never ends up with mixed endings.
+  const block = `${CODEX_BLOCK_START}\n${Object.values(snippets)
+    .map((snippet) => `${snippet}\n`)
+    .join('')}${CODEX_BLOCK_END}\n`.replaceAll('\n', eol);
+  const keptText = keptEntries.join(`${eol}${eol}`);
+  let newContent: string;
+  if (!located) {
+    // First block in this file: it goes at the end.
+    const unmanaged = before.trimEnd();
+    newContent = unmanaged.length > 0 ? `${unmanaged}${eol}${eol}${block}` : block;
+  } else if (selection.selected) {
+    newContent =
+      keptEntries.length === 0
+        ? `${before}${block}${after}`
+        : `${withBlankLineEnd(before, eol)}${keptText}${eol}${eol}${block}${after}`;
+  } else {
+    // A deselected client keeps no managed block: only what is not the kit's stays in the file.
+    const head = keptEntries.length === 0 ? before : `${withBlankLineEnd(before, eol)}${keptText}${eol}`;
+    if (after.trim().length > 0) newContent = `${head}${after}`;
+    else newContent = head.trim().length > 0 ? `${head.trimEnd()}${eol}` : '';
   }
 
-  const block = `${CODEX_BLOCK_START}\n${generatedBlockBody}${CODEX_BLOCK_END}\n`;
-  // Kept entries are joined with the file's own line ending; without any, the text is as before.
-  const trimmedUnmanaged =
-    keptEntries.length === 0
-      ? unmanaged.trimEnd()
-      : [unmanaged.trimEnd(), ...keptEntries].filter((part) => part.trim().length > 0).join(`${eol}${eol}`);
-  const cleanUnmanaged = trimmedUnmanaged.trim().length === 0 ? '' : trimmedUnmanaged;
-  const separator = cleanUnmanaged.length > 0 ? '\n\n' : '';
-  let newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${separator}${block}` : block;
-  // A deselected client keeps no managed block: only what is not the kit's stays in the file.
-  if (!selection.selected) newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${eol}` : '';
-
-  try {
-    parseToml(newContent);
-  } catch {
+  // Everything that is not a server the kit writes or removes must read exactly as it did before.
+  const kitServers = new Set([...Object.keys(generatedServers), ...Object.keys(blockServers).filter((name) => !keptNames.has(name))]);
+  const settingsAfter = codexSettingsOutside(newContent, kitServers);
+  if (settingsAfter === undefined) {
     operations.push({
       action: 'conflict',
       path: targetPath,
       summary: `Generated TOML for ${targetPath} is invalid. Safe next action: review MCP server configurations.`,
     });
+    return { operations, targetFingerprints };
+  }
+  if (!isDeepStrictEqual(settingsAfter, codexSettingsOutside(existing, kitServers))) {
+    operations.push(
+      unusableTarget(
+        targetPath,
+        selection,
+        'rewriting the managed MCP block would change settings outside it',
+        `make sure the text after the managed block in ${targetPath} starts with a table header, not with loose keys.`,
+      ),
+    );
     return { operations, targetFingerprints };
   }
 
