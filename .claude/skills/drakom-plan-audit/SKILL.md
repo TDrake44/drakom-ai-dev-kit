@@ -11,10 +11,11 @@ description: Audit or clean up ignored local plans when explicitly requested. Fi
 Paths are relative to the repository root. Use this skill only for an explicit
 audit or cleanup of `.drakom-ai/plans/`.
 
-Plans use the header convention in `.drakom-ai/specs/README.md`: a title, then
-`**Status:** <word>: <one line>` (word is Active, Next, Later, or Done) and
-`**Synopsis:**`. Flag plans missing it or with a status that no longer matches
-the code.
+Expect each plan to start with a title, then `**Status:** <word>: <one line>`
+(word is Active, Next, Later, or Done) and `**Synopsis:**`; new installs also
+document this in `.drakom-ai/specs/README.md`. Report plans that lack the header
+or whose status no longer matches the code, and offer to add or fix it. A
+missing header is a finding, not an error; never delete a plan for it.
 
 Inventory plan names, sizes, status headers, active-step pointers, and incoming
 links before reading large plans. Check material status claims against the
