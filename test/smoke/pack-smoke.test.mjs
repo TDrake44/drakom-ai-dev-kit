@@ -9,9 +9,9 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { DRAKOM_DIR } from '../dist/constants.js';
+import { DRAKOM_DIR } from '../../dist/constants.js';
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const OFFLINE_REGISTRY = 'http://127.0.0.1:9';
 
 // The harness points XDG_CACHE_HOME at a temp dir, so corepack needs its real home to find the pinned pnpm offline.
@@ -319,6 +319,8 @@ test('packed artifact contains only required publishable runtime files and metad
     assert.equal(item.startsWith('.claude/'), false, `.claude file ${item} must not be packed`);
     assert.equal(item.startsWith('.vscode/'), false, `.vscode file ${item} must not be packed`);
     assert.equal(item.startsWith('.codex/'), false, `.codex file ${item} must not be packed`);
+    assert.equal(item.endsWith('.d.ts') || item.endsWith('.d.ts.map'), false, `Declaration file ${item} must not be packed`);
+    assert.notEqual(item, '.npmignore');
     assert.notEqual(item, 'tsconfig.json');
     assert.notEqual(item, 'jsconfig.json');
     assert.notEqual(item, 'biome.json');
