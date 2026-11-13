@@ -1,0 +1,46 @@
+{
+  "registry": "servers:\n  project-tools:\n    command: node\n    args: ['./scripts/mcp/server.mjs']\n    env:\n      LOG_LEVEL: info\n  documentation:\n    http:\n      url: https://mcp.example.com/docs\n      headers:\n        X-Client: drakom-ai-dev-kit\n    overrides:\n      codex:\n        headers:\n          X-Extra: codex\n  tracker:\n    http:\n      url: https://mcp.example.com/issues\n      headers:\n        Authorization: \"Bearer ${TRACKER_TOKEN}\"\n    skip: [antigravity]\n  prompted:\n    command: node\n    args: ['./prompted.mjs']\n    overrides:\n      vscode:\n        env:\n          REGION: \"${input:region}\"\n",
+  "files": {
+    ".mcp.json": "{\n  \"mcpServers\": {\n    \"project-tools\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"./scripts/mcp/server.mjs\"\n      ],\n      \"env\": {\n        \"LOG_LEVEL\": \"info\"\n      }\n    },\n    \"documentation\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.example.com/docs\",\n      \"headers\": {\n        \"X-Client\": \"drakom-ai-dev-kit\"\n      }\n    },\n    \"tracker\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.example.com/issues\",\n      \"headers\": {\n        \"Authorization\": \"Bearer ${TRACKER_TOKEN}\"\n      }\n    },\n    \"prompted\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"./prompted.mjs\"\n      ]\n    }\n  }\n}\n",
+    ".vscode/mcp.json": "{\n  \"servers\": {\n    \"project-tools\": {\n      \"type\": \"stdio\",\n      \"command\": \"node\",\n      \"args\": [\n        \"./scripts/mcp/server.mjs\"\n      ],\n      \"env\": {\n        \"LOG_LEVEL\": \"info\"\n      }\n    },\n    \"documentation\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.example.com/docs\",\n      \"headers\": {\n        \"X-Client\": \"drakom-ai-dev-kit\"\n      }\n    },\n    \"tracker\": {\n      \"type\": \"http\",\n      \"url\": \"https://mcp.example.com/issues\",\n      \"headers\": {\n        \"Authorization\": \"Bearer ${env:TRACKER_TOKEN}\"\n      }\n    },\n    \"prompted\": {\n      \"type\": \"stdio\",\n      \"command\": \"node\",\n      \"args\": [\n        \"./prompted.mjs\"\n      ],\n      \"env\": {\n        \"REGION\": \"${input:region}\"\n      }\n    }\n  }\n}\n",
+    ".agents/mcp_config.json": "{\n  \"mcpServers\": {\n    \"project-tools\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"./scripts/mcp/server.mjs\"\n      ],\n      \"env\": {\n        \"LOG_LEVEL\": \"info\"\n      }\n    },\n    \"documentation\": {\n      \"serverUrl\": \"https://mcp.example.com/docs\",\n      \"headers\": {\n        \"X-Client\": \"drakom-ai-dev-kit\"\n      }\n    },\n    \"prompted\": {\n      \"command\": \"node\",\n      \"args\": [\n        \"./prompted.mjs\"\n      ]\n    }\n  }\n}\n",
+    ".codex/config.toml": "# BEGIN Drakom AI Development Context MCP servers\n[mcp_servers.project-tools]\ncommand = \"node\"\nargs = [\"./scripts/mcp/server.mjs\"]\n\n[mcp_servers.project-tools.env]\nLOG_LEVEL = \"info\"\n\n[mcp_servers.documentation]\nurl = \"https://mcp.example.com/docs\"\n\n[mcp_servers.documentation.http_headers]\nX-Client = \"drakom-ai-dev-kit\"\nX-Extra = \"codex\"\n\n[mcp_servers.tracker]\nurl = \"https://mcp.example.com/issues\"\nbearer_token_env_var = \"TRACKER_TOKEN\"\n\n[mcp_servers.prompted]\ncommand = \"node\"\nargs = [\"./prompted.mjs\"]\n\n# END Drakom AI Development Context MCP servers\n"
+  },
+  "managedMcpServers": {
+    "project-tools": {
+      "sourceFingerprint": "sha256:b62712e4bf3f17fe9abfeb4079be30837d0c4f87251661d9f3b8c08731c66312",
+      "targetFingerprints": {
+        ".mcp.json": "sha256:b62712e4bf3f17fe9abfeb4079be30837d0c4f87251661d9f3b8c08731c66312",
+        ".vscode/mcp.json": "sha256:3fb56954539b6d0bf77bfcd19eae3f4045cd43f6d7ee1b6310f6bb431e025294",
+        ".agents/mcp_config.json": "sha256:b62712e4bf3f17fe9abfeb4079be30837d0c4f87251661d9f3b8c08731c66312",
+        ".codex/config.toml": "sha256:b62712e4bf3f17fe9abfeb4079be30837d0c4f87251661d9f3b8c08731c66312"
+      }
+    },
+    "documentation": {
+      "sourceFingerprint": "sha256:b5463eab27d6a573d8db5139fb4c817866cfaaa2d6443c0c074e8f87793ea735",
+      "targetFingerprints": {
+        ".mcp.json": "sha256:4f97a08f13934887924d738cf9b8dbd57fc4876c427674f2fdaa7c4cd08a75dc",
+        ".vscode/mcp.json": "sha256:4f97a08f13934887924d738cf9b8dbd57fc4876c427674f2fdaa7c4cd08a75dc",
+        ".agents/mcp_config.json": "sha256:4b375be0d0c80d27062ab719d79d705ea9e77f0f11c00f1f272b626009805bda",
+        ".codex/config.toml": "sha256:a7b3f561305646e92a6e9a786994fb39d027a96aa1f02c2bb3fe4526d78da61d"
+      }
+    },
+    "tracker": {
+      "sourceFingerprint": "sha256:d988f99d8bf0234821ea94316b9286c685532058fa97d4fb43e9e73300f4a1b7",
+      "targetFingerprints": {
+        ".mcp.json": "sha256:9d8641635d3dc22024b685e670d26be61add02507bf8712d7de8f94e09afa49d",
+        ".vscode/mcp.json": "sha256:d56d8eea1267ab96db7a84da7436e5e2fa24638558772353279188766b3eeb50",
+        ".codex/config.toml": "sha256:56bb461e610ee16e596bfef2b447564ebf8cbcf0372131c570195801e7649906"
+      }
+    },
+    "prompted": {
+      "sourceFingerprint": "sha256:7acda07e4345e20c0ea2a3ed3ee7a758cbccfc8cc4e9962d916518c0d8566373",
+      "targetFingerprints": {
+        ".mcp.json": "sha256:d6064f2ac5b4fd8767375481a438add80e8bd163b84291440c51fee0a2bd9c8d",
+        ".vscode/mcp.json": "sha256:ffd7ba933108194983c267ac17581c4cb9519e97fd637569b1d8b8c2b5a3648e",
+        ".agents/mcp_config.json": "sha256:d6064f2ac5b4fd8767375481a438add80e8bd163b84291440c51fee0a2bd9c8d",
+        ".codex/config.toml": "sha256:d6064f2ac5b4fd8767375481a438add80e8bd163b84291440c51fee0a2bd9c8d"
+      }
+    }
+  }
+}

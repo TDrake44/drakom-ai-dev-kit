@@ -34,7 +34,10 @@ export interface ClientOverrideConfig {
   transport?: string | undefined;
   /** `null` removes the base server's headers. */
   headers?: RemovableStringMap | null | undefined;
+  /** Accepted for registries written for earlier releases; no client is given it. */
   timeout?: number | undefined;
+  /** Antigravity's `timeoutSeconds`. */
+  timeoutSeconds?: number | undefined;
 }
 
 export interface BaseServerConfig {

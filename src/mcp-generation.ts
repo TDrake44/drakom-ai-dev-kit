@@ -21,8 +21,11 @@ import {
   generateAntigravityServer,
   generateClaudeServer,
   generateCodexServerSnippet,
+  generateVscodeRootServer,
   generateVscodeServer,
+  ignoredAntigravityOverrideKeys,
   sortKeys,
+  VscodeInputError,
 } from './mcp-renderers.js';
 
 export {
@@ -39,7 +42,10 @@ export { CODEX_BLOCK_END, CODEX_BLOCK_START, removeCodexServerFromToml } from '.
 
 const REGISTRY_PATH = `${DRAKOM_DIR}/mcp-servers.yaml`;
 
-/** The file each client reads. */
+/**
+ * The file the kit writes for each client. The root `.mcp.json` is shared: Claude Code reads it,
+ * and so does VS Code, whose own `.vscode/mcp.json` belongs to its deprecated Local harness.
+ */
 export const MCP_CLIENT_TARGETS: Record<McpClient, string> = {
   claude: '.mcp.json',
   vscode: '.vscode/mcp.json',
@@ -49,8 +55,9 @@ export const MCP_CLIENT_TARGETS: Record<McpClient, string> = {
 
 /** What the registry asks of one client file, beyond the servers to generate into it. */
 interface TargetSelection {
-  client: McpClient;
-  /** False when the registry's `clients` list leaves this client out; its file is then never a conflict. */
+  /** The client, or clients, the file is written for, as named in messages. */
+  client: string;
+  /** False when the registry's `clients` list leaves the file's clients out; the file is then never a conflict. */
   selected: boolean;
   /**
    * Servers the kit wrote into this file that the registry no longer wants there, through
@@ -576,6 +583,49 @@ export interface McpGenerationResult {
   nextManagedMcpServers: Record<string, ManagedMcpServerState>;
 }
 
+const ROOT_TARGET = MCP_CLIENT_TARGETS.claude;
+
+/**
+ * The root `.mcp.json` rendering of one server, and what the user should know about it.
+ *
+ * Claude Code and VS Code read the same root file, so it holds one version of each server: the
+ * claude one while claude is generated for that server, and otherwise the vscode one. A vscode
+ * version that differs, or that prompts with `${input:...}`, reaches VS Code only through
+ * `.vscode/mcp.json`.
+ */
+function sharedRootServer(
+  name: string,
+  server: BaseServerConfig,
+  forClaude: boolean,
+  forVscode: boolean,
+): { rendered?: Record<string, unknown>; note?: Operation } {
+  const claudeVersion = forClaude ? generateClaudeServer(server) : undefined;
+  if (!forVscode) return claudeVersion ? { rendered: claudeVersion } : {};
+
+  const vscodeOnly = `its vscode override only applies to ${MCP_CLIENT_TARGETS.vscode}`;
+  let vscodeVersion: Record<string, unknown>;
+  try {
+    vscodeVersion = generateVscodeRootServer(server);
+  } catch (error) {
+    if (!(error instanceof VscodeInputError)) throw error;
+    const cannot = `MCP server "${name}" uses ${error.input} for vscode, which ${ROOT_TARGET} cannot express`;
+    const summary = claudeVersion
+      ? `${cannot}; ${ROOT_TARGET} holds the claude version, and ${vscodeOnly}.`
+      : `${cannot}; the server is left out of ${ROOT_TARGET} and goes to ${MCP_CLIENT_TARGETS.vscode} only.`;
+    return { ...(claudeVersion ? { rendered: claudeVersion } : {}), note: { action: 'warning', path: ROOT_TARGET, summary } };
+  }
+  if (claudeVersion === undefined) return { rendered: vscodeVersion };
+  if (isDeepStrictEqual(claudeVersion, vscodeVersion)) return { rendered: claudeVersion };
+  return {
+    rendered: claudeVersion,
+    note: {
+      action: 'warning',
+      path: ROOT_TARGET,
+      summary: `MCP server "${name}" differs between claude and vscode; ${ROOT_TARGET} holds the claude version, and ${vscodeOnly}.`,
+    },
+  };
+}
+
 export function generateMcpOperations(
   registry: McpRegistry,
   inventory: TargetInventory,
@@ -588,16 +638,30 @@ export function generateMcpOperations(
     selectedClients.has(client) && !(server.skip ?? []).includes(client);
 
   // Generate for each client that wants the server
-  const claudeServers: Record<string, Record<string, unknown>> = {};
+  const rootServers: Record<string, Record<string, unknown>> = {};
   const vscodeServers: Record<string, Record<string, unknown>> = {};
   const agyServers: Record<string, Record<string, unknown>> = {};
   const codexServers: Record<string, BaseServerConfig> = {};
+  const rootNotes: Operation[] = [];
+  const registryNotes: Operation[] = [];
 
   for (const [name, server] of Object.entries(servers)) {
     try {
-      if (wants('claude', server)) claudeServers[name] = generateClaudeServer(server);
+      const root = sharedRootServer(name, server, wants('claude', server), wants('vscode', server));
+      if (root.rendered) rootServers[name] = root.rendered;
+      if (root.note) rootNotes.push(root.note);
       if (wants('vscode', server)) vscodeServers[name] = generateVscodeServer(server);
-      if (wants('antigravity', server)) agyServers[name] = generateAntigravityServer(server);
+      if (wants('antigravity', server)) {
+        agyServers[name] = generateAntigravityServer(server);
+        const ignored = ignoredAntigravityOverrideKeys(server).map((key) => `overrides.antigravity.${key}`);
+        if (ignored.length > 0) {
+          registryNotes.push({
+            action: 'warning',
+            path: REGISTRY_PATH,
+            summary: `MCP server "${name}": ${ignored.join(' and ')} ${ignored.length === 1 ? 'is' : 'are'} no longer written to ${MCP_CLIENT_TARGETS.antigravity}, because Antigravity does not define ${ignored.length === 1 ? 'that field' : 'those fields'}. Remove ${ignored.length === 1 ? 'it' : 'them'} from the registry; to set a timeout, use overrides.antigravity.timeoutSeconds, in seconds.`,
+          });
+        }
+      }
       if (wants('codex', server)) codexServers[name] = server;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -605,42 +669,70 @@ export function generateMcpOperations(
     }
   }
 
-  const selectionFor = (client: McpClient): TargetSelection => {
-    const targetPath = MCP_CLIENT_TARGETS[client];
+  /** The servers each client file is to hold, and whether the registry still selects the file at all. */
+  const targets: Array<{ path: string; label: string; selected: boolean; holds: (name: string) => boolean }> = [
+    {
+      path: ROOT_TARGET,
+      label: 'claude or vscode',
+      selected: selectedClients.has('claude') || selectedClients.has('vscode'),
+      holds: (name) => Object.hasOwn(rootServers, name),
+    },
+    ...(['vscode', 'antigravity', 'codex'] as const).map((client) => ({
+      path: MCP_CLIENT_TARGETS[client],
+      label: client,
+      selected: selectedClients.has(client),
+      holds: (name: string) => Object.hasOwn(servers, name) && wants(client, servers[name] ?? {}),
+    })),
+  ];
+
+  const selectionFor = (targetPath: string): TargetSelection => {
+    const target = targets.find(({ path }) => path === targetPath);
+    if (target === undefined) throw new Error(`Unknown MCP client file ${targetPath}`);
     const released = new Set<string>();
     for (const name of Object.keys(state.managedMcpServers)) {
       if (managedTargetFingerprint(state, name, targetPath) === undefined) continue;
-      const server = Object.hasOwn(servers, name) ? servers[name] : undefined;
-      // A server that left the registry altogether keeps its existing handling while its client is selected.
-      if (!selectedClients.has(client) || (server !== undefined && !wants(client, server))) released.add(name);
+      // A server that left the registry altogether keeps its existing handling while its file is selected.
+      if (!target.selected || (Object.hasOwn(servers, name) && !target.holds(name))) released.add(name);
     }
-    return { client, selected: selectedClients.has(client), released };
+    return { client: target.label, selected: target.selected, released };
   };
 
   // Only VS Code documents comments in its MCP file; the other JSON clients stay strict.
-  const preparations: Record<McpClient, JsonTargetPreparation> = {
-    claude: prepareJsonTarget(MCP_CLIENT_TARGETS.claude, 'mcpServers', claudeServers, inventory, state, JSON.parse, selectionFor('claude')),
-    vscode: prepareJsonTarget(MCP_CLIENT_TARGETS.vscode, 'servers', vscodeServers, inventory, state, parseJsonc, selectionFor('vscode')),
-    antigravity: prepareJsonTarget(
+  const preparations: Record<string, JsonTargetPreparation> = {
+    [ROOT_TARGET]: prepareJsonTarget(ROOT_TARGET, 'mcpServers', rootServers, inventory, state, JSON.parse, selectionFor(ROOT_TARGET)),
+    [MCP_CLIENT_TARGETS.vscode]: prepareJsonTarget(
+      MCP_CLIENT_TARGETS.vscode,
+      'servers',
+      vscodeServers,
+      inventory,
+      state,
+      parseJsonc,
+      selectionFor(MCP_CLIENT_TARGETS.vscode),
+    ),
+    [MCP_CLIENT_TARGETS.antigravity]: prepareJsonTarget(
       MCP_CLIENT_TARGETS.antigravity,
       'mcpServers',
       agyServers,
       inventory,
       state,
       JSON.parse,
-      selectionFor('antigravity'),
+      selectionFor(MCP_CLIENT_TARGETS.antigravity),
     ),
-    codex: prepareCodexTarget(codexServers, inventory, state, selectionFor('codex')),
+    [MCP_CLIENT_TARGETS.codex]: prepareCodexTarget(codexServers, inventory, state, selectionFor(MCP_CLIENT_TARGETS.codex)),
   };
-  for (const client of MCP_CLIENTS) operations.push(...preparations[client].operations);
+  operations.push(...registryNotes);
+  for (const { path } of targets) {
+    operations.push(...(preparations[path]?.operations ?? []));
+    if (path === ROOT_TARGET) operations.push(...rootNotes);
+  }
 
   // A server is recorded only for the client files it is generated into.
   const nextManagedMcpServers: Record<string, ManagedMcpServerState> = {};
   for (const [name, server] of Object.entries(servers)) {
     const targetFingerprints: Record<string, string> = {};
-    for (const client of MCP_CLIENTS) {
-      if (wants(client, server)) {
-        targetFingerprints[MCP_CLIENT_TARGETS[client]] = preparations[client].targetFingerprints[name] ?? '';
+    for (const target of targets) {
+      if (target.selected && target.holds(name)) {
+        targetFingerprints[target.path] = preparations[target.path]?.targetFingerprints[name] ?? '';
       }
     }
     nextManagedMcpServers[name] = { sourceFingerprint: fingerprintObject(server), targetFingerprints };

@@ -17,11 +17,10 @@ servers:
       url: https://mcp.example.com/docs
       headers:
         X-Client: drakom-ai-dev-kit
+    # Antigravity's own timeout field, in seconds.
     overrides:
       antigravity:
-        serverUrl: https://mcp.example.com/docs
-        transport: http
-        timeout: 30000
+        timeoutSeconds: 30
 
   # A server that reads a secret from the environment. Antigravity cannot expand
   # ${VAR}, so this server is not generated for it.

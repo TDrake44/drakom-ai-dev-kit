@@ -1,0 +1,11 @@
+---
+'@drakom/ai-dev-kit': minor
+---
+
+Write MCP client files the way each client reads them today.
+
+- VS Code's Copilot harness reads the root `.mcp.json`, so that file is now written when `clients` includes `claude` or `vscode`, and a server goes into it when it is generated for either. A registry that selects both, including one without `clients`, gets the same files and state as before. When the claude and vscode versions of a server differ, `.mcp.json` keeps the claude version and `sync` lists a `WARNING` row; a server that prompts with `${input:...}` goes to `.vscode/mcp.json` only, with a `WARNING` row. `.vscode/mcp.json` belongs to VS Code's deprecated Local harness, removed in February 2027, and is still written for `vscode`.
+- Antigravity now receives only the fields its MCP documentation defines: `serverUrl`, `headers`, `command`, `args`, `env` and the new `overrides.antigravity.timeoutSeconds`. It no longer receives `transport` or `timeout`; `overrides.antigravity.type`, `transport` and `timeout` are still accepted, are not written, and are named in a `WARNING` row. The next `sync` rewrites existing `.agents/mcp_config.json` entries without a conflict.
+- The managed block in `.codex/config.toml` is rewritten where it is, keeping the text before and after it byte for byte, including CRLF line endings. A server written as an inline table or with dotted keys is detected: adopted when identical, a conflict when different, and never duplicated.
+- Servers between the old "AI Framework Blueprint" markers in `.codex/config.toml` are now treated as unmanaged content: they are kept, an identical server is adopted, and a different same-name server is a conflict. Before, the kit replaced that block, dropping any server in it that the registry did not list.
+- A `__proto__` entry in `.drakom-ai/state.json`, or a `__proto__` key in an MCP server definition, is refused with an error that says what to remove or rename, instead of being dropped silently. `constructor` keeps working as a name.
