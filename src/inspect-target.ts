@@ -146,6 +146,9 @@ async function resolveTargetRoot(typedRoot: string): Promise<string> {
     if (isMissingPath(error)) {
       throw new Error(`Target path ${typedRoot} is a symlink to ${linkTarget}, which does not exist.`);
     }
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ELOOP') {
+      throw new Error(`Target path ${typedRoot} is a symlink to ${linkTarget}, which is part of a symlink loop.`);
+    }
     throw error;
   }
   if (!(await stat(resolved)).isDirectory()) {

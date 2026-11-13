@@ -31,6 +31,12 @@ async function scratch(t) {
 }
 
 /**
+ * The link type for a directory: a junction on Windows, which needs no privilege and which Node
+ * reports as a symlink.
+ */
+const dirLink = process.platform === 'win32' ? 'junction' : 'dir';
+
+/**
  * Create a symlink, or skip the test where the platform does not permit one.
  * @param {import('node:test').TestContext} t
  * @param {string} target
@@ -40,7 +46,7 @@ async function scratch(t) {
  */
 async function trySymlink(t, target, linkPath, type) {
   try {
-    await symlink(target, linkPath, type);
+    await symlink(target, linkPath, type === 'dir' ? dirLink : type);
     return true;
   } catch (error) {
     if (error instanceof Error && 'code' in error && (error.code === 'EPERM' || error.code === 'EACCES')) {
@@ -100,7 +106,7 @@ test('the kit still refuses to write through a symlink inside a symlinked target
   const outside = path.join(base, 'outside');
   await mkdir(outside);
   if (!(await trySymlink(t, repo, link, 'dir'))) return;
-  await symlink(outside, path.join(repo, '.claude'), 'dir');
+  await symlink(outside, path.join(repo, '.claude'), dirLink);
 
   const init = drakom(['init', link, '--yes']);
 
@@ -116,7 +122,7 @@ test('a target symlink to a file or to nothing is reported as a link with its de
   const danglingLink = path.join(base, 'dangling-link');
   const missing = path.join(base, 'missing');
   if (!(await trySymlink(t, file, fileLink, 'file'))) return;
-  await symlink(missing, danglingLink, 'dir');
+  await symlink(missing, danglingLink, dirLink);
 
   const toFile = drakom(['init', fileLink, '--yes']);
   const toNothing = drakom(['sync', danglingLink]);
@@ -130,5 +136,33 @@ test('a target symlink to a file or to nothing is reported as a link with its de
   assert.equal(
     toNothing.stderr.trim(),
     `drakom-ai: Target path ${danglingLink} is a symlink to ${missing}, which does not exist.`,
+  );
+});
+
+test('a path typed from the current directory through the link gets the "Did you mean" hint', async (t) => {
+  const { base, repo } = await scratch(t);
+  const link = path.join(base, 'link');
+  if (!(await trySymlink(t, repo, link, 'dir'))) return;
+  assert.equal(drakom(['init', link, '--yes']).status, 0);
+
+  const sync = drakom(['sync', 'link', '--accept', path.join('link', ...setupSkill.split('/'))], base);
+
+  assert.equal(sync.status, 1);
+  assert.match(sync.stderr, new RegExp(`Did you mean ${setupSkill.replaceAll('.', '\\.')}\\? Paths are relative to the target`));
+});
+
+test('a target symlink that is part of a loop is reported as a link with its destination', async (t) => {
+  const { base } = await scratch(t);
+  const first = path.join(base, 'first');
+  const second = path.join(base, 'second');
+  if (!(await trySymlink(t, second, first, 'dir'))) return;
+  await symlink(first, second, dirLink);
+
+  const result = drakom(['sync', first]);
+
+  assert.equal(result.status, 1);
+  assert.equal(
+    result.stderr.trim(),
+    `drakom-ai: Target path ${first} is a symlink to ${second}, which is part of a symlink loop.`,
   );
 });

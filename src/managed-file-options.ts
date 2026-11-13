@@ -91,19 +91,25 @@ async function normalizeOptionPath(
   }
 }
 
-/** A managed file the user probably meant: the same path read from the current directory, or in another letter case. */
-function suggestManagedPath(
+/**
+ * A managed file the user probably meant: the same path read from the current directory, or in
+ * another letter case. A path from the current directory may reach the target through a symlink.
+ */
+async function suggestManagedPath(
   value: string,
   managedPath: string,
   managedFiles: Record<string, unknown>,
   root: string,
   cwd: string,
   pathApi: path.PlatformPath,
-): string {
+): Promise<string> {
   if (!pathApi.isAbsolute(value)) {
-    const fromCwd = pathApi.relative(root, pathApi.resolve(cwd, value)).split(pathApi.sep).join('/');
-    if (Object.hasOwn(managedFiles, fromCwd)) {
-      return ` Did you mean ${fromCwd}? Paths are relative to the target, not the current directory.`;
+    const fromCwd = pathApi.resolve(cwd, value);
+    for (const candidate of [fromCwd, await realpathOfExistingPart(fromCwd, pathApi)]) {
+      const relative = pathApi.relative(root, candidate).split(pathApi.sep).join('/');
+      if (Object.hasOwn(managedFiles, relative)) {
+        return ` Did you mean ${relative}? Paths are relative to the target, not the current directory.`;
+      }
     }
   }
   const sameLetters = Object.keys(managedFiles).find((known) => known.toLowerCase() === managedPath.toLowerCase());
@@ -135,7 +141,7 @@ export async function resolveManagedFileOptions(
     for (const value of values) {
       const managedPath = await normalizeOptionPath(value, inventory.root, option, pathApi);
       if (!Object.hasOwn(managedFiles, managedPath)) {
-        const hint = suggestManagedPath(value, managedPath, managedFiles, inventory.root, options.cwd ?? inventory.root, pathApi);
+        const hint = await suggestManagedPath(value, managedPath, managedFiles, inventory.root, options.cwd ?? inventory.root, pathApi);
         throw new Error(
           `${option} ${managedPath}: ${describeUnmanagedPath(inventory, managedPath)}. ${option} applies to kit-managed files only.${hint}`,
         );
