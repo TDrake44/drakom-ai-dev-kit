@@ -9,7 +9,7 @@
 
 ## Assessment Entries
 
-List every relevant source, or a bounded group of related sources, under Keep, Refine, Add, or Omit. Include `.drakom-ai/plans/` and `.drakom-ai/specs/` even when search tools skip them because of `.gitignore`. Record each entry with these fields:
+List every relevant source, or a bounded group of related sources, under Keep, Refine, Add, or Omit, one row per source: path, evidence, and decision. Include `.drakom-ai/plans/` and `.drakom-ai/specs/` even when search tools skip them because of `.gitignore`. Record the full set of fields below only for items being added or changed (Add, Refine); Keep and Omit rows need just the row and a one-line reason:
 
 - Source path and evidence:
 - Ownership (kit-managed, generated, project-owned, unmanaged, or unknown):

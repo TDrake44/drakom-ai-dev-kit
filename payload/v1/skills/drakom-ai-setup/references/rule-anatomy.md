@@ -4,16 +4,16 @@ Use this reference when an approved Add item is a rule in `.drakom-ai/rules/`. A
 
 ## Anatomy
 
-Every rule file has four sections, in this order:
+A rule file has these sections, in this order. Prohibited Patterns is optional; omit it when there is no real failure to record.
 
 1. **Scope**: the files, directories, or tasks the rule applies to. Name concrete paths or globs so an agent can tell whether the rule is relevant.
 2. **Required Patterns**: the idioms, conventions, and architectural structures this repository expects. State the desired pattern directly; this is where most guidance belongs.
-3. **Prohibited Patterns**: failures agents have introduced here, or plausibly would, that formatters, linters, types, and tests do not already catch. Give each prohibition its reason.
+3. **Prohibited Patterns** (optional): failures agents have introduced here, or plausibly would, that formatters, linters, types, and tests do not already catch. Give each prohibition its reason.
 4. **Verification**: the repository's actual commands that check compliance, or the manual check to perform when no command exists.
 
 ## Budget and Content
 
-- Keep each rule within a budget of 150–200 lines. Split a rule by scope before exceeding it, and move deep-dive material into a companion `<rule>-reference.md` routed on demand.
+- Keep each rule short; most need well under 100 lines. Treat 150 lines as a hard ceiling, not a target: split a rule by scope before exceeding it, and move deep-dive material into a companion `<rule>-reference.md` routed on demand.
 - Prefer stating the desired pattern under Required Patterns over listing what to avoid.
 - Add a prohibition only when the failure is real in this repository: seen in history, review, or incident evidence, or a near-certain consequence of the stack. Each prohibition states its reason so an agent can judge edge cases.
 - Omit anything formatters, linters, types, or tests already enforce, unless an agent needs it to choose the correct approach before the tooling runs.
