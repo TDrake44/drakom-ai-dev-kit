@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { DRAKOM_DIR } from '../dist/constants.js';
@@ -61,12 +61,20 @@ function readState(root) {
   return readJson(root, STATE);
 }
 
+/** @type {string[]} Temporary targets made by the running test, removed when it ends. */
+const createdRoots = [];
+
+afterEach(async () => {
+  await Promise.all(createdRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
 /**
  * An initialized target with the given registry, not yet synchronized.
  * @param {string} registry
  */
 async function createTarget(registry) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-output-'));
+  createdRoots.push(root);
   const init = drakom('init', root, ['--yes']);
   assert.equal(init.status, 0, init.stderr);
   await write(root, REGISTRY, registry);
@@ -221,6 +229,51 @@ test('an Antigravity file written with transport and timeout is corrected withou
   assertInSync(root);
 });
 
+test('an Antigravity entry the user already corrected by hand is recorded, not a conflict', async () => {
+  const registry = `servers:
+  documentation:
+    http:
+      url: https://mcp.example.com/docs
+`;
+  const root = await createTarget(registry);
+  syncOk(root);
+  // The previous release wrote and recorded the entry with transport and timeout; the user has since
+  // deleted those two fields by hand, so the file already holds what this release writes.
+  const written = await read(root, ANTIGRAVITY);
+  const { fingerprintObject } = await import('../dist/mcp-renderers.js');
+  const state = await readState(root);
+  state.managedMcpServers.documentation.targetFingerprints[ANTIGRAVITY] = fingerprintObject({
+    serverUrl: 'https://mcp.example.com/docs',
+    transport: 'sse',
+    timeout: 30000,
+  });
+  await write(root, STATE, `${JSON.stringify(state, null, 2)}\n`);
+
+  const result = syncOk(root);
+
+  assert.doesNotMatch(result.stdout, /^CONFLICT/m);
+  assert.equal(await read(root, ANTIGRAVITY), written);
+  assert.equal(
+    (await readState(root)).managedMcpServers.documentation.targetFingerprints[ANTIGRAVITY],
+    fingerprintObject({ serverUrl: 'https://mcp.example.com/docs' }),
+  );
+  assertInSync(root);
+});
+
+test('a JSON entry edited by hand to exactly what the registry now generates is not a conflict', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  syncOk(root);
+  const edited = (await read(root, ROOT)).replace('./alpha.mjs', './changed.mjs');
+  await write(root, ROOT, edited);
+  await write(root, REGISTRY, ALPHA_ONLY.replace('./alpha.mjs', './changed.mjs'));
+
+  const result = syncOk(root);
+
+  assert.doesNotMatch(result.stdout, /^CONFLICT/m);
+  assert.equal(await read(root, ROOT), edited);
+  assertInSync(root);
+});
+
 test('the example registry uses the documented Antigravity fields and raises no warning', async () => {
   const example = await readFile(path.join(repositoryRoot, 'examples', 'mcp-servers.yaml'), 'utf8');
   const root = await createTarget(example);
@@ -329,7 +382,7 @@ servers:
   assertNoDrift(root);
 });
 
-test('a server skipped for claude still reaches the root file through vscode', async () => {
+test('a server skipped for claude stays out of the root file, and vscode gets it from .vscode/mcp.json with a warning', async () => {
   const root = await createTarget(`servers:
   tools:
     command: node
@@ -337,16 +390,58 @@ test('a server skipped for claude still reaches the root file through vscode', a
   other:
     command: node
     skip: [claude, vscode]
+  shared:
+    command: node
 `);
 
   const result = syncOk(root);
 
-  assert.doesNotMatch(result.stdout, /^(CONFLICT|WARNING)/m);
-  assert.deepEqual(await readJson(root, ROOT), { mcpServers: { tools: { command: 'node' } } });
+  assert.doesNotMatch(result.stdout, /^CONFLICT/m);
+  const warnings = rows(result.stdout, 'WARNING');
+  assert.equal(warnings.length, 1, result.stdout);
+  assert.match(warnings[0] ?? '', /WARNING\s+\.mcp\.json.*"tools".*skips claude.*Copilot harness.*\.vscode\/mcp\.json/);
+  assert.deepEqual(await readJson(root, ROOT), { mcpServers: { shared: { command: 'node' } } });
+  assert.deepEqual((await readJson(root, VSCODE)).servers.tools, { type: 'stdio', command: 'node' });
   const state = await readState(root);
-  assert.deepEqual(Object.keys(state.managedMcpServers.tools.targetFingerprints), [ROOT, VSCODE, ANTIGRAVITY, CODEX]);
+  assert.deepEqual(Object.keys(state.managedMcpServers.tools.targetFingerprints), [VSCODE, ANTIGRAVITY, CODEX]);
   assert.deepEqual(Object.keys(state.managedMcpServers.other.targetFingerprints), [ANTIGRAVITY, CODEX]);
-  assertInSync(root);
+  assertNoDrift(root);
+});
+
+test('skip: [claude] keeps a server out of the root file even when claude is not in clients', async () => {
+  const root = await createTarget(`clients: [vscode]
+servers:
+  tools:
+    command: node
+    skip: [claude]
+  plain:
+    command: node
+`);
+
+  const result = syncOk(root);
+
+  assert.equal(rows(result.stdout, 'WARNING').length, 1, result.stdout);
+  assert.deepEqual(await readJson(root, ROOT), { mcpServers: { plain: { command: 'node' } } });
+  assert.deepEqual(Object.keys((await readState(root)).managedMcpServers.tools.targetFingerprints), [VSCODE]);
+  assertNoDrift(root);
+});
+
+test('upgrading leaves a user\'s own same-name root entry alone when the server skips claude', async () => {
+  const root = await createTarget(`servers:
+  s1:
+    command: node
+    skip: [claude]
+`);
+  const own = `${JSON.stringify({ mcpServers: { s1: { command: 'python', args: ['mine.py'] } } }, null, 2)}\n`;
+  await write(root, ROOT, own);
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 0, result.stdout);
+  assert.doesNotMatch(result.stdout, /^CONFLICT/m);
+  assert.equal(await read(root, ROOT), own);
+  assert.deepEqual((await readJson(root, VSCODE)).servers.s1, { type: 'stdio', command: 'node' });
+  assertNoDrift(root);
 });
 
 test('a server that prompts with ${input:} goes to .vscode/mcp.json only, with a warning', async () => {

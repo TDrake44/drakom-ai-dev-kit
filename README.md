@@ -264,7 +264,10 @@ which is deprecated and will be removed in February 2027; a later release of
 the kit will stop generating `.vscode/mcp.json`. Until then:
 
 - `.mcp.json` is written when `clients` includes `claude` or `vscode`. A server
-  goes into it when it is generated for either of them.
+  goes into it when it is generated for either of them, unless it has
+  `skip: [claude]`: Claude Code reads `.mcp.json`, so such a server stays out of
+  it, goes to `.vscode/mcp.json` only, and `sync` lists a `WARNING` row because
+  VS Code's Copilot harness will not see it from `.mcp.json`.
 - `.mcp.json` holds one version of each server. When both clients are
   selected and `overrides.claude` and `overrides.vscode` give different
   results, it holds the claude version, and `sync` lists a `WARNING` row: the
@@ -307,7 +310,9 @@ servers:
 - `clients` is a non-empty list of `claude`, `vscode`, `antigravity`, `codex`,
   without repeats. The kit does not generate a file for a client that is left
   out, and that client's file is never a conflict, whether it exists, is
-  missing, or is invalid.
+  missing, or is invalid. The shared `.mcp.json` is the exception: it belongs
+  to both `claude` and `vscode`, so it is generated, and can be a conflict,
+  while either of them is selected.
 - `skip` leaves one server out of the listed clients. It may name a client that
   `clients` already leaves out. A server that skips every selected client is an
   error; remove the server instead.

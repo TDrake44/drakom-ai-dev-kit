@@ -13,9 +13,28 @@ export interface CodexBlockLocation {
   after: string;
 }
 
+/**
+ * Where a marker stands as a comment line of its own: the marker alone on its line, with optional
+ * indentation and trailing whitespace. A line inside a multi-line string is not a comment, and the
+ * text before such a line does not parse, which is how it is told apart.
+ */
+function markerIndex(text: string, marker: string): number {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lineRegex = new RegExp(`^[ \\t]*${escaped}[ \\t]*\\r?$`, 'gm');
+  for (let match = lineRegex.exec(text); match !== null; match = lineRegex.exec(text)) {
+    try {
+      parseToml(text.slice(0, match.index));
+      return match.index + (match[0].length - match[0].trimStart().length);
+    } catch {
+      // Inside a string or another construct that spans lines.
+    }
+  }
+  return -1;
+}
+
 export function locateCodexBlock(text: string): CodexBlockLocation | null {
-  const startIndex = text.indexOf(CODEX_BLOCK_START);
-  const endIndex = text.indexOf(CODEX_BLOCK_END);
+  const startIndex = markerIndex(text, CODEX_BLOCK_START);
+  const endIndex = markerIndex(text, CODEX_BLOCK_END);
   if (startIndex === -1 && endIndex === -1) return null;
   if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
     throw new Error('Managed MCP block in .codex/config.toml is malformed');

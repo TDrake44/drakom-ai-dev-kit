@@ -189,7 +189,9 @@ function prepareJsonTarget(
         }
       } else {
         const actualFp = fingerprintObject(currentServers[serverName]);
-        if (actualFp !== prevFp) {
+        // An entry already edited into exactly what the kit now writes is up to date, and is recorded as such.
+        const generated = Object.hasOwn(generatedServers, serverName) ? generatedServers[serverName] : undefined;
+        if (actualFp !== prevFp && (generated === undefined || actualFp !== fingerprintObject(generated))) {
           operations.push({
             action: 'conflict',
             path: targetPath,
@@ -376,6 +378,20 @@ function prepareCodexTarget(
   if (!selection.selected && !located) {
     return { operations, targetFingerprints };
   }
+  // In TOML, keys directly after the block belong to the block's last table, so a rewrite could hand
+  // them to a different server. Only comments and blank lines may come before the next table header.
+  const looseLine = located?.after.split(/\r?\n/).find((line) => line.trim().length > 0 && !/^\s*#/.test(line));
+  if (looseLine !== undefined && !/^\s*\[/.test(looseLine)) {
+    operations.push(
+      unusableTarget(
+        targetPath,
+        selection,
+        `the text after the managed block must start with a table header, and "${looseLine.trim()}" comes first`,
+        'move that line under the table it belongs to, or put a table header above it.',
+      ),
+    );
+    return { operations, targetFingerprints };
+  }
 
   // The block is rewritten where it is: the text on either side of it is the user's.
   let before = located ? located.before : existing;
@@ -385,6 +401,13 @@ function prepareCodexTarget(
   const keptEntries: string[] = [];
   const keptNames = new Set<string>();
   let blockServers: Record<string, unknown> = {};
+  const expectedCodexFingerprint = (serverName: string): string | undefined => {
+    if (!Object.hasOwn(generatedServers, serverName)) return undefined;
+    const generated = generatedServers[serverName];
+    if (generated === undefined) return undefined;
+    const expected = codexServersOf(renderCodexSnippet(serverName, generated))[serverName];
+    return isRecord(expected) ? fingerprintObject(expected) : undefined;
+  };
   if (located) {
     // Check if previously managed servers were manually edited inside the block
     try {
@@ -418,7 +441,8 @@ function prepareCodexTarget(
           }
         } else {
           const actualFp = fingerprintObject(blockServers[serverName]);
-          if (actualFp !== prevFp) {
+          // An entry already edited into exactly what the kit now writes is up to date, and is recorded as such.
+          if (actualFp !== prevFp && actualFp !== expectedCodexFingerprint(serverName)) {
             operations.push({
               action: 'conflict',
               path: targetPath,
@@ -461,15 +485,14 @@ function prepareCodexTarget(
         });
         continue;
       }
-    } else if (located) {
-      // Its place in the block was checked above; anything outside is the user's addition to it.
-      continue;
-    } else if (fingerprintObject(outsideServer) !== prevFp) {
-      // Recorded as the kit's, but the file has no managed block: the markers were removed or are an older kind.
+    } else if (located || fingerprintObject(outsideServer) !== prevFp) {
+      // Recorded as the kit's, but defined outside the block: a table or keys the user added to it there
+      // (they would attach to whatever the kit writes, or be left behind when it removes the server), or a
+      // changed copy in a file whose markers were removed.
       operations.push({
         action: 'conflict',
         path: targetPath,
-        summary: `Cannot safely update ${targetPath}: managed MCP server "${serverName}" is defined outside the managed block and is not what the kit wrote. Safe next action: remove "${serverName}" from ${targetPath} so the kit can write it again, or rename the server in ${DRAKOM_DIR}/mcp-servers.yaml.`,
+        summary: `Cannot safely update ${targetPath}: managed MCP server "${serverName}" is defined outside the managed block, in whole or in part, and is not what the kit wrote. Safe next action: remove "${serverName}" from outside the block in ${targetPath} (set what it adds in ${DRAKOM_DIR}/mcp-servers.yaml instead), or rename the server in ${DRAKOM_DIR}/mcp-servers.yaml.`,
       });
       continue;
     }
@@ -591,7 +614,7 @@ const ROOT_TARGET = MCP_CLIENT_TARGETS.claude;
  * Claude Code and VS Code read the same root file, so it holds one version of each server: the
  * claude one while claude is generated for that server, and otherwise the vscode one. A vscode
  * version that differs, or that prompts with `${input:...}`, reaches VS Code only through
- * `.vscode/mcp.json`.
+ * `.vscode/mcp.json`. A server that skips claude stays out of the root file, which Claude Code reads.
  */
 function sharedRootServer(
   name: string,
@@ -601,6 +624,15 @@ function sharedRootServer(
 ): { rendered?: Record<string, unknown>; note?: Operation } {
   const claudeVersion = forClaude ? generateClaudeServer(server) : undefined;
   if (!forVscode) return claudeVersion ? { rendered: claudeVersion } : {};
+  if ((server.skip ?? []).includes('claude')) {
+    return {
+      note: {
+        action: 'warning',
+        path: ROOT_TARGET,
+        summary: `MCP server "${name}" skips claude, so it is left out of ${ROOT_TARGET}, which Claude Code reads; VS Code's Copilot harness will not see it from ${ROOT_TARGET}, and VS Code gets it from ${MCP_CLIENT_TARGETS.vscode} only.`,
+      },
+    };
+  }
 
   const vscodeOnly = `its vscode override only applies to ${MCP_CLIENT_TARGETS.vscode}`;
   let vscodeVersion: Record<string, unknown>;

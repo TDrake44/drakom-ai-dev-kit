@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parse as parseTomlText } from 'smol-toml';
 
@@ -44,12 +44,20 @@ async function readState(root) {
   return JSON.parse(await read(root, STATE));
 }
 
+/** @type {string[]} Temporary targets made by the running test, removed when it ends. */
+const createdRoots = [];
+
+afterEach(async () => {
+  await Promise.all(createdRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
 /**
  * An initialized target with the given registry, not yet synchronized.
  * @param {string} registry
  */
 async function createTarget(registry) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-output-'));
+  createdRoots.push(root);
   const init = drakom('init', root, ['--yes']);
   assert.equal(init.status, 0, init.stderr);
   await write(root, REGISTRY, registry);
@@ -413,3 +421,111 @@ test('a recorded server edited between legacy Blueprint markers is a conflict', 
   assert.equal(await read(root, CODEX), legacy);
 });
 
+
+// ---------------------------------------------------------------------------
+// Codex: block markers are whole comment lines
+// ---------------------------------------------------------------------------
+
+test('marker text inside a TOML string is not a managed block', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  const original = `notes = """\n${BLOCK_START}\n"""\ninline = "see ${BLOCK_END}"\n`;
+  await write(root, CODEX, original);
+
+  const result = syncOk(root);
+
+  assert.doesNotMatch(result.stdout, /malformed/);
+  const text = await read(root, CODEX);
+  assert.equal(text, `${original}\n${BLOCK_START}\n${ALPHA_TABLE}\n${BLOCK_END}\n`);
+  assert.equal(parseToml(text).notes, `${BLOCK_START}\n`);
+  assertInSync(root);
+});
+
+test('marker text in a string before a real block leaves the real block to be rewritten in place', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  syncOk(root);
+  const block = await read(root, CODEX);
+  const before = `notes = """\n${BLOCK_END}\n${BLOCK_START}\n"""\n\n`;
+  const after = '\n[profiles.mine]\nmodel = "other"\n';
+  await write(root, CODEX, `${before}${block}${after}`);
+  await write(root, REGISTRY, ALPHA_ONLY.replace('./alpha.mjs', './changed.mjs'));
+
+  syncOk(root);
+
+  assert.equal(await read(root, CODEX), `${before}${block.replace('./alpha.mjs', './changed.mjs')}${after}`);
+  assertInSync(root);
+});
+
+test('indented markers with CRLF endings are still found', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  await write(root, CODEX, `model = "x"\r\n\r\n  ${BLOCK_START}\r\n[mcp_servers.alpha]\r\ncommand = "node"\r\nargs = ["./alpha.mjs"]\r\n  ${BLOCK_END}  \r\n`);
+
+  syncOk(root);
+
+  const text = await read(root, CODEX);
+  assert.equal(count(text, '[mcp_servers.alpha]'), 1, text);
+  assertOnlyCrlf(text);
+  assertInSync(root);
+});
+
+// ---------------------------------------------------------------------------
+// Codex: what follows the managed block
+// ---------------------------------------------------------------------------
+
+test('loose keys directly after the managed block are a conflict that names the first one', async () => {
+  const root = await createTarget(TWO_SERVERS);
+  syncOk(root);
+  const edited = `${await read(root, CODEX)}\n# my note\nstartup_timeout_sec = 20\n\n[profiles.mine]\nmodel = "other"\n`;
+  await write(root, CODEX, edited);
+  await write(root, REGISTRY, ALPHA_ONLY);
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 2, result.stdout);
+  assert.match(
+    result.stdout,
+    /CONFLICT \.codex\/config\.toml.*after the managed block must start with a table header.*"startup_timeout_sec = 20"/,
+  );
+  assert.equal(await read(root, CODEX), edited);
+});
+
+test('comments and blank lines after the managed block are fine before a table header', async () => {
+  const root = await createTarget(TWO_SERVERS);
+  syncOk(root);
+  const block = await read(root, CODEX);
+  const after = '\n# my note\n\n   # indented note\n[profiles.mine]\nmodel = "other"\n';
+  await write(root, CODEX, `${block}${after}`);
+  await write(root, REGISTRY, ALPHA_ONLY);
+
+  syncOk(root);
+
+  assert.equal(await read(root, CODEX), `${BLOCK_START}\n${ALPHA_TABLE}\n${BLOCK_END}\n${after}`);
+  assertInSync(root);
+});
+
+test('a sub-table the user adds to a managed server outside the block is a conflict', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  syncOk(root);
+  const edited = `${await read(root, CODEX)}\n[mcp_servers.alpha.env]\nMINE = "1"\n`;
+  await write(root, CODEX, edited);
+  await write(root, REGISTRY, ALPHA_ONLY.replace('./alpha.mjs', './changed.mjs'));
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 2, result.stdout);
+  assert.match(result.stdout, /CONFLICT \.codex\/config\.toml.*"alpha" is defined outside the managed block/);
+  assert.equal(await read(root, CODEX), edited);
+});
+
+test('a Codex entry edited by hand to exactly what the registry now generates is not a conflict', async () => {
+  const root = await createTarget(ALPHA_ONLY);
+  syncOk(root);
+  const edited = (await read(root, CODEX)).replace('./alpha.mjs', './changed.mjs');
+  await write(root, CODEX, edited);
+  await write(root, REGISTRY, ALPHA_ONLY.replace('./alpha.mjs', './changed.mjs'));
+
+  const result = syncOk(root);
+
+  assert.doesNotMatch(result.stdout, /^CONFLICT/m);
+  assert.equal(await read(root, CODEX), edited);
+  assertInSync(root);
+});
