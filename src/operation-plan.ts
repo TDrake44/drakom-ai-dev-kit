@@ -1132,7 +1132,10 @@ function planMcp(inventory: TargetInventory, state: InstallState, operations: Op
               const mcpGenResult = generateMcpOperations(validation.registry, inventory, state);
               if (mcpGenResult.operations.some(({ action }) => action === 'conflict')) {
                 // Server records span every client file, so one MCP conflict holds back all MCP writes.
-                operations.push(...mcpGenResult.operations.filter((operation) => !isMutation(operation)));
+                // Warnings go too: they report entries as released, and nothing is released yet.
+                operations.push(
+                  ...mcpGenResult.operations.filter((operation) => !isMutation(operation) && operation.action !== 'warning'),
+                );
               } else {
                 operations.push(...mcpGenResult.operations);
                 nextManagedMcpServers = mcpGenResult.nextManagedMcpServers;
@@ -1295,7 +1298,8 @@ export function buildSyncPlan(
   const mirrorPlan = planSkillMirrors(inventory, state, operations);
   const mcpStart = operations.length;
   let mcpPlan = planMcp(inventory, state, operations);
-  const mcpMutations = operations.slice(mcpStart).filter(isMutation);
+  const mcpOperations = operations.slice(mcpStart);
+  const mcpMutations = mcpOperations.filter(isMutation);
 
   // Guard before the state update so that state records only what survives, and again after for the state file itself.
   const planned = operations;
@@ -1304,7 +1308,10 @@ export function buildSyncPlan(
   const refusedWrites = planned.filter((operation) => isMutation(operation) && !surviving.has(operation));
   holdMirrorsOfUnsettledSkills(operations, [...managedFilePlan.conflicted, ...refusedWrites.map(({ path }) => path)]);
   if (mcpMutations.some((operation) => !surviving.has(operation))) {
-    operations = operations.filter((operation) => !mcpMutations.includes(operation));
+    // The release warnings describe a state change that is now not happening.
+    operations = operations.filter(
+      (operation) => !mcpMutations.includes(operation) && !(operation.action === 'warning' && mcpOperations.includes(operation)),
+    );
     mcpPlan = { nextManagedMcpServers: { ...state.managedMcpServers }, turnsMcpOn: false };
   }
   const addedManagedFiles: Record<string, ManagedFileState> = {};

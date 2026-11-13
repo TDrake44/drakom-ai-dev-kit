@@ -287,7 +287,7 @@ and the kit had written it into that client's file:
 | The entry in the client file | What `sync` does |
 | --- | --- |
 | Is still what the kit wrote | Removes that entry and stops tracking it. |
-| Was edited | Leaves it, stops tracking it, and lists a `WARNING` row. In `.codex/config.toml` the entry moves out of the managed block, text unchanged. |
+| Was edited | Leaves it, stops tracking it, and lists a `WARNING` row. In `.codex/config.toml` the entry moves out of the managed block: its tables, and comment lines directly above a table header, are kept as written; its position in the file and blank lines around it may change. |
 | Is gone, or the file is gone or unreadable | Stops tracking it. |
 
 The kit never deletes a client file and never touches servers it did not write.
@@ -335,8 +335,18 @@ and the generated files are committed. A value is refused when:
   not;
 - its header is `Authorization`, `Api-Key`, `X-Api-Key`, `Token`, `Auth` or
   `X-Auth-Token`;
-- the value looks like a token (`sk-…`, `ghp_…`, `gho_…`, `glpat-…`, `xox…`),
-  or a URL carries a user name or password.
+- the value looks like a token (`sk-…`, `ghp_…`, `gho_…`, `glpat-…`, `xox…`);
+- the server's own URL carries a user name or password;
+- the name contains a credential word, or is one of those headers, and the
+  value is a URL carrying credentials before the host (`user:pw@host`, with or
+  without a scheme) or a query parameter named like a credential
+  (`?token=…`). A descriptive ending does not excuse this, so
+  `AUTH_URL: https://host/x?token=…` is refused.
+
+URL credentials in an `env` value under any other name are not detected:
+`DATABASE_URL: postgres://user:pw@host/db` passes, so keep such values in a
+`${VAR}` reference yourself. In an override, `headers` and `http.headers` are
+both checked.
 
 A `${VAR}` reference is always accepted. The conflict names the field, for
 example `env.AUTH`. If that value is not a secret, list the path exactly as
@@ -358,8 +368,9 @@ servers:
 - `notSecret` accepts `env.NAME` and `headers.NAME`, and
   `overrides.<client>.env.NAME` and `overrides.<client>.headers.NAME` for a
   value set in an override. Each path covers that one field only.
-- It switches off the name check only. A token-shaped value, or a URL with a
-  user name or password, is refused even when its field is listed.
+- It switches off the name check only. A token-shaped value, or a URL value
+  carrying credentials as described above, is refused even when its field is
+  listed.
 - A path that matches no field of the server is an error, so a typo is caught.
 
 ### Initialization
@@ -376,6 +387,11 @@ To turn MCP management on later, create `.drakom-ai/mcp-servers.yaml` (an empty
 generation and sets `features.mcp` to `true` in `state.json`; `sync --check`
 reports this as drift until it is applied. Without that file, a `--skip-mcp`
 project stays as it is.
+
+This also applies on upgrade: a project initialized with `--skip-mcp` that
+already has `.drakom-ai/mcp-servers.yaml` has MCP turned on by its next `sync`
+with this version, and `sync --check` reports drift until then. To keep MCP
+off, remove the registry file.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
 

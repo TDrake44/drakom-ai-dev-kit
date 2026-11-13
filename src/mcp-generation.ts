@@ -321,17 +321,31 @@ function codexServerHeaderRegex(serverName: string): RegExp {
   );
 }
 
-/** The lines of one server's tables inside a managed block, as written, without the block markers. */
-function extractCodexServerText(block: string, serverName: string): string {
+/**
+ * The lines of one server's tables inside a managed block, as written, without the block markers.
+ * Comment lines directly above a table header belong to that table, so they travel with it.
+ */
+function extractCodexServerText(block: string, serverName: string, eol: string): string {
   const serverHeaderRegex = codexServerHeaderRegex(serverName);
+  const lines = block.split(/\r?\n/);
+  const isMarker = (line: string): boolean => line.startsWith('# BEGIN ') || line.startsWith('# END ');
+  const isComment = (line: string): boolean => /^\s*#/.test(line) && !isMarker(line);
+  // For each line, whether it belongs to this server; decided table by table.
   const kept: string[] = [];
   let keeping = false;
-  for (const line of block.split('\n')) {
-    if (serverHeaderRegex.test(line)) keeping = true;
-    else if (/^\s*\[/.test(line) || line.startsWith('# BEGIN ') || line.startsWith('# END ')) keeping = false;
+  for (const [index, line] of lines.entries()) {
+    if (isMarker(line)) keeping = false;
+    else if (/^\s*\[/.test(line)) keeping = serverHeaderRegex.test(line);
+    else if (isComment(line)) {
+      // A comment run that ends at a table header belongs to that table.
+      let next = index + 1;
+      while (next < lines.length && isComment(lines[next] ?? '')) next += 1;
+      const nextLine = lines[next] ?? '';
+      if (/^\s*\[/.test(nextLine)) keeping = serverHeaderRegex.test(nextLine);
+    }
     if (keeping) kept.push(line);
   }
-  return kept.join('\n').trim();
+  return kept.join(eol).trim();
 }
 
 export function removeCodexServerFromToml(text: string, serverName: string): string {
@@ -412,6 +426,7 @@ function prepareCodexTarget(
   }
 
   let unmanaged = existing;
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n';
   // Released entries that were edited: their text leaves the managed block and stays in the file.
   const keptEntries: string[] = [];
   if (extracted) {
@@ -434,7 +449,7 @@ function prepareCodexTarget(
       if (prevFp !== undefined) {
         if (selection.released.has(serverName)) {
           if (Object.hasOwn(blockServers, serverName) && fingerprintObject(blockServers[serverName]) !== prevFp) {
-            keptEntries.push(extractCodexServerText(extracted.block, serverName));
+            keptEntries.push(extractCodexServerText(extracted.block, serverName, eol));
             operations.push(releasedEditedEntry(targetPath, serverName, selection, 'kept, outside the managed block,'));
           }
           continue;
@@ -547,12 +562,16 @@ function prepareCodexTarget(
   }
 
   const block = `${CODEX_BLOCK_START}\n${generatedBlockBody}${CODEX_BLOCK_END}\n`;
-  const trimmedUnmanaged = [unmanaged.trimEnd(), ...keptEntries].filter((part) => part.trim().length > 0).join('\n\n');
+  // Kept entries are joined with the file's own line ending; without any, the text is as before.
+  const trimmedUnmanaged =
+    keptEntries.length === 0
+      ? unmanaged.trimEnd()
+      : [unmanaged.trimEnd(), ...keptEntries].filter((part) => part.trim().length > 0).join(`${eol}${eol}`);
   const cleanUnmanaged = trimmedUnmanaged.trim().length === 0 ? '' : trimmedUnmanaged;
   const separator = cleanUnmanaged.length > 0 ? '\n\n' : '';
   let newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${separator}${block}` : block;
   // A deselected client keeps no managed block: only what is not the kit's stays in the file.
-  if (!selection.selected) newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}\n` : '';
+  if (!selection.selected) newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${eol}` : '';
 
   try {
     parseToml(newContent);

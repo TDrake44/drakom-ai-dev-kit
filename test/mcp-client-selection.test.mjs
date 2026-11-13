@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 import { renderCliHelp } from '../dist/cli-help.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
-import { checkLiteralCredentials, isSensitiveName } from '../dist/mcp-discovery.js';
+import { inspectTarget } from '../dist/inspect-target.js';
+import { checkLiteralCredentials, discoverMcp, isSensitiveName } from '../dist/mcp-discovery.js';
 import { validateMcpRegistry } from '../dist/mcp-registry.js';
 import {
   generateAntigravityServer,
@@ -1002,4 +1003,318 @@ test('the example registry synchronizes cleanly and shows the new keys at work',
   assert.equal(claude['issue-tracker'].headers.Authorization, 'Bearer ${ISSUE_TRACKER_TOKEN}');
   assert.deepEqual(claude.search.env, { SEARCH_API_KEY: '${SEARCH_API_KEY}', AUTH: 'none' });
   assertInSync(root);
+});
+
+// ---------------------------------------------------------------------------
+// Review round: unchanged output for references and client overrides
+// ---------------------------------------------------------------------------
+
+test('a URL reference with Claude and VS Code overrides produces the same bytes and state as before', async () => {
+  const root = await createTarget(`servers:
+  regional:
+    http:
+      url: https://\${MCP_HOST}/mcp
+      headers:
+        X-Client: kit
+    overrides:
+      claude:
+        headers:
+          X-Agent: claude
+      vscode:
+        http:
+          url: https://\${MCP_HOST}/vscode
+          type: sse
+          headers:
+            X-Agent: vscode
+      antigravity:
+        serverUrl: https://mcp.example.com/mcp
+      codex:
+        url: https://mcp.example.com/mcp
+`);
+
+  syncOk(root);
+
+  // Captured from the build before client selection existed.
+  assert.equal(
+    await read(root, CLAUDE),
+    '{\n  "mcpServers": {\n    "regional": {\n      "type": "http",\n      "url": "https://${MCP_HOST}/mcp",\n      "headers": {\n        "X-Client": "kit",\n        "X-Agent": "claude"\n      }\n    }\n  }\n}\n',
+  );
+  assert.equal(
+    await read(root, VSCODE),
+    '{\n  "servers": {\n    "regional": {\n      "type": "sse",\n      "url": "https://${env:MCP_HOST}/vscode",\n      "headers": {\n        "X-Client": "kit",\n        "X-Agent": "vscode"\n      }\n    }\n  }\n}\n',
+  );
+  assert.equal(
+    await read(root, ANTIGRAVITY),
+    '{\n  "mcpServers": {\n    "regional": {\n      "serverUrl": "https://mcp.example.com/mcp",\n      "headers": {\n        "X-Client": "kit"\n      }\n    }\n  }\n}\n',
+  );
+  assert.equal(
+    await read(root, CODEX),
+    '# BEGIN Drakom AI Development Context MCP servers\n[mcp_servers.regional]\nurl = "https://mcp.example.com/mcp"\n\n[mcp_servers.regional.http_headers]\nX-Client = "kit"\n\n# END Drakom AI Development Context MCP servers\n',
+  );
+  assert.equal(
+    JSON.stringify((await readState(root)).managedMcpServers),
+    JSON.stringify({
+      regional: {
+        sourceFingerprint: 'sha256:9543e0b985031edbaea8f9bfbba0a1a155a2167a1d7d09362325457ea4c7a3e7',
+        targetFingerprints: {
+          '.mcp.json': 'sha256:7da22e8f10cd18d8d24303fd9bee2174ec6e17a11662460a93abe9faef006c5c',
+          '.vscode/mcp.json': 'sha256:4bae3c7117cab34c2cadbdfbc019d845994d326d1844d0b7cfbca4d325389863',
+          '.agents/mcp_config.json': 'sha256:74e339537207875c191ed56f0e8d77620aca5ff75a05223d21ab40f4e14aeb46',
+          '.codex/config.toml': 'sha256:ca12c447ea8af49c5cd053840ee24d228944a292baf64fdb97950635697c2427',
+        },
+      },
+    }),
+  );
+});
+
+test('env references render for Claude, VS Code and Codex exactly as before', () => {
+  const server = validServer(
+    {
+      servers: {
+        gh: {
+          command: 'node',
+          args: ['--host', '${MCP_HOST}'],
+          env: { GITHUB_TOKEN: '${GITHUB_TOKEN}', REGION: '${env:AWS_REGION}', PLAIN: 'x' },
+          overrides: { codex: { args: ['--host', 'fixed'], env: { REGION: 'eu' } } },
+        },
+      },
+    },
+    'gh',
+  );
+
+  // Captured from the build before client selection existed.
+  assert.equal(
+    JSON.stringify(generateClaudeServer(server)),
+    '{"command":"node","args":["--host","${MCP_HOST}"],"env":{"GITHUB_TOKEN":"${GITHUB_TOKEN}","REGION":"${AWS_REGION}","PLAIN":"x"}}',
+  );
+  assert.equal(
+    JSON.stringify(generateVscodeServer(server)),
+    '{"type":"stdio","command":"node","args":["--host","${env:MCP_HOST}"],"env":{"GITHUB_TOKEN":"${env:GITHUB_TOKEN}","REGION":"${env:AWS_REGION}","PLAIN":"x"}}',
+  );
+  assert.equal(
+    generateCodexServerSnippet('gh', server),
+    '[mcp_servers.gh]\ncommand = "node"\nargs = ["--host","fixed"]\nenv_vars = ["GITHUB_TOKEN"]\n\n[mcp_servers.gh.env]\nREGION = "eu"\nPLAIN = "x"\n',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Review round: credentials under descriptive names and in merged header maps
+// ---------------------------------------------------------------------------
+
+// Placeholders assembled at run time; none is a real credential.
+const USER_INFO = ['user', 'placeholder'].join(':');
+const QUERY_SECRET = ['token', 'placeholder000000'].join('=');
+
+test('a descriptive name does not excuse a value that carries a credential', () => {
+  /** @type {Array<[string, string]>} */
+  const refused = [
+    ['AUTH_URL', `https://auth.example.com/x?${QUERY_SECRET}&api_key=placeholder`],
+    ['AUTH_URL', `https://auth.example.com/x?api_key=placeholder`],
+    ['AUTH_URL', `${USER_INFO}@auth.example.com/x`],
+    ['AUTH_URL', `https://${USER_INFO}@auth.example.com/x`],
+    ['TOKEN_ENDPOINT', `auth.example.com/x?${QUERY_SECRET}`],
+    ['PASSWORD_FILE', `sftp://${USER_INFO}@files.example.com/run/secrets/pw`],
+    ['SECRET_NAME', FAKE_TOKEN],
+    ['TOKEN_TYPE', FAKE_TOKEN],
+  ];
+  /** @type {Array<[string, string]>} */
+  const accepted = [
+    ['AUTH_MODE', 'oauth'],
+    ['AUTH_TYPE', 'basic'],
+    ['TOKEN_URL', 'https://auth.example.com/token'],
+    ['TOKEN_URL', 'https://auth.example.com/token?grant_type=client_credentials&scope=read'],
+    ['TOKEN_URL', 'https://auth.example.com/token?token=${REFRESH_TOKEN}'],
+    ['OIDC_AUTH_URL', 'https://auth.example.com:8443/authorize'],
+    ['PASSWORD_FILE', '/run/secrets/pw'],
+    ['SECRET_NAME', 'my-secret'],
+    ['AUTH_NAME', 'team@example.com'],
+  ];
+
+  for (const [name, value] of refused) {
+    const listed = new Set([`env.${name}`]);
+    for (const notSecret of [undefined, listed]) {
+      const result = checkLiteralCredentials({ command: 'node', env: { [name]: value } }, '', notSecret);
+      assert.deepEqual(result, { hasCredentials: true, field: `env.${name}`, reason: 'value' }, `${name} should be refused`);
+    }
+  }
+  for (const [name, value] of accepted) {
+    assert.deepEqual(
+      checkLiteralCredentials({ command: 'node', env: { [name]: value } }),
+      { hasCredentials: false },
+      `${name}=${value} should pass`,
+    );
+  }
+});
+
+test('sync refuses a credential in a descriptively named env value and writes nothing', async () => {
+  const root = await createTarget(`servers:
+  api:
+    command: node
+    notSecret: [env.AUTH_URL]
+    env:
+      AUTH_URL: "https://auth.example.com/x?${QUERY_SECRET}"
+`);
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stdout, /CONFLICT.*MCP registry server "api" contains literal credentials in env\.AUTH_URL\./);
+  assert.match(result.stdout, /notSecret does not apply/);
+  assert.doesNotMatch(result.stdout + result.stderr, /placeholder000000/);
+  assert.equal(await exists(root, CLAUDE), false);
+});
+
+test('init discovery flags a credential in a descriptively named env value', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-selection-'));
+  await write(
+    root,
+    CLAUDE,
+    JSON.stringify({
+      mcpServers: {
+        leaky: { command: 'node', env: { AUTH_URL: `https://auth.example.com/x?${QUERY_SECRET}` } },
+        schemeless: { command: 'node', env: { AUTH_URL: `${USER_INFO}@auth.example.com/x` } },
+        fine: { command: 'node', env: { AUTH_MODE: 'oauth', TOKEN_URL: 'https://auth.example.com/token' } },
+      },
+    }),
+  );
+
+  const discovered = discoverMcp(await inspectTarget(root));
+
+  assert.equal(discovered.servers.get('leaky')?.classification, 'literal_credentials');
+  assert.equal(discovered.servers.get('schemeless')?.classification, 'literal_credentials');
+  assert.equal(discovered.servers.get('fine')?.classification, 'identical');
+  const init = drakom('init', root, ['--dry-run']);
+  assert.doesNotMatch(init.stdout + init.stderr, /placeholder000000/);
+});
+
+test('every header map an override merges is checked for credentials', async () => {
+  const literal = ['Bearer', 'placeholder-literal-value'].join(' ');
+  const direct = checkLiteralCredentials({
+    http: { url: 'https://mcp.example.com/a', headers: { Authorization: literal } },
+    headers: { 'X-A': 'a' },
+  });
+  assert.deepEqual(direct, { hasCredentials: true, field: 'headers.Authorization', reason: 'name' });
+
+  const root = await createTarget(`servers:
+  docs:
+    http:
+      url: https://mcp.example.com/docs
+    overrides:
+      claude:
+        headers:
+          X-A: a
+        http:
+          url: https://mcp.example.com/docs
+          headers:
+            Authorization: "${literal}"
+`);
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stdout, /CONFLICT.*literal credentials in overrides\.claude\.headers\.Authorization\./);
+  assert.doesNotMatch(result.stdout + result.stderr, /placeholder-literal-value/);
+  assert.equal(await exists(root, CLAUDE), false);
+});
+
+test('notSecret on a header does not clear a token-shaped value or URL credentials', () => {
+  const notSecret = new Set(['headers.Authorization']);
+  const url = 'https://mcp.example.com/a';
+
+  for (const value of [`https://${USER_INFO}@auth.example.com`, `${USER_INFO}@auth.example.com`, FAKE_TOKEN, `https://auth.example.com/x?${QUERY_SECRET}`]) {
+    assert.deepEqual(
+      checkLiteralCredentials({ http: { url, headers: { Authorization: value } } }, '', notSecret),
+      { hasCredentials: true, field: 'headers.Authorization', reason: 'value' },
+    );
+  }
+  assert.deepEqual(checkLiteralCredentials({ http: { url, headers: { Authorization: 'none' } } }, '', notSecret), {
+    hasCredentials: false,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review round: releasing Codex entries, and warnings while MCP is held back
+// ---------------------------------------------------------------------------
+
+test('a released, edited Codex entry keeps the comment lines directly above it', async () => {
+  const root = await createTarget(TWO_SERVERS);
+  syncOk(root);
+  await write(
+    root,
+    CODEX,
+    (await read(root, CODEX))
+      .replace('[mcp_servers.alpha]', '# first note\n# second note\n[mcp_servers.alpha]')
+      .replace('args = ["./alpha.mjs"]', 'args = ["./edited.mjs"]')
+      .replace('[mcp_servers.beta]', '# about beta\n[mcp_servers.beta]'),
+  );
+  await write(root, REGISTRY, TWO_SERVERS.replace("args: ['./alpha.mjs']", "args: ['./alpha.mjs']\n    skip: [codex]"));
+
+  syncOk(root);
+
+  const codex = await read(root, CODEX);
+  assert.ok(
+    codex.startsWith('# first note\n# second note\n[mcp_servers.alpha]\ncommand = "node"\nargs = ["./edited.mjs"]\n\n# BEGIN Drakom AI'),
+    codex,
+  );
+  assert.equal(codex.split('# about beta').length, 1, 'a comment above another server does not travel with the entry');
+  assertInSync(root);
+});
+
+test('a released, edited Codex entry keeps the line endings of its file', async () => {
+  const root = await createTarget(TWO_SERVERS);
+  await write(root, CODEX, 'model = "example"\r\n');
+  syncOk(root);
+  await write(
+    root,
+    CODEX,
+    (await read(root, CODEX))
+      .replace('[mcp_servers.alpha]', '# note\n[mcp_servers.alpha]')
+      .replace('args = ["./alpha.mjs"]', 'args = ["./edited.mjs"]')
+      .replace(/\r?\n/g, '\r\n'),
+  );
+  await write(root, REGISTRY, `clients: [claude, vscode, antigravity]\n${TWO_SERVERS}`);
+
+  syncOk(root);
+
+  assert.equal(
+    await read(root, CODEX),
+    'model = "example"\r\n\r\n# note\r\n[mcp_servers.alpha]\r\ncommand = "node"\r\nargs = ["./edited.mjs"]\r\n',
+  );
+  assertInSync(root);
+});
+
+test('no release warning is shown while another MCP conflict holds MCP state back', async () => {
+  const root = await createTarget(TWO_SERVERS);
+  syncOk(root);
+  const antigravity = await readJson(root, ANTIGRAVITY);
+  antigravity.mcpServers.alpha.args = ['./edited.mjs'];
+  await write(root, ANTIGRAVITY, `${JSON.stringify(antigravity, null, 2)}\n`);
+  const claude = await readJson(root, CLAUDE);
+  claude.mcpServers.beta.args = ['./edited.mjs'];
+  await write(root, CLAUDE, `${JSON.stringify(claude, null, 2)}\n`);
+  const stateBefore = await read(root, `${DRAKOM_DIR}/state.json`);
+  await write(root, REGISTRY, `clients: [claude, vscode, codex]\n${TWO_SERVERS}`);
+
+  const result = drakom('sync', root);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stdout, /CONFLICT\s+\.mcp\.json.*"beta" was edited manually/);
+  assert.doesNotMatch(result.stdout, /^WARNING/m);
+  assert.doesNotMatch(result.stdout, /no longer managed/);
+  assert.equal(await read(root, `${DRAKOM_DIR}/state.json`), stateBefore);
+});
+
+test('the Codex refusals also offer skip', () => {
+  assert.throws(
+    () => generateCodexServerSnippet('api', { command: 'node', args: ['--token=${TOKEN}'] }),
+    /Codex.*cannot expand.*skip: \[codex\]/,
+  );
+  assert.throws(
+    () => generateCodexServerSnippet('api', { http: { url: 'https://${env:HOST}/mcp' } }),
+    /Codex.*cannot expand.*skip: \[codex\]/,
+  );
+  assert.throws(
+    () => generateCodexServerSnippet('api', { command: 'node', env: { API_KEY: '${OTHER_KEY}' } }),
+    /Codex cannot rename.*skip: \[codex\]/,
+  );
 });

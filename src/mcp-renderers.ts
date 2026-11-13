@@ -125,8 +125,8 @@ function assertNoUnsupportedVarRef(value: string, client: 'Codex' | 'Antigravity
   if (match) {
     const remedy = client === 'Codex'
       ? field.startsWith('args') || field.startsWith('env.')
-        ? 'pass the value through env or use overrides.codex'
-        : 'use a fixed value in overrides.codex'
+        ? 'pass the value through env, use overrides.codex, or add "skip: [codex]" to the server'
+        : 'use a fixed value in overrides.codex, or add "skip: [codex]" to the server'
       : field.startsWith('env.') || field.startsWith('headers.')
         ? `add "skip: [antigravity]" to the server, or set overrides.antigravity.${field} to null to leave the field out for Antigravity`
         : 'add "skip: [antigravity]" to the server, or give Antigravity a fixed value in overrides.antigravity';
@@ -225,7 +225,7 @@ function splitCodexEnv(name: string, env: StringMap | undefined): { literalEnv: 
       if (varName !== undefined) {
         if (varName !== key) {
           throw new Error(
-            `Codex cannot rename environment variables: server "${name}" sets ${key} from $${varName}; use a variable named ${key}.`,
+            `Codex cannot rename environment variables: server "${name}" sets ${key} from $${varName}; use a variable named ${key}, or add "skip: [codex]" to the server.`,
           );
         }
         envVars.push(key);

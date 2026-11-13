@@ -108,13 +108,37 @@ function isAuthVariableReference(value: string): boolean {
 const TOKEN_PATTERN_REGEX =
   /(?:sk-[a-zA-Z0-9_-]{10,}|ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9_-]{20,}|xox[baprs]-[a-zA-Z0-9_-]{10,})/;
 
+// `user:password@host` written without a scheme, which `URL` does not read as credentials.
+const SCHEMELESS_USERINFO_REGEX = /^[^/\s:@]+:[^/\s@]+@/;
+
 function hasUrlUserinfo(value: string): boolean {
   try {
     const parsed = new URL(value);
-    return parsed.username.length > 0 || parsed.password.length > 0;
+    if (parsed.username.length > 0 || parsed.password.length > 0) return true;
   } catch {
-    return false;
+    // Not an absolute URL; the schemeless form is checked below.
   }
+  return SCHEMELESS_USERINFO_REGEX.test(value);
+}
+
+/** True when the text after `?` sets a parameter whose name reads as a credential to a literal value. */
+function hasSensitiveQueryParam(value: string): boolean {
+  const queryStart = value.indexOf('?');
+  if (queryStart === -1) return false;
+  const query = value.slice(queryStart + 1).split('#')[0] ?? '';
+  for (const [name, paramValue] of new URLSearchParams(query)) {
+    if (isSensitiveName(name) && paramValue.length > 0 && !isVariableReference(paramValue)) return true;
+  }
+  return false;
+}
+
+/**
+ * True when a value is a URL that carries a credential, in its userinfo or in a query parameter.
+ * Asked only of values whose name already points at a credential, so that a descriptive name
+ * (`AUTH_URL`) or a `notSecret` entry cannot wave such a value through.
+ */
+function carriesUrlCredential(value: string): boolean {
+  return hasUrlUserinfo(value) || hasSensitiveQueryParam(value);
 }
 
 export interface CredentialCheckResult {
@@ -123,7 +147,8 @@ export interface CredentialCheckResult {
   field?: string;
   /**
    * `name`: an env or header value judged by its name, which `notSecret` can clear.
-   * `value`: an env or header value that is itself token-shaped or carries URL credentials.
+   * `value`: an env or header value that is itself token-shaped, or is a URL carrying credentials
+   * under a name that points at one; `notSecret` does not clear it.
    * Absent for URLs and arguments.
    */
   reason?: 'name' | 'value';
@@ -149,7 +174,7 @@ export function checkLiteralCredentials(
       if (typeof val !== 'string' || val.length === 0 || isVariableReference(val)) continue;
       const field = `${prefix}env.${key}`;
       const wordInName = SENSITIVE_WORD_REGEX.test(key);
-      if (TOKEN_PATTERN_REGEX.test(val) || (wordInName && hasUrlUserinfo(val))) {
+      if (TOKEN_PATTERN_REGEX.test(val) || (wordInName && carriesUrlCredential(val))) {
         return { hasCredentials: true, field, reason: 'value' };
       }
       if (isSensitiveName(key) && !notSecret.has(field)) {
@@ -158,24 +183,18 @@ export function checkLiteralCredentials(
     }
   }
 
-  // 2. Check headers
-  const headers = isRecord(raw.headers)
-    ? raw.headers
-    : isRecord(raw.http) && isRecord(raw.http.headers)
-      ? raw.http.headers
-      : isRecord(raw.http_headers)
-        ? raw.http_headers
-        : null;
-
-  if (headers) {
+  // 2. Check headers: every map a renderer may merge, not only the first one present
+  const headerMaps = [raw.headers, isRecord(raw.http) ? raw.http.headers : undefined, raw.http_headers].filter(isRecord);
+  for (const headers of headerMaps) {
     for (const [key, val] of Object.entries(headers)) {
       if (typeof val !== 'string' || val.length === 0 || isVariableReference(val)) continue;
       const field = `${prefix}headers.${key}`;
       if (TOKEN_PATTERN_REGEX.test(val)) {
         return { hasCredentials: true, field, reason: 'value' };
       }
-      if (SENSITIVE_HEADER_REGEX.test(key) && !isAuthVariableReference(val) && !notSecret.has(field)) {
-        return { hasCredentials: true, field, reason: 'name' };
+      if (SENSITIVE_HEADER_REGEX.test(key) && !isAuthVariableReference(val)) {
+        if (carriesUrlCredential(val)) return { hasCredentials: true, field, reason: 'value' };
+        if (!notSecret.has(field)) return { hasCredentials: true, field, reason: 'name' };
       }
     }
   }
