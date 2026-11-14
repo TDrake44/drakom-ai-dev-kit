@@ -1,6 +1,6 @@
 # Canonical Agent Skills
 
-The folders in this directory are the **canonical, hand-authored** skill suite, formatted to the open [agent-skills](https://agentskills.io) `SKILL.md` standard.
+The `plan`, `dev`, `pr-review` and `document` folders are this repository's own hand-authored skills, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of `payload/v1/skills/`: edit the payload and run `pnpm sync`, because sync treats a direct edit here as a conflict.
 
 The included skills are defaults, not required framework components. A project
 may edit, replace, or delete them. After removing a skill, update `AGENTS.md`
