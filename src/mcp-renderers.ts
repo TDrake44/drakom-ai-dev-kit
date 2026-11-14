@@ -1,4 +1,4 @@
-import type { BaseServerConfig, ClientOverrideConfig, McpClient, StringMap } from './mcp-types.js';
+import type { BaseServerConfig, HttpConfig, McpClient, RemovableStringMap, StringMap } from './mcp-types.js';
 import { fingerprint, isRecord } from './util.js';
 import { INPUT_REF_REGEX, VAR_REF_REGEX, VAR_REFS_REGEX } from './mcp-variables.js';
 
@@ -24,10 +24,44 @@ function nonEmptyString(value: string | undefined): string | undefined {
   return value !== undefined && value.trim().length > 0 ? value : undefined;
 }
 
-function resolveServerConfig(server: BaseServerConfig, client: McpClient): ClientOverrideConfig {
+/** A server as one client sees it: the base definition with that client's override applied. */
+interface ResolvedServerConfig {
+  command?: string;
+  args?: string[];
+  env?: StringMap;
+  http?: HttpConfig;
+  url?: string;
+  serverUrl?: string;
+  type?: string;
+  transport?: string;
+  headers?: StringMap;
+  timeout?: number;
+}
+
+/**
+ * Lays override maps over a base map, in order. A `null` layer drops everything gathered so far;
+ * a `null` value drops that key.
+ */
+function mergeStringMaps(base: StringMap | undefined, ...layers: Array<RemovableStringMap | null | undefined>): StringMap {
+  let merged: StringMap = { ...(base ?? {}) };
+  for (const layer of layers) {
+    if (layer === undefined) continue;
+    if (layer === null) {
+      merged = {};
+      continue;
+    }
+    for (const [key, value] of Object.entries(layer)) {
+      if (value === null) delete merged[key];
+      else merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+function resolveServerConfig(server: BaseServerConfig, client: McpClient): ResolvedServerConfig {
   const override = server.overrides?.[client];
   if (!override) {
-    const result: ClientOverrideConfig = {};
+    const result: ResolvedServerConfig = {};
     if (server.command) result.command = server.command;
     if (server.args) result.args = server.args;
     if (server.env) result.env = server.env;
@@ -40,19 +74,19 @@ function resolveServerConfig(server: BaseServerConfig, client: McpClient): Clien
   const isStdio = overrideCommand !== undefined || (server.command !== undefined && overrideUrl === undefined);
 
   if (isStdio) {
-    const result: ClientOverrideConfig = {};
+    const result: ResolvedServerConfig = {};
     const command = override.command ?? server.command;
     if (command) result.command = command;
     const args = override.args ?? server.args;
     if (args) result.args = args;
-    if (server.env || override.env) result.env = { ...(server.env ?? {}), ...(override.env ?? {}) };
+    if (server.env || override.env) result.env = mergeStringMaps(server.env, override.env);
     return result;
   }
 
   const url = overrideUrl ?? server.http?.url;
   const type = override.http?.type ?? override.type ?? override.transport ?? server.http?.type;
-  const headers = { ...(server.http?.headers ?? {}), ...(override.http?.headers ?? {}), ...(override.headers ?? {}) };
-  const result: ClientOverrideConfig = {};
+  const headers = mergeStringMaps(server.http?.headers, override.http?.headers, override.headers);
+  const result: ResolvedServerConfig = {};
   if (url) {
     result.url = url;
     result.serverUrl = url;
@@ -91,9 +125,11 @@ function assertNoUnsupportedVarRef(value: string, client: 'Codex' | 'Antigravity
   if (match) {
     const remedy = client === 'Codex'
       ? field.startsWith('args') || field.startsWith('env.')
-        ? 'pass the value through env or use overrides.codex'
-        : 'use a fixed value in overrides.codex'
-      : 'use a reference-free overrides.antigravity configuration or leave the server unmanaged';
+        ? 'pass the value through env, use overrides.codex, or add "skip: [codex]" to the server'
+        : 'use a fixed value in overrides.codex, or add "skip: [codex]" to the server'
+      : field.startsWith('env.') || field.startsWith('headers.')
+        ? `add "skip: [antigravity]" to the server, or set overrides.antigravity.${field} to null to leave the field out for Antigravity`
+        : 'add "skip: [antigravity]" to the server, or give Antigravity a fixed value in overrides.antigravity';
     throw new Error(`${client} ${field} uses ${match}, which ${client} cannot expand; ${remedy}`);
   }
 }
@@ -189,7 +225,7 @@ function splitCodexEnv(name: string, env: StringMap | undefined): { literalEnv: 
       if (varName !== undefined) {
         if (varName !== key) {
           throw new Error(
-            `Codex cannot rename environment variables: server "${name}" sets ${key} from $${varName}; use a variable named ${key}.`,
+            `Codex cannot rename environment variables: server "${name}" sets ${key} from $${varName}; use a variable named ${key}, or add "skip: [codex]" to the server.`,
           );
         }
         envVars.push(key);

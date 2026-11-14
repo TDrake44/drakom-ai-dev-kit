@@ -4,10 +4,7 @@ import { parse as parseToml } from 'smol-toml';
 import { DRAKOM_DIR } from './constants.js';
 import type { TargetInventory } from './inspect-target.js';
 import { parseJsonc, setJsonValue } from './json-text.js';
-import type {
-  BaseServerConfig,
-  McpRegistry,
-} from './mcp-types.js';
+import { MCP_CLIENTS, type BaseServerConfig, type McpClient, type McpRegistry } from './mcp-types.js';
 import type { Operation } from './operation-plan.js';
 import type { InstallState, ManagedMcpServerState } from './state.js';
 import { isRecord } from './util.js';
@@ -35,9 +32,59 @@ export const CODEX_BLOCK_END = '# END Drakom AI Development Context MCP servers'
 export const LEGACY_CODEX_BLOCK_START = '# BEGIN AI Framework Blueprint MCP servers';
 export const LEGACY_CODEX_BLOCK_END = '# END AI Framework Blueprint MCP servers';
 
+const REGISTRY_PATH = `${DRAKOM_DIR}/mcp-servers.yaml`;
+
+/** The file each client reads. */
+export const MCP_CLIENT_TARGETS: Record<McpClient, string> = {
+  claude: '.mcp.json',
+  vscode: '.vscode/mcp.json',
+  antigravity: '.agents/mcp_config.json',
+  codex: '.codex/config.toml',
+};
+
+/** What the registry asks of one client file, beyond the servers to generate into it. */
+interface TargetSelection {
+  client: McpClient;
+  /** False when the registry's `clients` list leaves this client out; its file is then never a conflict. */
+  selected: boolean;
+  /**
+   * Servers the kit wrote into this file that the registry no longer wants there, through
+   * `clients` or the server's `skip`. An entry still as the kit wrote it is removed; an edited
+   * one is left alone. Either way it stops being managed in this file.
+   */
+  released: ReadonlySet<string>;
+}
+
 interface JsonTargetPreparation {
   operations: Operation[];
   targetFingerprints: Record<string, string>;
+}
+
+/**
+ * A client file the kit cannot work with: a conflict for a selected client, and for a deselected
+ * one a warning, because the kit then has nothing left to do with the file.
+ */
+function unusableTarget(targetPath: string, selection: TargetSelection, problem: string, nextAction: string): Operation {
+  if (selection.selected) {
+    return {
+      action: 'conflict',
+      path: targetPath,
+      summary: `Cannot safely update ${targetPath}: ${problem}. Safe next action: ${nextAction}`,
+    };
+  }
+  return {
+    action: 'warning',
+    path: targetPath,
+    summary: `${targetPath} is left as it is (${problem}). The MCP servers the kit wrote there are no longer managed, because ${REGISTRY_PATH} no longer selects ${selection.client}.`,
+  };
+}
+
+function releasedEditedEntry(targetPath: string, serverName: string, selection: TargetSelection, kept: string): Operation {
+  return {
+    action: 'warning',
+    path: targetPath,
+    summary: `MCP server "${serverName}" in ${targetPath} was edited after the kit wrote it, so it is ${kept} and is no longer managed; ${REGISTRY_PATH} no longer selects ${selection.client} for it.`,
+  };
 }
 
 type JsonParser = (text: string) => unknown;
@@ -70,31 +117,28 @@ function prepareJsonTarget(
   inventory: TargetInventory,
   state: InstallState,
   parse: JsonParser,
+  selection: TargetSelection,
 ): JsonTargetPreparation {
   const operations: Operation[] = [];
   const targetFingerprints: Record<string, string> = {};
   const currentContent = inventory.contents[targetPath];
   const targetExists = currentContent !== undefined;
+  // A deselected client's file matters only while it may still hold entries the kit wrote.
+  if (!selection.selected && (!targetExists || selection.released.size === 0)) {
+    return { operations, targetFingerprints };
+  }
 
   let existing: Record<string, unknown> = {};
   if (targetExists) {
     try {
       const parsed = parse(currentContent);
       if (!isRecord(parsed)) {
-        operations.push({
-          action: 'conflict',
-          path: targetPath,
-          summary: `Cannot safely update ${targetPath}: top-level must be a JSON object. Safe next action: fix or remove invalid file.`,
-        });
+        operations.push(unusableTarget(targetPath, selection, 'top-level must be a JSON object', 'fix or remove invalid file.'));
         return { operations, targetFingerprints };
       }
       existing = parsed;
     } catch {
-      operations.push({
-        action: 'conflict',
-        path: targetPath,
-        summary: `Cannot safely update ${targetPath}: invalid JSON syntax. Safe next action: fix syntax in ${targetPath}.`,
-      });
+      operations.push(unusableTarget(targetPath, selection, 'invalid JSON syntax', `fix syntax in ${targetPath}.`));
       return { operations, targetFingerprints };
     }
   }
@@ -103,20 +147,26 @@ function prepareJsonTarget(
   let currentServers: Record<string, unknown> = {};
   if (currentServersRaw !== undefined) {
     if (!isRecord(currentServersRaw)) {
-      operations.push({
-        action: 'conflict',
-        path: targetPath,
-        summary: `Cannot safely update ${targetPath}: "${containerKey}" must be an object. Safe next action: ensure "${containerKey}" is a JSON mapping.`,
-      });
+      operations.push(
+        unusableTarget(targetPath, selection, `"${containerKey}" must be an object`, `ensure "${containerKey}" is a JSON mapping.`),
+      );
       return { operations, targetFingerprints };
     }
     currentServers = currentServersRaw;
   }
 
   // 1. Check previously managed servers for manual edits
+  const releasedUntouched = new Set<string>();
   for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
     const prevFp = serverState.targetFingerprints[targetPath];
     if (prevFp !== undefined) {
+      if (selection.released.has(serverName)) {
+        if (Object.hasOwn(currentServers, serverName)) {
+          if (fingerprintObject(currentServers[serverName]) === prevFp) releasedUntouched.add(serverName);
+          else operations.push(releasedEditedEntry(targetPath, serverName, selection, 'left as it is'));
+        }
+        continue;
+      }
       if (!Object.hasOwn(currentServers, serverName)) {
         if (Object.hasOwn(generatedServers, serverName)) {
           operations.push({
@@ -163,7 +213,8 @@ function prepareJsonTarget(
     (serverName) =>
       !Object.hasOwn(generatedServers, serverName) &&
       Object.hasOwn(currentServers, serverName) &&
-      managedTargetFingerprint(state, serverName, targetPath) !== undefined,
+      managedTargetFingerprint(state, serverName, targetPath) !== undefined &&
+      (!selection.released.has(serverName) || releasedUntouched.has(serverName)),
   );
   const changedServers = Object.entries(generatedServers).filter(
     ([serverName]) =>
@@ -185,11 +236,13 @@ function prepareJsonTarget(
   }
 
   if (removedServers.length === 0 && changedServers.length === 0) {
-    operations.push({
-      action: 'preserve',
-      path: targetPath,
-      summary: `MCP client configuration ${targetPath} is up to date.`,
-    });
+    if (selection.selected) {
+      operations.push({
+        action: 'preserve',
+        path: targetPath,
+        summary: `MCP client configuration ${targetPath} is up to date.`,
+      });
+    }
     return { operations, targetFingerprints };
   }
 
@@ -206,11 +259,14 @@ function prepareJsonTarget(
   }
 
   if (!editProducedServers(newContent, containerKey, expectedServers, parse)) {
-    operations.push({
-      action: 'conflict',
-      path: targetPath,
-      summary: `Cannot safely update ${targetPath}: managed MCP edits could not be applied cleanly. Safe next action: check ${targetPath} for duplicate keys or unusual structure.`,
-    });
+    operations.push(
+      unusableTarget(
+        targetPath,
+        selection,
+        'managed MCP edits could not be applied cleanly',
+        `check ${targetPath} for duplicate keys or unusual structure.`,
+      ),
+    );
     return { operations, targetFingerprints };
   }
 
@@ -257,14 +313,46 @@ function extractCodexBlock(text: string): CodexBlockExtraction | null {
   return { startMarker, endMarker, block, unmanaged };
 }
 
+/** Matches the header of a server's table or of one of its sub-tables. */
+function codexServerHeaderRegex(serverName: string): RegExp {
+  const escapedName = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `^\\s*\\[\\s*mcp_servers\\s*\\.\\s*(?:"${escapedName}"|'${escapedName}'|${escapedName})(?:\\s*\\.[^\\]]+)?\\s*\\]`,
+  );
+}
+
+/**
+ * The lines of one server's tables inside a managed block, as written, without the block markers.
+ * Comment lines directly above a table header belong to that table, so they travel with it.
+ */
+function extractCodexServerText(block: string, serverName: string, eol: string): string {
+  const serverHeaderRegex = codexServerHeaderRegex(serverName);
+  const lines = block.split(/\r?\n/);
+  const isMarker = (line: string): boolean => line.startsWith('# BEGIN ') || line.startsWith('# END ');
+  const isComment = (line: string): boolean => /^\s*#/.test(line) && !isMarker(line);
+  // For each line, whether it belongs to this server; decided table by table.
+  const kept: string[] = [];
+  let keeping = false;
+  for (const [index, line] of lines.entries()) {
+    if (isMarker(line)) keeping = false;
+    else if (/^\s*\[/.test(line)) keeping = serverHeaderRegex.test(line);
+    else if (isComment(line)) {
+      // A comment run that ends at a table header belongs to that table.
+      let next = index + 1;
+      while (next < lines.length && isComment(lines[next] ?? '')) next += 1;
+      const nextLine = lines[next] ?? '';
+      if (/^\s*\[/.test(nextLine)) keeping = serverHeaderRegex.test(nextLine);
+    }
+    if (keeping) kept.push(line);
+  }
+  return kept.join(eol).trim();
+}
+
 export function removeCodexServerFromToml(text: string, serverName: string): string {
   const lines = text.split('\n');
   const result: string[] = [];
   let skipping = false;
-  const escapedName = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const serverHeaderRegex = new RegExp(
-    `^\\s*\\[\\s*mcp_servers\\s*\\.\\s*(?:"${escapedName}"|'${escapedName}'|${escapedName})(?:\\s*\\.[^\\]]+)?\\s*\\]`,
-  );
+  const serverHeaderRegex = codexServerHeaderRegex(serverName);
   const anyHeaderRegex = /^\s*\[/;
 
   for (const line of lines) {
@@ -301,23 +389,24 @@ function prepareCodexTarget(
   generatedServers: Record<string, BaseServerConfig>,
   inventory: TargetInventory,
   state: InstallState,
+  selection: TargetSelection,
 ): CodexTargetPreparation {
   const operations: Operation[] = [];
   const targetFingerprints: Record<string, string> = {};
-  const targetPath = '.codex/config.toml';
+  const targetPath = MCP_CLIENT_TARGETS.codex;
   const currentContent = inventory.contents[targetPath];
   const targetExists = currentContent !== undefined;
   const existing = currentContent ?? '';
+  // A deselected client's file matters only while it may still hold entries the kit wrote.
+  if (!selection.selected && (!targetExists || selection.released.size === 0)) {
+    return { operations, targetFingerprints };
+  }
 
   if (existing.length > 0) {
     try {
       parseToml(existing);
     } catch {
-      operations.push({
-        action: 'conflict',
-        path: targetPath,
-        summary: `Cannot safely update ${targetPath}: invalid TOML syntax. Safe next action: fix syntax in ${targetPath}.`,
-      });
+      operations.push(unusableTarget(targetPath, selection, 'invalid TOML syntax', `fix syntax in ${targetPath}.`));
       return { operations, targetFingerprints };
     }
   }
@@ -326,15 +415,20 @@ function prepareCodexTarget(
   try {
     extracted = extractCodexBlock(existing);
   } catch {
-    operations.push({
-      action: 'conflict',
-      path: targetPath,
-      summary: `Cannot safely update ${targetPath}: malformed managed block markers. Safe next action: restore or remove corrupted block markers.`,
-    });
+    operations.push(
+      unusableTarget(targetPath, selection, 'malformed managed block markers', 'restore or remove corrupted block markers.'),
+    );
+    return { operations, targetFingerprints };
+  }
+  // Without a managed block there is nothing of the kit's left in a deselected client's file.
+  if (!selection.selected && !extracted) {
     return { operations, targetFingerprints };
   }
 
   let unmanaged = existing;
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n';
+  // Released entries that were edited: their text leaves the managed block and stays in the file.
+  const keptEntries: string[] = [];
   if (extracted) {
     unmanaged = extracted.unmanaged;
     // Check if previously managed servers were manually edited inside the block
@@ -343,11 +437,9 @@ function prepareCodexTarget(
       const p = parseToml(extracted.block);
       if (isRecord(p)) parsedBlock = p;
     } catch {
-      operations.push({
-        action: 'conflict',
-        path: targetPath,
-        summary: `Cannot safely update ${targetPath}: managed MCP block contains invalid TOML syntax. Safe next action: fix syntax in ${targetPath}.`,
-      });
+      operations.push(
+        unusableTarget(targetPath, selection, 'managed MCP block contains invalid TOML syntax', `fix syntax in ${targetPath}.`),
+      );
       return { operations, targetFingerprints };
     }
 
@@ -355,6 +447,13 @@ function prepareCodexTarget(
     for (const [serverName, serverState] of Object.entries(state.managedMcpServers)) {
       const prevFp = serverState.targetFingerprints[targetPath];
       if (prevFp !== undefined) {
+        if (selection.released.has(serverName)) {
+          if (Object.hasOwn(blockServers, serverName) && fingerprintObject(blockServers[serverName]) !== prevFp) {
+            keptEntries.push(extractCodexServerText(extracted.block, serverName, eol));
+            operations.push(releasedEditedEntry(targetPath, serverName, selection, 'kept, outside the managed block,'));
+          }
+          continue;
+        }
         if (!Object.hasOwn(blockServers, serverName)) {
           if (Object.hasOwn(generatedServers, serverName)) {
             operations.push({
@@ -384,11 +483,7 @@ function prepareCodexTarget(
       const p = parseToml(unmanaged);
       if (isRecord(p)) parsedUnmanaged = p;
     } catch {
-      operations.push({
-        action: 'conflict',
-        path: targetPath,
-        summary: `Cannot safely update ${targetPath}: invalid TOML in unmanaged section. Safe next action: fix syntax in ${targetPath}.`,
-      });
+      operations.push(unusableTarget(targetPath, selection, 'invalid TOML in unmanaged section', `fix syntax in ${targetPath}.`));
       return { operations, targetFingerprints };
     }
   }
@@ -467,10 +562,16 @@ function prepareCodexTarget(
   }
 
   const block = `${CODEX_BLOCK_START}\n${generatedBlockBody}${CODEX_BLOCK_END}\n`;
-  const trimmedUnmanaged = unmanaged.trimEnd();
+  // Kept entries are joined with the file's own line ending; without any, the text is as before.
+  const trimmedUnmanaged =
+    keptEntries.length === 0
+      ? unmanaged.trimEnd()
+      : [unmanaged.trimEnd(), ...keptEntries].filter((part) => part.trim().length > 0).join(`${eol}${eol}`);
   const cleanUnmanaged = trimmedUnmanaged.trim().length === 0 ? '' : trimmedUnmanaged;
   const separator = cleanUnmanaged.length > 0 ? '\n\n' : '';
-  const newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${separator}${block}` : block;
+  let newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${separator}${block}` : block;
+  // A deselected client keeps no managed block: only what is not the kit's stays in the file.
+  if (!selection.selected) newContent = cleanUnmanaged.length > 0 ? `${cleanUnmanaged}${eol}` : '';
 
   try {
     parseToml(newContent);
@@ -498,7 +599,7 @@ function prepareCodexTarget(
       content: newContent,
       before: currentContent,
     });
-  } else {
+  } else if (selection.selected) {
     operations.push({
       action: 'preserve',
       path: targetPath,
@@ -521,8 +622,11 @@ export function generateMcpOperations(
 ): McpGenerationResult {
   const operations: Operation[] = [];
   const servers = registry.servers;
+  const selectedClients = new Set<McpClient>(registry.clients ?? MCP_CLIENTS);
+  const wants = (client: McpClient, server: BaseServerConfig): boolean =>
+    selectedClients.has(client) && !(server.skip ?? []).includes(client);
 
-  // Generate for each client
+  // Generate for each client that wants the server
   const claudeServers: Record<string, Record<string, unknown>> = {};
   const vscodeServers: Record<string, Record<string, unknown>> = {};
   const agyServers: Record<string, Record<string, unknown>> = {};
@@ -530,39 +634,55 @@ export function generateMcpOperations(
 
   for (const [name, server] of Object.entries(servers)) {
     try {
-      claudeServers[name] = generateClaudeServer(server);
-      vscodeServers[name] = generateVscodeServer(server);
-      agyServers[name] = generateAntigravityServer(server);
-      codexServers[name] = server;
+      if (wants('claude', server)) claudeServers[name] = generateClaudeServer(server);
+      if (wants('vscode', server)) vscodeServers[name] = generateVscodeServer(server);
+      if (wants('antigravity', server)) agyServers[name] = generateAntigravityServer(server);
+      if (wants('codex', server)) codexServers[name] = server;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(`MCP server "${name}": ${detail}`);
     }
   }
 
+  const selectionFor = (client: McpClient): TargetSelection => {
+    const targetPath = MCP_CLIENT_TARGETS[client];
+    const released = new Set<string>();
+    for (const name of Object.keys(state.managedMcpServers)) {
+      if (managedTargetFingerprint(state, name, targetPath) === undefined) continue;
+      const server = Object.hasOwn(servers, name) ? servers[name] : undefined;
+      // A server that left the registry altogether keeps its existing handling while its client is selected.
+      if (!selectedClients.has(client) || (server !== undefined && !wants(client, server))) released.add(name);
+    }
+    return { client, selected: selectedClients.has(client), released };
+  };
+
   // Only VS Code documents comments in its MCP file; the other JSON clients stay strict.
-  const claudePrep = prepareJsonTarget('.mcp.json', 'mcpServers', claudeServers, inventory, state, JSON.parse);
-  const vscodePrep = prepareJsonTarget('.vscode/mcp.json', 'servers', vscodeServers, inventory, state, parseJsonc);
-  const agyPrep = prepareJsonTarget('.agents/mcp_config.json', 'mcpServers', agyServers, inventory, state, JSON.parse);
-  const codexPrep = prepareCodexTarget(codexServers, inventory, state);
+  const preparations: Record<McpClient, JsonTargetPreparation> = {
+    claude: prepareJsonTarget(MCP_CLIENT_TARGETS.claude, 'mcpServers', claudeServers, inventory, state, JSON.parse, selectionFor('claude')),
+    vscode: prepareJsonTarget(MCP_CLIENT_TARGETS.vscode, 'servers', vscodeServers, inventory, state, parseJsonc, selectionFor('vscode')),
+    antigravity: prepareJsonTarget(
+      MCP_CLIENT_TARGETS.antigravity,
+      'mcpServers',
+      agyServers,
+      inventory,
+      state,
+      JSON.parse,
+      selectionFor('antigravity'),
+    ),
+    codex: prepareCodexTarget(codexServers, inventory, state, selectionFor('codex')),
+  };
+  for (const client of MCP_CLIENTS) operations.push(...preparations[client].operations);
 
-  operations.push(...claudePrep.operations);
-  operations.push(...vscodePrep.operations);
-  operations.push(...agyPrep.operations);
-  operations.push(...codexPrep.operations);
-
+  // A server is recorded only for the client files it is generated into.
   const nextManagedMcpServers: Record<string, ManagedMcpServerState> = {};
   for (const [name, server] of Object.entries(servers)) {
-    const sourceFp = fingerprintObject(server);
-    nextManagedMcpServers[name] = {
-      sourceFingerprint: sourceFp,
-      targetFingerprints: {
-        '.mcp.json': claudePrep.targetFingerprints[name] ?? '',
-        '.vscode/mcp.json': vscodePrep.targetFingerprints[name] ?? '',
-        '.agents/mcp_config.json': agyPrep.targetFingerprints[name] ?? '',
-        '.codex/config.toml': codexPrep.targetFingerprints[name] ?? '',
-      },
-    };
+    const targetFingerprints: Record<string, string> = {};
+    for (const client of MCP_CLIENTS) {
+      if (wants(client, server)) {
+        targetFingerprints[MCP_CLIENT_TARGETS[client]] = preparations[client].targetFingerprints[name] ?? '';
+      }
+    }
+    nextManagedMcpServers[name] = { sourceFingerprint: fingerprintObject(server), targetFingerprints };
   }
 
   return {

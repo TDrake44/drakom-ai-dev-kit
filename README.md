@@ -251,8 +251,129 @@ Variable references in commands, arguments, URLs, environment values, and
 headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
 receives `${env:VAR}`. Codex maps whole environment and header references to
 its environment-backed fields; other references require a Codex override.
-Antigravity requires client-specific values for references it cannot expand.
-Sync reports a conflict when a reference cannot be represented safely.
+Antigravity cannot expand references at all: skip it for that server, or remove
+the field for it (both are described below). Sync reports a conflict when a
+reference cannot be represented safely.
+
+### Choosing clients
+
+By default every server is generated for all four clients. Two optional keys
+narrow that:
+
+```yaml
+clients: [claude, vscode, codex]   # registry root; omit it to use all four
+servers:
+  github:
+    http:
+      url: https://mcp.example.com/github
+      headers:
+        Authorization: "Bearer ${GITHUB_TOKEN}"
+    skip: [antigravity]            # do not generate this server for these clients
+```
+
+- `clients` is a non-empty list of `claude`, `vscode`, `antigravity`, `codex`,
+  without repeats. The kit does not generate a file for a client that is left
+  out, and that client's file is never a conflict, whether it exists, is
+  missing, or is invalid.
+- `skip` leaves one server out of the listed clients. It may name a client that
+  `clients` already leaves out. A server that skips every selected client is an
+  error; remove the server instead.
+- A server is recorded in `state.json` only for the client files it is
+  generated into.
+
+When a server stops being generated for a client (through `clients` or `skip`)
+and the kit had written it into that client's file:
+
+| The entry in the client file | What `sync` does |
+| --- | --- |
+| Is still what the kit wrote | Removes that entry and stops tracking it. |
+| Was edited | Leaves it, stops tracking it, and lists a `WARNING` row. In `.codex/config.toml` the entry moves out of the managed block: its tables, and comment lines directly above a table header, are kept as written; its position in the file and blank lines around it may change. |
+| Is gone, or the file is gone or unreadable | Stops tracking it. |
+
+The kit never deletes a client file and never touches servers it did not write.
+A file it created can therefore be left with an empty server list (for
+`.codex/config.toml`, without the managed block); delete it if you do not need
+it. A client file you deleted on purpose stops being a conflict once its client
+is left out of `clients`.
+
+### Overrides
+
+`overrides.<client>` changes a server for one client. `env` and `headers` (also
+`http.headers`) are merged into the base server's values. Set a key to `null`
+to remove it for that client, or set the whole map to `null` to remove all of
+it:
+
+```yaml
+servers:
+  api:
+    command: node
+    env:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      LOG_LEVEL: info
+    overrides:
+      antigravity:
+        env:
+          GITHUB_TOKEN: null   # Antigravity gets LOG_LEVEL only
+      codex:
+        env: null              # Codex gets no env at all
+```
+
+`null` is only valid inside `overrides`.
+
+### Literal credentials
+
+`sync` refuses a registry that holds a literal credential, because the registry
+and the generated files are committed. A value is refused when:
+
+- its `env` or URL parameter name contains a credential word (`API_KEY`,
+  `APIKEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `AUTH`, `CREDENTIAL`,
+  `CREDENTIALS`, `JWT`, `PRIVATE_KEY`) as a whole underscore-separated part,
+  unless the name ends in a part that only describes one: `MODE`, `TYPE`,
+  `METHOD`, `SCHEME`, `PROVIDER`, `URL`, `URI`, `ENDPOINT`, `FILE`, `PATH`,
+  `DIR`, `NAME`, `ENABLED`, `TTL`, `TIMEOUT`. So `GITHUB_TOKEN`, `AUTH` and
+  `DB_PASSWORD` are refused; `AUTH_MODE`, `TOKEN_URL` and `PASSWORD_FILE` are
+  not;
+- its header is `Authorization`, `Api-Key`, `X-Api-Key`, `Token`, `Auth` or
+  `X-Auth-Token`;
+- the value looks like a token (`sk-…`, `ghp_…`, `gho_…`, `glpat-…`, `xox…`);
+- the server's own URL carries a user name or password;
+- the name contains a credential word, or is one of those headers, and the
+  value is a URL carrying credentials before the host (`user:pw@host`, with or
+  without a scheme) or a query parameter named like a credential
+  (`?token=…`). A descriptive ending does not excuse this, so
+  `AUTH_URL: https://host/x?token=…` is refused.
+
+URL credentials in an `env` value under any other name are not detected:
+`DATABASE_URL: postgres://user:pw@host/db` passes, so keep such values in a
+`${VAR}` reference yourself. In an override, `headers` and `http.headers` are
+both checked.
+
+A `${VAR}` reference is always accepted. The conflict names the field, for
+example `env.AUTH`. If that value is not a secret, list the path exactly as
+printed under the server's `notSecret`:
+
+```yaml
+servers:
+  api:
+    command: node
+    env:
+      AUTH: basic
+    notSecret: [env.AUTH, overrides.codex.env.AUTH]
+    overrides:
+      codex:
+        env:
+          AUTH: digest   # a separate field, so it has its own path
+```
+
+- `notSecret` accepts `env.NAME` and `headers.NAME`, and
+  `overrides.<client>.env.NAME` and `overrides.<client>.headers.NAME` for a
+  value set in an override. Each path covers that one field only.
+- It switches off the name check only. A token-shaped value, or a URL value
+  carrying credentials as described above, is refused even when its field is
+  listed.
+- A path that matches no field of the server is an error, so a typo is caught.
+
+### Initialization
 
 During initialization, Drakom AI Dev Kit compares discovered repository-local MCP
 configuration with the registry and reports what it found, preserving unmanaged
@@ -260,6 +381,17 @@ definitions rather than adopting them automatically. Run the `drakom-ai-setup`
 skill to walk through the reported decisions (import, import with overrides,
 leave unmanaged, or skip) for each discovered server. Use `--skip-mcp` if the
 project should not initialize MCP management.
+
+To turn MCP management on later, create `.drakom-ai/mcp-servers.yaml` (an empty
+`servers: {}` is enough) and run `drakom-ai sync`. The plan then includes MCP
+generation and sets `features.mcp` to `true` in `state.json`; `sync --check`
+reports this as drift until it is applied. Without that file, a `--skip-mcp`
+project stays as it is.
+
+This also applies on upgrade: a project initialized with `--skip-mcp` that
+already has `.drakom-ai/mcp-servers.yaml` has MCP turned on by its next `sync`
+with this version, and `sync --check` reports drift until then. To keep MCP
+off, remove the registry file.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
 
@@ -282,7 +414,7 @@ When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-man
 | `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
 | `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
 | `drakom-ai init [path] --yes` | Apply safe initialization without a prompt; it refuses structured merges into existing entry points. |
-| `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. |
+| `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. To turn MCP on later, create `.drakom-ai/mcp-servers.yaml` and run `sync`. |
 | `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
 | `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. A conflict holds back only its own item. |
 | `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |

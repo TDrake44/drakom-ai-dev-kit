@@ -22,6 +22,9 @@ Options:
   --yes       Apply safe initialization without prompting; refuse structured merges.
   --skip-mcp  Initialize without MCP registry management.
   -h, --help  Show this help message.
+
+To turn MCP management on after --skip-mcp, create .drakom-ai/mcp-servers.yaml
+and run "drakom-ai sync".
 `;
 
 const syncHelp = `Usage: drakom-ai sync [path] [options]
