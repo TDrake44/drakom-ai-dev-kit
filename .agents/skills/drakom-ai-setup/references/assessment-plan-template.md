@@ -1,5 +1,9 @@
 # Project Context Adoption Plan
 
+**Status:** Active: assessment drafted, waiting for approval.
+
+**Synopsis:** What project context this repository should keep, refine, add or omit, and why.
+
 ## Context
 
 - Repository evidence:
