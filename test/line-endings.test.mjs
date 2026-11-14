@@ -209,6 +209,8 @@ test('fingerprints that 0.5.0 recorded over CRLF bytes are re-recorded once, the
   const crlfAnatomy = toCrlf(await read(root, ruleAnatomy));
   await write(root, ruleAnatomy, crlfAnatomy);
   const state = JSON.parse(await read(root, statePath));
+  const payloadSkill = await readFile(path.join(repositoryRoot, 'payload/v1/skills/drakom-ai-setup/SKILL.md'), 'utf8');
+  state.managedFiles[setupSkill].fingerprint = fingerprint(toCrlf(payloadSkill));
   state.managedFiles[setupSkill].acceptedFingerprint = fingerprint(editedSkill);
   state.managedFiles[ruleAnatomy].fingerprint = fingerprint(crlfAnatomy);
   state.managedSkillMirrors[setupMirror].fingerprint = fingerprint(mixedMirrorOf(editedSkill));
@@ -228,6 +230,42 @@ test('fingerprints that 0.5.0 recorded over CRLF bytes are re-recorded once, the
   assert.equal(healed.managedSkillMirrors[setupMirror].fingerprint, lfFingerprint(mixedMirrorOf(editedSkill)));
   assert.equal(healed.managedBlocks['AGENTS.md#drakom-ai'].fingerprint, lfFingerprint(`${MANAGED_BLOCK}\n`));
   await assertCleanOnEveryCheckout(root);
+});
+
+test('legacy CRLF records migrate after an LF checkout while actual edits still conflict', async (t) => {
+  const root = await tempTarget(t);
+  assert.equal(drakom(['init', root, '--yes']).status, 0);
+  const baseline = await read(root, setupSkill);
+  const edit = '---\nname: drakom-ai-setup\ndescription: Accepted locally\n---\n\n# Mine\n';
+  await write(root, setupSkill, edit);
+  const state = JSON.parse(await read(root, statePath));
+  state.managedFiles[setupSkill].fingerprint = fingerprint(toCrlf(baseline));
+  state.managedFiles[setupSkill].acceptedFingerprint = fingerprint(toCrlf(edit));
+  state.managedBlocks['AGENTS.md#drakom-ai'].fingerprint = fingerprint(toCrlf(`${MANAGED_BLOCK}\n`));
+  await write(root, statePath, `${JSON.stringify(state, null, 2)}\n`);
+
+  const heal = drakom(['sync', root]);
+
+  assert.equal(heal.status, 0, heal.stdout + heal.stderr);
+  assert.equal(await read(root, setupSkill), edit);
+  const healed = JSON.parse(await read(root, statePath));
+  assert.equal(healed.managedFiles[setupSkill].fingerprint, lfFingerprint(baseline));
+  assert.equal(healed.managedFiles[setupSkill].acceptedFingerprint, lfFingerprint(edit));
+  assert.equal(healed.managedBlocks['AGENTS.md#drakom-ai'].fingerprint, lfFingerprint(`${MANAGED_BLOCK}\n`));
+  await assertCleanOnEveryCheckout(root);
+
+  await write(root, setupSkill, `${edit}Edited again.\n`);
+  const changed = drakom(['sync', root, '--check']);
+  assert.equal(changed.status, 2, changed.stdout + changed.stderr);
+  assert.match(changed.stdout, /CONFLICT.*edited again after its local edit was accepted/);
+  assert.equal(await read(root, setupSkill), `${edit}Edited again.\n`);
+
+  await write(root, setupSkill, edit);
+  healed.managedFiles[setupSkill].fingerprint = fingerprint(toCrlf(`${baseline}A different kit baseline.\n`));
+  await write(root, statePath, `${JSON.stringify(healed, null, 2)}\n`);
+  const kitChanged = drakom(['sync', root, '--check']);
+  assert.equal(kitChanged.status, 2, kitChanged.stdout + kitChanged.stderr);
+  assert.match(kitChanged.stdout, /CONFLICT.*changed this file, which has an accepted local edit/);
 });
 
 test('a mixed-ending 0.5.0 mirror that a checkout already converted is re-recorded, not a conflict', async (t) => {

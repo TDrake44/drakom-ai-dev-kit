@@ -47,14 +47,17 @@ export function fingerprint(content: string): string {
 
 /**
  * How a recorded fingerprint matches the text: `current` for the fingerprint this version records,
- * `legacy` for a hash of the exact bytes that earlier versions recorded over CRLF text, or undefined.
- * A `legacy` match only holds while the file keeps those exact bytes, so callers record the current
- * fingerprint in its place.
+ * `legacy` for an earlier raw-byte hash of the current text or its all-CRLF form, or undefined.
+ * Checking the all-CRLF form also recognizes records after an LF checkout. Callers replace legacy
+ * records with the current fingerprint. Arbitrary mixed endings cannot be reconstructed from a hash.
  */
 export function fingerprintMatch(content: string, recorded: string | undefined): 'current' | 'legacy' | undefined {
   if (recorded === undefined) return undefined;
   if (recorded === fingerprint(content)) return 'current';
-  return recorded === `sha256:${createHash('sha256').update(content).digest('hex')}` ? 'legacy' : undefined;
+  for (const candidate of new Set([content, withLineEnding(content, '\r\n')])) {
+    if (recorded === `sha256:${createHash('sha256').update(candidate).digest('hex')}`) return 'legacy';
+  }
+  return undefined;
 }
 
 /** Whether a recorded fingerprint matches the text, in either form `fingerprintMatch` accepts. */
