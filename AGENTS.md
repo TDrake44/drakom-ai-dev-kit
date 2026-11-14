@@ -14,7 +14,6 @@ Load only the rule files relevant to the active task, not all of them at session
 | :--- | :--- |
 | Implementing features, fixing bugs, refactoring code | [`.drakom-ai/rules/coding.md`](.drakom-ai/rules/coding.md) + [`.drakom-ai/rules/testing.md`](.drakom-ai/rules/testing.md) |
 | Documentation, READMEs, API specifications | [`.drakom-ai/rules/documentation.md`](.drakom-ai/rules/documentation.md) |
-| Deep-dive reference material | Companion `<rule>-reference.md` files (on-demand only) |
 
 
 ## 2. Skill Suite
@@ -46,7 +45,7 @@ with `EPERM`. Use `pnpm run test` with the approved command prefix where
 available; sandbox subprocess failures do not establish a project test failure.
 
 ```bash
-# 1. Formatting & Linting
+# 1. Linting
 pnpm lint
 
 # 2. Type Checking
@@ -68,6 +67,7 @@ pnpm sync:check
 * **Human Gates**: High-stakes operations (modifying plans, creating new architecture, posting PR comments) require explicit human approval.
 * **Changesets**: Any PR introducing user-facing features, fixes, or breaking changes intended for package publication must include a changeset via `pnpm changeset`. Documentation-only updates, test fixtures, and internal refactors do not require one.
 * **Runtime**: Use Node.js >= 24 (declared in `.nvmrc`) for development, releases, and the published CLI.
+* **Kit payload**: The `drakom-*` skills, their references and the templates are authored in `payload/v1/`. The copies under `.agents/skills/drakom-*` are installed by `pnpm sync` and recorded in `.drakom-ai/state.json`; edit the payload, then run `pnpm sync`. In this repo run the CLI as `pnpm sync` or, after `pnpm build`, `node dist/cli.js`. `pnpm drakom-ai` does not resolve here, and `npx` would fetch the published version instead of this checkout.
 
 <!-- drakom-ai:start -->
 ## Drakom AI Development Context

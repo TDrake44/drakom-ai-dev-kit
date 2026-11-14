@@ -9,7 +9,7 @@ Applies to READMEs, docstrings, architectural specifications, and inline comment
 - Document reasons and constraints rather than restating self-evident code mechanics.
 
 ## 3. Prohibited Patterns
-- **No Outdated CLI Flags**: Every listed command must match current `package.json` scripts.
+- **No stale commands or flags**: `pnpm` commands must match `package.json` scripts, and `drakom-ai` flags must match `src/cli-help.ts` and `src/cli-arguments.ts`.
 - **No Bloated Setups**: Avoid redundant conversational narrative in instruction documents.
 
 ## 4. Verification

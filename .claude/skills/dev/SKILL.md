@@ -14,7 +14,7 @@ description: Implementation driver executing features and bug fixes using Test-D
 
 ## Execution Loop (TDD)
 1. Write failing tests covering the acceptance criteria from the plan or request.
-2. Run test suite to verify test failure (`pnpm test`).
+2. Run test suite to verify test failure (`pnpm run test`).
 3. Implement minimal viable code passing the tests.
 4. Refactor while strictly conforming to Prohibited Patterns in `.drakom-ai/rules/coding.md`.
 5. Run linting and typecheck verification commands.
