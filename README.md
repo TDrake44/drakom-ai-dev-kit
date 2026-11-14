@@ -51,9 +51,32 @@ $drakom-ai-setup    # OpenAI Codex CLI
 ```
 
 It inspects the repository and proposes project-specific context for your
-approval. The kit also installs skills for authoring project skills and auditing
-local plans. It creates `.drakom-ai/` for rules, plans and specifications;
-the [workflow guide](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/agent-workflows.md) shows the full layout.
+approval.
+
+## Project layout
+
+```text
+.drakom-ai/
+  rules/                 # Project-owned policies
+  plans/                 # Local, ignored scratchpads
+  specs/                 # Shared specifications and decisions
+  mcp-servers.yaml       # MCP server registry
+  state.json             # Kit-managed ownership records
+.agents/skills/          # Canonical skills
+.claude/skills/          # Generated Claude Code mirrors
+AGENTS.md / CLAUDE.md    # Agent entry points
+```
+
+The [workflow guide](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/agent-workflows.md)
+covers the full scaffold, ownership and worktree behavior.
+
+## Included skills
+
+| Skill | When to use it |
+| --- | --- |
+| `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
+| `drakom-skill-author` | Find, draft or refine useful project skills, with approval before changes. |
+| `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
 
 ## Day-to-day use
 
