@@ -2,4 +2,4 @@
 '@drakom/ai-dev-kit': patch
 ---
 
-Stop shipping TypeScript declaration files in the published package; it is a CLI and exposes no importable API.
+**Smaller package.** Stop shipping TypeScript declarations for the CLI; no importable API is exposed.

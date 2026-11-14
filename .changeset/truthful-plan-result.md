@@ -2,4 +2,4 @@
 '@drakom/ai-dev-kit': patch
 ---
 
-Stop printing "no changes made" above a plan that is then applied; dry-run and check now end with their own no-changes statement.
+**Accurate summaries.** Applied plans no longer say "no changes made". Dry-run and check retain their own no-change summaries.
