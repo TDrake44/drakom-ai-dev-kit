@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 926b03f: **Safer sync conflicts.** One edited managed file no longer blocks unrelated updates. Use `sync --accept <path>` to keep an edit or `sync --release <path>` to take ownership. Sync exits `2` while conflicts remain and warns about detached files that differ from the kit.
+- 5aa8455: **Updated MCP output.** VS Code can use the shared root `.mcp.json`; `.vscode/mcp.json` remains available during its deprecation period. Antigravity uses `serverUrl` and `timeoutSeconds`. Codex blocks stay in place, preserve surrounding text and recognize inline/dotted server definitions.
+  
+  Sync also preserves legacy Codex content, accepts entries already matching generated output, and rejects unsafe `__proto__` keys. See the [upgrade notes](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/upgrading.md#upgrading-to-060) for shared-file exclusions and override changes.
+- e8461e1: **Choose MCP clients.** Select clients with registry-level `clients` and per-server `skip`. Overrides can remove environment/header values with `null`; `notSecret` marks ordinary values without allowing token-shaped secrets. Adding a registry after `init --skip-mcp` now enables MCP on the next sync.
+  
+  **Upgrade:** both header maps are now checked for literal credentials. Review the [0.6.0 upgrade notes](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/upgrading.md#upgrading-to-060) before syncing an existing project.
+
+### Patch Changes
+
+- ca923c1: **Project-owned READMEs.** Editing or deleting the starter rules/specs READMEs no longer blocks sync. Existing files are preserved; their old managed records are removed automatically.
+- 62764f0: **Windows line endings.** Preserve existing LF/CRLF conventions and avoid false conflicts after checkout conversion. Sync migrates matching legacy fingerprints automatically; unrecoverable old mixed-ending records remain conflicts. See the [upgrade notes](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/upgrading.md#upgrading-to-060) for migration and downgrade limits.
+- 54d29eb: **Smaller package.** Stop shipping TypeScript declarations for the CLI; no importable API is exposed.
+- 186797b: **Fresh-install instructions.** Skills create missing AGENTS.md sections outside the managed block and invoke the CLI through the project's package runner.
+- ff8a724: **Windows diagnostics.** State-file errors use forward-slash paths, consistent with other CLI output.
+- 9cf9a0a: **Clearer skills.** Shorter setup assessments, explicit approval handoffs, optional rule prohibitions and a 150-line ceiling. Plan-audit defines its expected header; starter guidance no longer suggests a fixed rule set.
+- 362615a: **Safe Claude symlinks.** Accept `.claude/skills` and `CLAUDE.md` links to their canonical targets; refuse writes through other links. Unanswered initialization prompts exit cleanly.
+- 62764f0: **Linked target directories.** Init and sync accept a directory symlink as their target. Broken, looping and file links produce actionable errors.
+- bbd8dc4: **Accurate summaries.** Applied plans no longer say "no changes made". Dry-run and check retain their own no-change summaries.
+
 ## 0.5.0
 
 ### Minor Changes
