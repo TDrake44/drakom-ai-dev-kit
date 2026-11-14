@@ -4,3 +4,6 @@ dist/
 # Local AI scratchpads and working assets
 .drakom-ai/plans/*
 .drakom-ai/assets/*
+
+# Claude Code agent worktrees
+.claude/worktrees/

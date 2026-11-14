@@ -30,17 +30,16 @@ Prefer invoking the standardized skills over ad-hoc prompting. Skills guarantee 
 
 *Note: In Claude Code, Copilot, and Antigravity, invoke with `/`. In OpenAI Codex CLI, invoke with `$`.*
 
-These are starter defaults. Projects may edit, replace, or remove them; keep
-this table and the Standards Index synchronized with the files that remain.
+Keep this table and the Standards Index synchronized with the files that exist.
 
 
 ## 3. Key Verification Commands
 
 Always run these commands before considering work complete. Never report a failing run as passing:
 
-The reference implementation uses Biome, TypeScript `checkJs`, and Node's
-built-in test runner. Replace these commands with the target project's native
-tooling when bootstrapping the architecture elsewhere.
+This repository uses Biome, TypeScript (`tsconfig.json` builds `src/*.ts` to
+`dist/`; `jsconfig.json` type-checks the `test/**/*.mjs` files with `checkJs`),
+and Node's built-in test runner.
 
 Run this repository's tests outside the sandbox when it blocks Node subprocesses
 with `EPERM`. Use `pnpm run test` with the approved command prefix where

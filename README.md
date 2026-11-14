@@ -247,6 +247,9 @@ into these repository-local client files:
 `.vscode/mcp.json` is read as JSONC, so it may contain comments and trailing
 commas. `.mcp.json` and `.agents/mcp_config.json` must be strict JSON.
 
+Codex and GitHub Copilot CLI load project-level MCP configuration only in
+folders you have marked as trusted.
+
 Antigravity receives the fields its MCP documentation defines: `command`,
 `args` and `env` for a local server, `serverUrl` and `headers` for a remote one
 (remote servers must use Streamable HTTP), and `timeoutSeconds` for either. Set
