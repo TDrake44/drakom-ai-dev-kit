@@ -575,12 +575,12 @@ test('the root file switches to the vscode version when claude is deselected', a
   assertInSync(root);
 });
 
-test('the README explains the VS Code move to the root file', async () => {
-  const readme = await readFile(path.join(repositoryRoot, 'README.md'), 'utf8');
+test('the MCP guide explains the VS Code move to the root file', async () => {
+  const guide = await readFile(path.join(repositoryRoot, 'docs', 'mcp.md'), 'utf8');
 
-  assert.match(readme, /February 2027/);
-  assert.match(readme, /Local harness/);
-  assert.match(readme, /`\.mcp\.json` for Claude Code, GitHub Copilot CLI and VS Code/);
+  assert.match(guide, /February 2027/);
+  assert.match(guide, /Local harness/);
+  assert.match(guide, /`\.mcp\.json` for Claude Code, GitHub Copilot CLI and VS Code/);
 });
 
 // ---------------------------------------------------------------------------
