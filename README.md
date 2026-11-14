@@ -5,542 +5,118 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/TDrake44/drakom-ai-dev-kit/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/TDrake44/drakom-ai-dev-kit/actions)
 [![license](https://img.shields.io/npm/l/@drakom/ai-dev-kit?style=flat-square)](LICENSE)
 
-> A portable, tool-agnostic workflow system for high-leverage AI development.
+Keep project rules, agent skills and MCP server definitions in one place while
+working with Claude Code, OpenAI Codex, Antigravity and GitHub Copilot.
 
-I built this workflow for my own hobby development. Between a full-time job and family life, my time for personal projects is precious. AI assistants make it possible for me to keep building and shipping, but managing setup, context, and prompt drift across tools was eating into my limited coding hours.
+I built this for my own hobby projects to spend less time maintaining duplicate
+agent configuration. It scaffolds shared context, helps an agent propose useful
+project-specific rules, and synchronizes supported client files.
 
-I frequently bounce between **Claude Code**, **OpenAI Codex**, **Antigravity**, and **GitHub Copilot** depending on which memberships and quotas I have available at any given time. I didn't want vendor lock-in, but I also refused to manage configurations, rules, and skills in four different places.
+## What it does
 
-**Drakom AI Dev Kit** is the packaged, portable version of the system I landed on:
-- **Instant Portability**: Spawns a lightweight, predictable structure (`plans/`, `specs/`, `assets/`, `rules/`) into any new or existing project with a single command.
-- **Zero Tool Lock-in**: Define agent rules and skills in one canonical place; `drakom-ai sync` brings your tool-specific configs back into line, and `drakom-ai sync --check` detects drift.
-- **Lightweight & Modular**: Separates scratchpad thinking (`plans/`) from tracked architecture (`specs/`) and task-scoped rules without boilerplate bloat.
-
-Because I use this daily across all my personal projects, it is a living system that I'll continue to refine and polish as my workflows and the AI tooling landscape evolve.
-
-Drakom is an independently maintained open-source project brand.
-
-## What It Does
-
-| Capability | Purpose |
+| Capability | How it helps |
 | --- | --- |
-| Context scaffold | Creates an isolated `.drakom-ai/` namespace plus minimal `AGENTS.md` and `CLAUDE.md` entry points. |
-| Rule governance | Uses `/drakom-ai-setup` (or `$drakom-ai-setup`) to assess a repository before proposing project-specific rules, then requires approval before creating them. |
-| Task routing | Keeps `AGENTS.md` as the concise router from a task type to the relevant on-demand rules and skills. |
-| Canonical skills | Stores portable agent skills in `.agents/skills/` and mirrors them to Claude Code under `.claude/skills/`. |
-| MCP synchronization | Generates supported tool configuration from one `.drakom-ai/mcp-servers.yaml` registry. |
-| Safe updates | Records managed-file fingerprints in `.drakom-ai/state.json` and reports drift or conflicts instead of overwriting local edits. |
+| Shared context | `AGENTS.md` routes tasks to the project's rules and skills; `CLAUDE.md` imports it. |
+| Project assessment | The setup skill recommends rules and workflows from repository evidence, with approval before changes. |
+| Portable skills | Canonical skills live in `.agents/skills/`; sync generates Claude Code mirrors. |
+| MCP configuration | One `.drakom-ai/mcp-servers.yaml` registry generates supported client configuration. |
+| Safe updates | Sync tracks managed content, previews changes and reports conflicts for local edits. |
 
-## Quick Start
+## Requirements
 
-Use a one-time invocation to evaluate Drakom AI Dev Kit without adding it to the project:
+- Package users: Node.js >= 24.
+- pnpm >= 10.15.0, or npm for one-time invocation.
+- Contributors and release automation require Node.js 24 LTS. Use `.nvmrc` with a compatible version manager; Changesets v3 requires Node.js >= 22.11.0.
 
-```bash
-# Using npx or pnpm dlx
-npx @drakom/ai-dev-kit init .
-# or
-pnpm dlx @drakom/ai-dev-kit init .
-```
+## Quick start
 
-Or install it as a development dependency for ongoing synchronization:
+Install in your project for ongoing synchronization:
 
 ```bash
 pnpm add -D @drakom/ai-dev-kit
 pnpm drakom-ai init .
 ```
 
-When initialization completes, open your preferred AI assistant and run the setup skill:
+For one-time use:
+
+```bash
+npx @drakom/ai-dev-kit init .
+```
+
+After initialization, ask your AI assistant to run the setup skill:
 
 ```text
 /drakom-ai-setup    # Claude Code, Antigravity, GitHub Copilot
 $drakom-ai-setup    # OpenAI Codex CLI
 ```
 
-Initialization also installs the `drakom-plan-audit` skill. Ask your agent to
-use it when you want to review or clean up local `.drakom-ai/plans/`.
+It inspects the repository and proposes project-specific context for your
+approval.
 
-The agent will inspect your repository (tooling, scripts, directory structure), propose the smallest useful set of project-owned rules, create an approval-gated plan under `.drakom-ai/plans/`, and only make changes once you review and approve.
-
-## What `init` Creates
-
-For a fresh repository, `drakom-ai init .` creates:
+## Project layout
 
 ```text
 .drakom-ai/
-├── .gitignore
-├── mcp-servers.yaml              # omitted with --skip-mcp
-├── state.json
-├── assets/                       # ignored, initially empty
-├── plans/                        # ignored, initially empty
-├── rules/
-│   └── README.md                 # explains project-specific rules
-└── specs/
-    └── README.md                 # explains tracked architecture specifications
-
-.agents/
-└── skills/
-    ├── drakom-ai-setup/
-    │   ├── SKILL.md
-    │   └── references/
-    │       ├── assessment-plan-template.md
-    │       └── rule-anatomy.md
-    ├── drakom-skill-author/
-    │   ├── SKILL.md
-    │   └── references/
-    │       └── skill-patterns.md
-    └── drakom-plan-audit/
-        └── SKILL.md
-
-.claude/
-└── skills/                       # generated SKILL.md-only mirrors for Claude Code
-    ├── drakom-ai-setup/SKILL.md
-    ├── drakom-skill-author/SKILL.md
-    └── drakom-plan-audit/SKILL.md
-
-AGENTS.md
-CLAUDE.md
-.worktreeinclude
+  rules/                 # Project-owned policies
+  plans/                 # Local, ignored scratchpads
+  specs/                 # Shared specifications and decisions
+  mcp-servers.yaml       # MCP server registry
+  state.json             # Kit-managed ownership records
+.agents/skills/          # Canonical skills
+.claude/skills/          # Generated Claude Code mirrors
+AGENTS.md / CLAUDE.md    # Agent entry points
 ```
 
-`init` refuses to replace a hand-authored `.claude/skills/` entry that shares a
-kit skill's name; it reports a conflict and makes no changes. `init` mirrors only
-the kit's skills. Run `drakom-ai sync .` to mirror skills your project already
-has in `.agents/skills/`.
+The [workflow guide](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/agent-workflows.md)
+covers the full scaffold, ownership and worktree behavior.
 
-`init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
+## Included skills
 
-### Core Structure & Workflow Roles
-
-| Directory / File | Tracking | Role in Workflow |
-| --- | --- | --- |
-| `.drakom-ai/plans/` | Local (gitignored) | Scratchpad planning for agent task breakdowns, checklists, and TDD loops before writing code. |
-| `.drakom-ai/specs/` | Tracked (git) | Architecture specifications and RFCs elevated for team review and multi-session continuity. |
-| `.drakom-ai/rules/` | Tracked (git) | Modular coding and testing standards loaded on-demand via `AGENTS.md` (preventing context bloat). |
-| `.drakom-ai/assets/` | Local (gitignored) | Screenshots, mockups, or error logs referenced by agents during tasks. |
-| `.agents/skills/` | Tracked (git) | Canonical, portable agent task procedures mirrored to `.claude/skills/` via `sync`. |
-| `AGENTS.md` / `CLAUDE.md` | Tracked (git) | Front-door context hub and task router across all supported AI assistants. |
-| `.worktreeinclude` | Tracked (git) | Preserves local gitignored AI context (`.drakom-ai/plans/*`, `.drakom-ai/assets/*`) across git worktrees. |
-
-## How Rules and Skills Evolve
-
-`AGENTS.md` is the front door. It should route a task to only the rules needed
-for that task; it is not a place to paste every project policy. `CLAUDE.md`
-imports that shared router so the two entry points stay aligned.
-
-When a project needs to add, revise, rename, or retire a rule, run the setup
-skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
-
-1. Creates the rule under `.drakom-ai/rules/`, following the anatomy and size
-   budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
-2. Adds a task-based link to the `AGENTS.md` Standards Index.
-3. Revises stale routes when a rule is renamed or superseded.
-4. Verifies links, commands, and relevant project checks.
-
-Skills are procedures rather than policy. Author them in `.agents/skills/`; run
-`drakom-ai sync .` to generate their Claude Code mirrors. The
-`drakom-skill-author` skill (`/drakom-skill-author` or `$drakom-skill-author`)
-manages project skills, and setup hands approved skill additions to it:
-
-1. **Find**: proposes a candidate only from evidence of repeated work (git and
-   pull request history, CI configuration, package scripts, contribution docs,
-   plans and specs) or an explicit request.
-2. **Write**: drafts a short skill that routes to rules instead of copying
-   them, with stop points, verification commands, and a report.
-3. **Check**: walks the draft through a recent real task and verifies its paths
-   and commands.
-4. **Refine or retire**: makes targeted fixes to stale or misfiring skills, or
-   proposes removing unused ones.
-
-It asks for approval before creating, changing, or removing any project skill.
-Common archetypes and a worked example are in
-`.agents/skills/drakom-skill-author/references/skill-patterns.md`.
-
-A project may add, replace, or remove its own rules and skills—the kit does not
-claim ownership of them. Kit-managed skills use the `drakom-` prefix
-(`drakom-ai-setup`, `drakom-skill-author`, `drakom-plan-audit`); projects should
-not name their own skills with that prefix, to avoid colliding with skills the
-kit may add in the future.
-
-## Managed and Project-Owned Content
-
-Managed by Drakom AI Dev Kit:
-
-- `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`)
-- `drakom-skill-author` skill and its reference (`skill-patterns.md`)
-- `drakom-plan-audit` skill
-- The managed block in `AGENTS.md`
-- Generated Claude skill mirrors
-- Generated MCP client blocks
-- Fingerprints in `.drakom-ai/state.json`
-
-Owned by the project:
-
-- Rules in `.drakom-ai/rules/`
-- The starter `README.md` files in `.drakom-ai/rules/` and `.drakom-ai/specs/`:
-  `init` creates each once if it is absent. They are not recorded in
-  `state.json`, and `sync` never updates, checks, or recreates them, so edit or
-  delete them freely.
-- Task routes and all other `AGENTS.md` content
-- Project-authored canonical skills in `.agents/skills/`
-- MCP registry choices and all unmanaged client configuration
-- Plans, specifications, `.worktreeinclude`, and team decisions
-
-Managed content is updated only when its recorded fingerprint still matches.
-If it has local edits, synchronization reports a conflict rather than replacing
-it. Files with no managed changes are left untouched. Files with managed
-changes are edited minimally: unmanaged content and comments outside managed
-entries are kept. Single-line content on the lines an edit touches, or an
-entire minified file, may be reformatted.
-
-### Conflicts
-
-A conflict holds back only its own item. `sync` still applies every other
-update and records it in `state.json`, leaves the conflicting file and its
-record exactly as they were, and exits `2` until the conflict is resolved. Two
-exceptions are deliberately wider:
-
-- An MCP conflict holds back all generated MCP client files, because each
-  server's record spans every client file.
-- The Claude mirror of a kit skill is left alone while that skill is in conflict.
-
-Each conflict row names its next step. For an edited or deleted kit-managed
-file, choose one:
-
-| You want | Do this |
+| Skill | When to use it |
 | --- | --- |
-| The kit's version back | Restore the file (from Git, or from `payload/v1/` in the installed package) and run `drakom-ai sync`. |
-| To keep your edit and stay managed | `drakom-ai sync --accept <path>` |
-| To own the file yourself | `drakom-ai sync --release <path>` |
+| `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
+| `drakom-skill-author` | Find, draft or refine useful project skills, with approval before changes. |
+| `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
 
-- `--accept` records your version (`acceptedFingerprint`) next to the kit's
-  current version of that file. Your edit is kept, is not drift, and is never
-  overwritten. When a later kit release changes that file, `sync` reports a
-  conflict again so you can merge the kit's changes and accept again. Only a
-  file with a local edit can be accepted: not a missing file, and not one that
-  is merely behind the kit version.
-- `--release` moves the file from `managedFiles` to `releasedFiles` in
-  `state.json` and leaves the file alone. It also works for a managed file you
-  deleted on purpose. The kit never updates or recreates a released file.
-- A kit CLI older than 0.6.0 does not know either record. It reports an accepted
-  file as a locally modified conflict and does not overwrite it. If it writes
-  `state.json`, it drops `releasedFiles`, so use one kit version across a team.
-- Both options are repeatable, apply to kit-managed files only (not skill
-  mirrors, the `AGENTS.md` block, or MCP client files), and take paths relative
-  to the target as printed in the plan. Any other path is an error.
-- With `--dry-run`, both are previewed and nothing is written. They cannot be
-  combined with `--check`.
+## Day-to-day use
 
-A kit file that is present but not managed, and differs from the kit's version,
-is listed as a `WARNING` row. This is what a released file looks like. A
-warning is not drift and does not change the exit code.
+Edit canonical skills in `.agents/skills/` and MCP definitions in
+`.drakom-ai/mcp-servers.yaml`. After those edits or a kit update:
 
-## MCP Configuration
-
-Declare MCP servers once in `.drakom-ai/mcp-servers.yaml` and synchronize them
-into these repository-local client files:
-
-- `.mcp.json` for Claude Code, GitHub Copilot CLI and VS Code
-- `.vscode/mcp.json` for VS Code's Local harness (deprecated, see below)
-- `.agents/mcp_config.json` for Antigravity CLI
-- `.codex/config.toml` for OpenAI Codex CLI
-
-`.vscode/mcp.json` is read as JSONC, so it may contain comments and trailing
-commas. `.mcp.json` and `.agents/mcp_config.json` must be strict JSON.
-
-Codex and GitHub Copilot CLI load project-level MCP configuration only in
-folders you have marked as trusted.
-
-Antigravity receives the fields its MCP documentation defines: `command`,
-`args` and `env` for a local server, `serverUrl` and `headers` for a remote one
-(remote servers must use Streamable HTTP), and `timeoutSeconds` for either. Set
-the timeout with `overrides.antigravity.timeoutSeconds`, in seconds. Earlier
-releases also wrote `transport` and `timeout`, which Antigravity does not
-define; `overrides.antigravity.type`, `transport` and `timeout` are still
-accepted, are no longer written, and `sync` lists a `WARNING` row for each
-server that sets them.
-
-#### VS Code and the root `.mcp.json`
-
-VS Code's Copilot harness reads the workspace-root `.mcp.json`, in the same
-format Claude Code uses. `.vscode/mcp.json` belongs to VS Code's Local harness,
-which is deprecated and will be removed in February 2027; a later release of
-the kit will stop generating `.vscode/mcp.json`. Until then:
-
-- `.mcp.json` is written when `clients` includes `claude` or `vscode`. A server
-  goes into it when it is generated for either of them, unless it has
-  `skip: [claude]`: Claude Code reads `.mcp.json`, so such a server stays out of
-  it, goes to `.vscode/mcp.json` only, and `sync` lists a `WARNING` row because
-  VS Code's Copilot harness will not see it from `.mcp.json`.
-- `.mcp.json` holds one version of each server. When both clients are
-  selected and `overrides.claude` and `overrides.vscode` give different
-  results, it holds the claude version, and `sync` lists a `WARNING` row: the
-  vscode override for that server only applies to `.vscode/mcp.json`. Without
-  `claude`, `.mcp.json` holds the vscode version.
-- A server that uses a `${input:...}` prompt for VS Code cannot be written to
-  `.mcp.json`. It goes to `.vscode/mcp.json` only, with a `WARNING` row.
-- `.vscode/mcp.json` is still written for `vscode`, as before.
-
-To stop generating `.vscode/mcp.json` today, select `claude` and leave `vscode`
-out of `clients` (for example `clients: [claude, codex]`). VS Code then reads
-the claude version of each server from `.mcp.json`; `overrides.vscode` and
-`${input:...}` prompts are not used anywhere. There is no key that keeps
-`vscode` selected but drops `.vscode/mcp.json`.
-
-Variable references in commands, arguments, URLs, environment values, and
-headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
-receives `${env:VAR}`. Codex maps whole environment and header references to
-its environment-backed fields; other references require a Codex override.
-Antigravity cannot expand references at all: skip it for that server, or remove
-the field for it (both are described below). Sync reports a conflict when a
-reference cannot be represented safely.
-
-### Choosing clients
-
-By default every server is generated for all four clients. Two optional keys
-narrow that:
-
-```yaml
-clients: [claude, vscode, codex]   # registry root; omit it to use all four
-servers:
-  github:
-    http:
-      url: https://mcp.example.com/github
-      headers:
-        Authorization: "Bearer ${GITHUB_TOKEN}"
-    skip: [antigravity]            # do not generate this server for these clients
+```bash
+pnpm drakom-ai sync . --dry-run   # Preview changes
+pnpm drakom-ai sync .            # Apply safe updates
+pnpm drakom-ai sync . --check    # Check for drift, including in CI
 ```
 
-- `clients` is a non-empty list of `claude`, `vscode`, `antigravity`, `codex`,
-  without repeats. The kit does not generate a file for a client that is left
-  out, and that client's file is never a conflict, whether it exists, is
-  missing, or is invalid. The shared `.mcp.json` is the exception: it belongs
-  to both `claude` and `vscode`, so it is generated, and can be a conflict,
-  while either of them is selected.
-- `skip` leaves one server out of the listed clients. It may name a client that
-  `clients` already leaves out. A server that skips every selected client is an
-  error; remove the server instead.
-- A server is recorded in `state.json` only for the client files it is
-  generated into.
+Sync reports conflicts for local edits and can still apply unrelated updates.
+A remaining conflict exits `2`. See the
+[conflict guide](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/sync.md#conflicts)
+for keeping an edit or taking ownership of a managed file.
 
-When a server stops being generated for a client (through `clients` or `skip`)
-and the kit had written it into that client's file:
+## Guides
 
-| The entry in the client file | What `sync` does |
+| You want to… | Read |
 | --- | --- |
-| Is still what the kit wrote | Removes that entry and stops tracking it. |
-| Was edited | Leaves it, stops tracking it, and lists a `WARNING` row. In `.codex/config.toml` the entry moves out of the managed block: its tables, and comment lines directly above a table header, are kept as written; its position in the file and blank lines around it may change. |
-| Is gone, or the file is gone or unreadable | Stops tracking it. |
+| Choose MCP clients, configure overrides or handle credentials | [MCP configuration](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/mcp.md) |
+| Understand ownership, conflicts and CLI commands | [Synchronization](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/sync.md) |
+| Work with rules, skills, project structure or worktrees | [Agent workflows](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/agent-workflows.md) |
+| Update an existing installation | [Upgrading](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/upgrading.md) |
 
-The kit never deletes a client file and never touches servers it did not write.
-A file it created can therefore be left with an empty server list (for
-`.codex/config.toml`, without the managed block); delete it if you do not need
-it. A client file you deleted on purpose stops being a conflict once its client
-is left out of `clients`.
-
-### Overrides
-
-`overrides.<client>` changes a server for one client. `env` and `headers` (also
-`http.headers`) are merged into the base server's values. Set a key to `null`
-to remove it for that client, or set the whole map to `null` to remove all of
-it:
-
-```yaml
-servers:
-  api:
-    command: node
-    env:
-      GITHUB_TOKEN: ${GITHUB_TOKEN}
-      LOG_LEVEL: info
-    overrides:
-      antigravity:
-        env:
-          GITHUB_TOKEN: null   # Antigravity gets LOG_LEVEL only
-      codex:
-        env: null              # Codex gets no env at all
-```
-
-`null` is only valid inside `overrides`.
-
-### Literal credentials
-
-`sync` refuses a registry that holds a literal credential, because the registry
-and the generated files are committed. A value is refused when:
-
-- its `env` or URL parameter name contains a credential word (`API_KEY`,
-  `APIKEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `AUTH`, `CREDENTIAL`,
-  `CREDENTIALS`, `JWT`, `PRIVATE_KEY`) as a whole underscore-separated part,
-  unless the name ends in a part that only describes one: `MODE`, `TYPE`,
-  `METHOD`, `SCHEME`, `PROVIDER`, `URL`, `URI`, `ENDPOINT`, `FILE`, `PATH`,
-  `DIR`, `NAME`, `ENABLED`, `TTL`, `TIMEOUT`. So `GITHUB_TOKEN`, `AUTH` and
-  `DB_PASSWORD` are refused; `AUTH_MODE`, `TOKEN_URL` and `PASSWORD_FILE` are
-  not;
-- its header is `Authorization`, `Api-Key`, `X-Api-Key`, `Token`, `Auth` or
-  `X-Auth-Token`;
-- the value looks like a token (`sk-…`, `ghp_…`, `gho_…`, `glpat-…`, `xox…`);
-- the server's own URL carries a user name or password;
-- the name contains a credential word, or is one of those headers, and the
-  value is a URL carrying credentials before the host (`user:pw@host`, with or
-  without a scheme) or a query parameter named like a credential
-  (`?token=…`). A descriptive ending does not excuse this, so
-  `AUTH_URL: https://host/x?token=…` is refused.
-
-URL credentials in an `env` value under any other name are not detected:
-`DATABASE_URL: postgres://user:pw@host/db` passes, so keep such values in a
-`${VAR}` reference yourself. In an override, `headers` and `http.headers` are
-both checked.
-
-A `${VAR}` reference is always accepted. The conflict names the field, for
-example `env.AUTH`. If that value is not a secret, list the path exactly as
-printed under the server's `notSecret`:
-
-```yaml
-servers:
-  api:
-    command: node
-    env:
-      AUTH: basic
-    notSecret: [env.AUTH, overrides.codex.env.AUTH]
-    overrides:
-      codex:
-        env:
-          AUTH: digest   # a separate field, so it has its own path
-```
-
-- `notSecret` accepts `env.NAME` and `headers.NAME`, and
-  `overrides.<client>.env.NAME` and `overrides.<client>.headers.NAME` for a
-  value set in an override. Each path covers that one field only.
-- It switches off the name check only. A token-shaped value, or a URL value
-  carrying credentials as described above, is refused even when its field is
-  listed.
-- A path that matches no field of the server is an error, so a typo is caught.
-
-### Initialization
-
-During initialization, Drakom AI Dev Kit compares discovered repository-local MCP
-configuration with the registry and reports what it found, preserving unmanaged
-definitions rather than adopting them automatically. Run the `drakom-ai-setup`
-skill to walk through the reported decisions (import, import with overrides,
-leave unmanaged, or skip) for each discovered server. Use `--skip-mcp` if the
-project should not initialize MCP management.
-
-To turn MCP management on later, create `.drakom-ai/mcp-servers.yaml` (an empty
-`servers: {}` is enough) and run `drakom-ai sync`. The plan then includes MCP
-generation and sets `features.mcp` to `true` in `state.json`; `sync --check`
-reports this as drift until it is applied. Without that file, a `--skip-mcp`
-project stays as it is.
-
-This also applies on upgrade: a project initialized with `--skip-mcp` that
-already has `.drakom-ai/mcp-servers.yaml` has MCP turned on by its next `sync`
-with this version, and `sync --check` reports drift until then. To keep MCP
-off, remove the registry file.
-
-## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
-
-When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-managed worktrees in the ChatGPT desktop app, or branch-isolated workspaces), Git only checks out tracked files. Because `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored to keep scratchpad work local, fresh worktrees naturally start without that active context.
-
-`drakom-ai init` scaffolds a project-owned `.worktreeinclude` file at the repository root:
-
-- **Native Tool Support**: Recognized natively by **Claude Code** and by Codex-managed worktrees in the **ChatGPT desktop app** (not worktrees you create yourself with Git on the command line) to automatically copy specified gitignored files into newly created worktree directories.
-- **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), and custom checkout hooks.
-- **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom AI Dev Kit drift warnings.
-
-## CLI Reference
-
-| Command | Effect |
-| --- | --- |
-| `drakom-ai --help` | Show command usage and available subcommands. |
-| `drakom-ai --version` (`-V`) | Print the installed kit version. |
-| `drakom-ai init --help` | Show initialization options without inspecting or changing the target. |
-| `drakom-ai sync --help` | Show synchronization options without inspecting or changing the target. |
-| `drakom-ai init [path]` | Preview and interactively approve project initialization. The default path is `.`. |
-| `drakom-ai init [path] --dry-run` | Render the initialization plan without changing files. |
-| `drakom-ai init [path] --yes` | Apply safe initialization without a prompt; it refuses structured merges into existing entry points. |
-| `drakom-ai init [path] --skip-mcp` | Initialize without creating the MCP registry or rendering an MCP comparison report. To turn MCP on later, create `.drakom-ai/mcp-servers.yaml` and run `sync`. |
-| `drakom-ai sync [path] --dry-run` | Render managed updates, skill-mirror work, and MCP changes without applying them. |
-| `drakom-ai sync [path]` | Apply safe managed updates and generate synchronized client configuration. A conflict holds back only its own item. |
-| `drakom-ai sync [path] --check` | Exit nonzero when managed content, skill mirrors, or generated MCP configuration has drifted. |
-| `drakom-ai sync [path] --accept <path>` | Keep a local edit to a kit-managed file until a later kit release changes that file. Repeatable. |
-| `drakom-ai sync [path] --release <path>` | Stop managing a kit-managed file and leave it as it is. Repeatable. |
-
-`sync` exit codes:
-
-| Code | Meaning |
-| --- | --- |
-| `0` | Everything is synchronized, or `--check` found no drift. |
-| `1` | The command could not run, for example an invalid option or path. |
-| `2` | A conflict remains (other changes may have been applied), or `--check` found drift. |
-
-## Lifecycle
-
-1. Run `init` to establish the safe minimal scaffold.
-2. Run `/drakom-ai-setup` (or `$drakom-ai-setup`) to assess the repository and approve project-owned rules or workflows.
-3. Make changes through the project’s routed rules and canonical skills.
-4. Run `sync` after kit updates or canonical-skill/MCP changes.
-5. Use `sync --check` in CI to detect drift before it reaches contributors.
-
-### Versions
-
-| Version | Meaning |
-| --- | --- |
-| Your application's version | Never changed by the kit, and unrelated to the versions below. |
-| Installed kit version | The `@drakom/ai-dev-kit` package in use; print it with `drakom-ai --version`. |
-| `kitVersion` in `.drakom-ai/state.json` | The last kit release successfully applied to the project by `init` or `sync`. |
-| `schemaVersion` | The format of `state.json` and the packaged payload. It changes independently of kit releases. |
-
-To upgrade, update the package and run `drakom-ai sync .`. Sync updates
-unmodified managed files and installs default files added in releases newer
-than the recorded `kitVersion`, then records the installed kit version.
-Kit-managed skills and their references are part of the kit; sync reports a
-conflict if one is missing or edited (see [Conflicts](#conflicts)). The recorded
-`kitVersion` stays at the old release while a new default file cannot be
-installed because an unmanaged file is in its place. Sync refuses to run when
-the recorded `kitVersion` is newer than the installed kit.
-
-### Upgrading to 0.6.0
-
-Update the kit, preview with `pnpm drakom-ai sync . --dry-run`, then run
-`pnpm drakom-ai sync .`. For one-time use, invoke the same commands through
-`npx @drakom/ai-dev-kit`. Review these changes before applying the plan:
-
-- **Local edits:** unrelated updates now proceed while conflicts remain;
-  sync exits `2`. Use [accept or release](#conflicts) for edited managed files.
-  Use one kit version across your team: older CLIs may drop release records
-  from state and report accepted edits as conflicts.
-- **MCP enablement:** a registry left behind after `init --skip-mcp` now enables
-  MCP on sync. Remove `.drakom-ai/mcp-servers.yaml` if MCP should stay disabled.
-- **Credentials:** both `headers` and `http.headers` are checked. Replace
-  literal credentials with `${VAR}` references; `notSecret` cannot bypass
-  token-shaped secret checks.
-- **VS Code:** review the [shared root MCP rules](#vs-code-and-the-root-mcpjson).
-  `skip: [claude]` excludes a server from the root file; differing VS Code
-  overrides and `${input:...}` prompts may apply only to `.vscode/mcp.json`.
-  That legacy file is still generated until a later kit release removes it;
-  VS Code's Local harness is scheduled for removal in February 2027.
-- **Antigravity:** use `overrides.antigravity.timeoutSeconds` for timeouts.
-  Legacy `type`, `transport` and `timeout` overrides are ignored with warnings;
-  sync rewrites existing generated entries to the supported fields.
-- **Line endings:** sync migrates matching old fingerprints automatically.
-  Arbitrary old mixed endings cannot be reconstructed after the original bytes
-  change, so unmatched records remain conflicts. Older CLIs that hash raw CRLF
-  bytes may report conflicts after a downgrade. Text outside replaced sections
-  keeps its existing endings.
-- **Starter READMEs:** existing rules/specs READMEs are project-owned and stay
-  as they are. Their new template guidance is installed only in fresh projects.
+See the [changelog](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/CHANGELOG.md) for release history and the
+[security policy](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/SECURITY.md) for vulnerability reporting.
 
 ## Development
 
+From a checkout of this repository:
+
 ```bash
+pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm sync:check
 ```
-
-## Requirements
-
-- Package users: Node.js >= 24.
-- Contributors and release automation require Node.js 24 LTS. Use `.nvmrc` with a compatible version manager; Changesets v3 requires Node.js >= 22.11.0.
-- pnpm >= 10.15.0
 
 ## License
 
