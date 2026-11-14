@@ -4,7 +4,14 @@ import { applyPlan } from './apply-plan.js';
 import { DRAKOM_DIR } from './constants.js';
 import { inspectTarget } from './inspect-target.js';
 import { discoverMcp, renderMcpComparisonReport } from './mcp-discovery.js';
-import { buildInitPlan, buildSyncPlan, compareVersions, createOnceSources } from './operation-plan.js';
+import { resolveManagedFileOptions } from './managed-file-options.js';
+import {
+  buildInitPlan,
+  buildSyncPlan,
+  compareVersions,
+  createOnceSources,
+  listKitManagedFiles,
+} from './operation-plan.js';
 import { loadPackageMetadata } from './package-metadata.js';
 import { loadPackagePayload } from './package-payload.js';
 import { renderPlan } from './render-plan.js';
@@ -100,7 +107,10 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
 
     // args.command === 'sync'
     const payload = await loadPackagePayload();
-    const inventory = await inspectTarget(args.targetPath, { unreadManagedFiles: createOnceSources(payload) });
+    const inventory = await inspectTarget(args.targetPath, {
+      unreadManagedFiles: createOnceSources(payload),
+      alsoRead: listKitManagedFiles(payload).keys(),
+    });
     if (inventory.state === null) {
       if (inventory.hasDrakomDirectory) {
         throw new Error(`Directory ${DRAKOM_DIR} exists without managed state; review ownership before synchronizing.`);
@@ -108,7 +118,12 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       throw new Error('Target is not an initialized Drakom installation; run init first.');
     }
     assertTargetNotNewerThanCli(inventory.state.kitVersion, payload.manifest.kitVersion);
-    const plan = buildSyncPlan(inventory, payload);
+    const resolutions = await resolveManagedFileOptions(inventory, payload, {
+      accept: args.accept,
+      release: args.release,
+      cwd: process.cwd(),
+    });
+    const plan = buildSyncPlan(inventory, payload, resolutions);
     io.stdout.write(renderPlan(plan));
 
     const hasDrift = plan.operations.some(
@@ -120,31 +135,44 @@ export async function runCli(argv: string[], io: CliIo): Promise<number> {
       return 2;
     }
 
+    const blocked = plan.hasConflicts && plan.partialApply !== true;
     if (args.dryRun || args.check) {
-      if (!plan.hasConflicts) {
+      // A blocked plan's result line already says that nothing was changed.
+      if (!blocked) {
         io.stdout.write(args.check ? 'No drift detected; no changes made.\n' : 'Dry run; no changes made.\n');
       }
       return plan.hasConflicts ? 2 : 0;
     }
 
-    if (plan.hasConflicts) {
+    if (blocked) {
       return 2;
     }
 
+    const conflictPaths = [
+      ...new Set(plan.operations.filter(({ action }) => action === 'conflict').map(({ path }) => path)),
+    ];
+    const remaining =
+      conflictPaths.length === 0
+        ? ''
+        : ` ${conflictPaths.length === 1 ? 'Conflict remains' : 'Conflicts remain'}, left unchanged: ${conflictPaths.join(', ')}.`;
     const mutations = plan.operations.filter(
       ({ action }) =>
         action === 'mkdir' || action === 'create' || action === 'update' || action === 'delete' || action === 'merge',
     );
     if (mutations.length === 0) {
+      if (plan.hasConflicts) {
+        io.stdout.write(`Nothing else to synchronize; no changes made.${remaining}\n`);
+        return 2;
+      }
       io.stdout.write('Installation is already up to date; no changes made.\n');
       return 0;
     }
 
     const result = await applyPlan(plan);
     io.stdout.write(
-      `Synchronized: ${result.updated.length} updated, ${result.created.length} created, ${result.deleted.length} deleted.\n`,
+      `Synchronized: ${result.updated.length} updated, ${result.created.length} created, ${result.deleted.length} deleted.${remaining}\n`,
     );
-    return 0;
+    return plan.hasConflicts ? 2 : 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     io.stderr.write(`drakom-ai: ${message}\n`);

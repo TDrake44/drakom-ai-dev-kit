@@ -27,11 +27,20 @@ Options:
 const syncHelp = `Usage: drakom-ai sync [path] [options]
 
 Synchronize managed project content. The default path is .
+A conflict holds back only its own item; everything else is applied, and the
+exit code is 2 while any conflict remains.
 
 Options:
-  --dry-run  Render the synchronization plan without making changes.
-  --check    Exit nonzero when managed content has drifted.
-  -h, --help Show this help message.
+  --dry-run         Render the synchronization plan without making changes.
+  --check           Exit nonzero when managed content has drifted.
+  --accept <path>   Keep your local edit to a kit-managed file. The edit stays
+                    until a later kit version changes that file. Repeatable.
+  --release <path>  Stop managing a kit-managed file. The file is left as it is
+                    (or stays deleted) and becomes project-owned. Repeatable.
+  -h, --help        Show this help message.
+
+Paths for --accept and --release are relative to the target, as printed in the
+plan. Both apply to kit-managed files only and cannot be combined with --check.
 `;
 
 /** Render public CLI usage without inspecting a target or loading package data. */

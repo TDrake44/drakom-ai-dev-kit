@@ -11,6 +11,12 @@ export const STATE_SCHEMA_VERSION = 1;
 export interface ManagedFileState {
   source: string;
   fingerprint: string;
+  /**
+   * Set by `sync --accept`: the fingerprint of the local content the user chose to keep. While it
+   * is set, `fingerprint` is the kit's version of the file at the time of acceptance, so a CLI that
+   * does not know this field sees a locally modified file and never overwrites it.
+   */
+  acceptedFingerprint?: string;
 }
 
 export interface ManagedMcpServerState {
@@ -26,6 +32,8 @@ export interface InstallState {
   managedBlocks?: Record<string, { fingerprint: string }>;
   managedSkillMirrors?: Record<string, { fingerprint: string }>;
   managedMcpServers: Record<string, ManagedMcpServerState>;
+  /** Paths given to `sync --release`. The kit never installs or manages a file at them again. */
+  releasedFiles?: string[];
 }
 
 export const SEMVER_REGEX =
@@ -128,11 +136,16 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
       typeof entry.source !== 'string' ||
       !isRelativePath(entry.source) ||
       typeof entry.fingerprint !== 'string' ||
-      !entry.fingerprint.startsWith('sha256:')
+      !entry.fingerprint.startsWith('sha256:') ||
+      (entry.acceptedFingerprint !== undefined &&
+        (typeof entry.acceptedFingerprint !== 'string' || !entry.acceptedFingerprint.startsWith('sha256:')))
     ) {
       throw new Error(`${statePath} has an invalid managedFiles entry for ${managedPath}.`);
     }
     managedFiles[managedPath] = { source: entry.source, fingerprint: entry.fingerprint };
+    if (entry.acceptedFingerprint !== undefined) {
+      managedFiles[managedPath].acceptedFingerprint = entry.acceptedFingerprint;
+    }
   }
   let managedBlocks: Record<string, { fingerprint: string }> | undefined;
   if (value.managedBlocks !== undefined) {
@@ -201,6 +214,16 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
   if (managedSkillMirrors !== undefined) {
     state.managedSkillMirrors = managedSkillMirrors;
   }
+  if (value.releasedFiles !== undefined) {
+    const releasedFiles = value.releasedFiles;
+    if (
+      !Array.isArray(releasedFiles) ||
+      !releasedFiles.every((entry): entry is string => typeof entry === 'string' && isRelativePath(entry))
+    ) {
+      throw new Error(`${statePath} must define releasedFiles as a list of relative paths when present.`);
+    }
+    state.releasedFiles = releasedFiles;
+  }
   return state;
 }
 
@@ -240,6 +263,9 @@ export function serializeState(state: InstallState): string {
   }
   if (state.managedSkillMirrors !== undefined) {
     ordered.managedSkillMirrors = state.managedSkillMirrors;
+  }
+  if (state.releasedFiles !== undefined && state.releasedFiles.length > 0) {
+    ordered.releasedFiles = [...new Set(state.releasedFiles)].sort();
   }
   return `${JSON.stringify(ordered, null, 2)}\n`;
 }

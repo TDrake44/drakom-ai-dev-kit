@@ -68,10 +68,11 @@ export interface ApplyResult {
 }
 
 /**
- * Apply a fully preflighted plan. State is required to be the final mutation.
+ * Apply a fully preflighted plan. State is required to be the final mutation. Conflicts are never
+ * written; a plan that has them is applied only when planning marked it safe to apply around them.
  */
 export async function applyPlan(plan: OperationPlan): Promise<ApplyResult> {
-  if (plan.hasConflicts) {
+  if (plan.hasConflicts && plan.partialApply !== true) {
     throw new Error('Cannot apply a plan that contains conflicts.');
   }
   const mutations = plan.operations.filter(({ action }) =>

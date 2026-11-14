@@ -8,9 +8,22 @@ export type CliArguments =
       yes: boolean;
       skipMcp: boolean;
     }
-  | { command: 'sync'; targetPath: string; dryRun: boolean; check: boolean }
+  | {
+      command: 'sync';
+      targetPath: string;
+      dryRun: boolean;
+      check: boolean;
+      /** Managed-file paths whose local edits the user keeps, as typed. */
+      accept: string[];
+      /** Managed-file paths the kit stops managing, as typed. */
+      release: string[];
+    }
   | { command: 'help'; topic: HelpTopic }
   | { command: 'version' };
+
+/** Repeatable sync options that take a path, written as `--name <path>` or `--name=<path>`. */
+const valueOptions = ['--accept', '--release'] as const;
+type ValueOption = (typeof valueOptions)[number];
 
 /**
  * Parse the public CLI surface without performing any I/O.
@@ -41,8 +54,31 @@ export function parseCliArgs(argv: string[]): CliArguments {
 
   let targetPath: string | null = null;
   const flags = new Set<string>();
-  for (const token of tokens) {
-    if (token.startsWith('-')) {
+  const values: Record<ValueOption, string[]> = { '--accept': [], '--release': [] };
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!;
+    const valueOption = valueOptions.find((name) => token === name || token.startsWith(`${name}=`));
+    if (valueOption !== undefined) {
+      if (command !== 'sync') {
+        throw new Error(`${valueOption} is available only with sync.`);
+      }
+      let value: string | undefined;
+      if (token === valueOption) {
+        index += 1;
+        value = tokens[index];
+        if (value === undefined || value.startsWith('-')) {
+          throw new Error(
+            `${valueOption} requires a path, for example ${valueOption} .agents/skills/<name>/SKILL.md. Run "drakom-ai sync --help" for usage.`,
+          );
+        }
+      } else {
+        value = token.slice(valueOption.length + 1);
+        if (value.length === 0) {
+          throw new Error(`${valueOption} requires a path. Run "drakom-ai sync --help" for usage.`);
+        }
+      }
+      values[valueOption].push(value);
+    } else if (token.startsWith('-')) {
       if (flags.has(token)) {
         throw new Error(`Flag ${token} may be provided only once.`);
       }
@@ -77,10 +113,16 @@ export function parseCliArgs(argv: string[]): CliArguments {
     };
   }
 
+  if (flags.has('--check') && (values['--accept'].length > 0 || values['--release'].length > 0)) {
+    throw new Error('--check only reports drift and cannot be combined with --accept or --release.');
+  }
+
   return {
     command,
     targetPath: targetPath ?? '.',
     dryRun: flags.has('--dry-run'),
     check: flags.has('--check'),
+    accept: values['--accept'],
+    release: values['--release'],
   };
 }

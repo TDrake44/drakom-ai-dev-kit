@@ -483,15 +483,23 @@ test('pnpm add -D installs packed artifact and pnpm drakom-ai runs full consumpt
     await writeFile(skillPath, `${originalSkill}\n# Local modification\n`, 'utf8');
 
     const driftCheck = runDrakom(['sync', '.', '--check']);
-    assert.notEqual(driftCheck.status, 0, 'sync --check must fail when drift is introduced');
+    assert.equal(driftCheck.status, 2, 'sync --check must fail when drift is introduced');
 
-    // 10. Conflict prevention: sync stops writes on local modification
+    // 10. Conflict prevention: sync never overwrites a local modification
     const syncConflict = runDrakom(['sync', '.']);
-    assert.notEqual(syncConflict.status, 0, 'sync must halt on conflict');
+    assert.equal(syncConflict.status, 2, 'sync must report the conflict');
     assert.match(syncConflict.stdout, /Managed file was locally modified/);
 
+    // 11. Accepting the edit clears the conflict and keeps the file
+    const accepted = runDrakom(['sync', '.', '--accept', '.agents/skills/drakom-ai-setup/SKILL.md']);
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+    assert.equal(runDrakom(['sync', '.', '--check']).status, 0);
+    assert.equal(await readFile(skillPath, 'utf8'), `${originalSkill}\n# Local modification\n`);
+
     // Restore skill
+    // Restoring the kit version needs one sync to drop the accepted-edit record
     await writeFile(skillPath, originalSkill, 'utf8');
+    assert.equal(runDrakom(['sync', '.']).status, 0);
     assert.equal(runDrakom(['sync', '.', '--check']).status, 0);
   } finally {
     await rm(consumer, { recursive: true, force: true });

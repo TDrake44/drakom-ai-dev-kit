@@ -112,6 +112,8 @@ export interface InspectOptions {
    * unread only when its recorded source matches too.
    */
   unreadManagedFiles?: ReadonlyMap<string, string>;
+  /** Further root-relative POSIX file paths to read when they exist as regular files. */
+  alsoRead?: Iterable<string>;
 }
 
 /**
@@ -183,6 +185,15 @@ export async function inspectTarget(targetPath: string, options: InspectOptions 
         } catch {
           // Ignore
         }
+      }
+    }
+  }
+  for (const extraPath of options.alsoRead ?? []) {
+    if (paths.includes(extraPath) && contents[extraPath] === undefined && symlinks[extraPath] === undefined) {
+      try {
+        contents[extraPath] = await readFile(path.join(root, extraPath), 'utf8');
+      } catch {
+        // Unreadable files are treated as not inspected.
       }
     }
   }

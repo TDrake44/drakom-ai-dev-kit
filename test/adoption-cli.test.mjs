@@ -127,6 +127,8 @@ test('parses the documented init and sync command surfaces', () => {
     targetPath: '.',
     dryRun: false,
     check: true,
+    accept: [],
+    release: [],
   });
   assert.throws(() => parseCliArgs(['init', '--check']), /--check.*sync/);
   assert.throws(() => parseCliArgs(['sync', '--yes']), /--yes.*init/);
@@ -923,13 +925,15 @@ test('sync on a 0.4.0 install refuses to adopt a hand-written drakom-plan-audit 
   delete previousState.managedFiles[planAuditTarget];
   await writeFile(statePath, `${JSON.stringify(previousState, null, 2)}\n`, 'utf8');
   await writeFile(path.join(root, planAuditTarget), '# Project-owned plan audit\n', 'utf8');
-  const before = await snapshot(root);
 
   const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
 
-  assert.notEqual(sync.status, 0);
+  assert.equal(sync.status, 2, sync.stdout);
   assert.match(sync.stdout, /CONFLICT.*drakom-plan-audit\/SKILL\.md/);
-  assert.deepEqual(await snapshot(root), before);
+  assert.equal(await readFile(path.join(root, planAuditTarget), 'utf8'), '# Project-owned plan audit\n');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(Object.hasOwn(state.managedFiles, planAuditTarget), false);
+  assert.equal(state.kitVersion, '0.4.0', 'the default is offered again once the path is free');
 });
 
 test('init --skip-mcp omits the registry and records the disabled feature', async () => {
@@ -1426,13 +1430,25 @@ test('sync refuses to take ownership of an unmanaged file at a new default path'
   const root = await createInstalledFixture('0.3.0');
   await mkdir(path.join(root, '.agents', 'skills', 'drakom-example-default', 'references'), { recursive: true });
   await writeFile(path.join(root, exampleReferenceTarget), '# Hand-written\n', 'utf8');
-  const before = await snapshot(root);
 
   const sync = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
 
-  assert.notEqual(sync.status, 0);
+  assert.equal(sync.status, 2, sync.stdout);
   assert.match(sync.stdout, /CONFLICT.*drakom-example-default\/references\/example\.md/);
-  assert.deepEqual(await snapshot(root), before);
+  assert.equal(await readFile(path.join(root, exampleReferenceTarget), 'utf8'), '# Hand-written\n');
+  const statePath = path.join(root, DRAKOM_DIR, 'state.json');
+  const state = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(Object.hasOwn(state.managedFiles, exampleReferenceTarget), false);
+  assert.equal(state.kitVersion, '0.3.0', 'the default is offered again once the path is free');
+
+  // Once the path is free, the next sync installs the default and records the kit version.
+  await rm(path.join(root, exampleReferenceTarget));
+  const retry = spawnSync(process.execPath, [kitCli, 'sync', root], { encoding: 'utf8' });
+  assert.equal(retry.status, 0, retry.stdout);
+  assert.equal(await readFile(path.join(root, exampleReferenceTarget), 'utf8'), exampleReferenceContent);
+  const finalState = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.ok(finalState.managedFiles[exampleReferenceTarget]);
+  assert.notEqual(finalState.kitVersion, '0.3.0');
 });
 
 test('sync does not re-offer a removed default once state reaches its addedIn version', async () => {
@@ -1584,7 +1600,7 @@ test('sync updates unchanged managed files and records state last with updated f
   assert.deepEqual(await snapshot(root), snapshotBefore);
 });
 
-test('sync stops all writes when a managed file was locally modified', async () => {
+test('sync leaves a locally modified managed file and its record untouched', async () => {
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
@@ -1708,16 +1724,19 @@ test('sync releases only the declared starter source, not another record at a st
   const state = await recordStarterReadmesAsManaged(root);
   state.managedFiles[rulesReadmeTarget].source = 'templates/obsolete.README.md';
   await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-  const before = await snapshot(root);
+  const rulesReadme = await readFile(path.join(root, rulesReadmeTarget), 'utf8');
 
   const sync = spawnSync(process.execPath, [cliPath, 'sync', root], { encoding: 'utf8' });
 
   assert.equal(sync.status, 2, sync.stdout);
   assert.match(sync.stdout, /CONFLICT.*rules\/README\.md.*missing from this kit version/);
-  assert.deepEqual(await snapshot(root), before);
+  assert.equal(await readFile(path.join(root, rulesReadmeTarget), 'utf8'), rulesReadme);
+  const stateAfter = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.deepEqual(stateAfter.managedFiles[rulesReadmeTarget], state.managedFiles[rulesReadmeTarget]);
+  assert.equal(Object.hasOwn(stateAfter.managedFiles, specsReadmeTarget), false);
 });
 
-test('sync stops all writes when a managed block in AGENTS.md was locally modified', async () => {
+test('sync leaves a locally modified managed block in AGENTS.md untouched', async () => {
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
@@ -2188,7 +2207,7 @@ test('sync reports a skill folder symlink to a non-canonical directory as a conf
   assert.deepEqual(await snapshot(root), before);
 });
 
-test('sync reports conflict and refuses state update when managed file source is missing in payload', async () => {
+test('sync reports a conflict and keeps the record when a managed file source is missing in the payload', async () => {
   const root = await createFixture();
   spawnSync(process.execPath, [cliPath, 'init', root, '--yes'], { cwd: repositoryRoot });
 
@@ -2207,17 +2226,27 @@ test('sync reports conflict and refuses state update when managed file source is
   state.kitVersion = '0.0.9';
   await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
 
-  const before = await snapshot(root);
   const syncResult = spawnSync(process.execPath, [cliPath, 'sync', root], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   });
 
-  assert.notEqual(syncResult.status, 0);
+  assert.equal(syncResult.status, 2, syncResult.stdout);
   assert.match(syncResult.stdout, /CONFLICT.*obsolete.*missing from this kit version.*upgrade notes/i);
-  assert.deepEqual(await snapshot(root), before);
+  assert.match(syncResult.stdout, /sync --release \.agents\/skills\/obsolete\/SKILL\.md/);
+  assert.equal(await readFile(path.join(root, obsoletePath), 'utf8'), obsoleteContent);
   const stateAfter = JSON.parse(await readFile(statePath, 'utf8'));
-  assert.equal(stateAfter.kitVersion, '0.0.9');
+  assert.deepEqual(stateAfter.managedFiles[obsoletePath], state.managedFiles[obsoletePath]);
+
+  // --accept has no kit version to compare against; --release makes the file project-owned.
+  const accept = spawnSync(process.execPath, [cliPath, 'sync', root, '--accept', obsoletePath], { encoding: 'utf8' });
+  assert.equal(accept.status, 1);
+  assert.match(accept.stderr, /no longer ships it.*--release/);
+  const release = spawnSync(process.execPath, [cliPath, 'sync', root, '--release', obsoletePath], { encoding: 'utf8' });
+  assert.equal(release.status, 0, release.stdout);
+  assert.equal(await readFile(path.join(root, obsoletePath), 'utf8'), obsoleteContent);
+  const released = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(Object.hasOwn(released.managedFiles, obsoletePath), false);
 });
 
 test('sync --dry-run --check renders preview and exits nonzero when drift exists', async () => {
@@ -2307,7 +2336,7 @@ test('sync reports conflict and makes zero writes when an unrecorded Claude skil
   });
 
   assert.notEqual(syncResult.status, 0);
-  assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/tester\/SKILL\.md.*unrecorded and does not match expected content/i);
+  assert.match(syncResult.stdout, /CONFLICT.*\.claude\/skills\/tester\/SKILL\.md.*unrecorded and does not match the canonical skill/i);
   assert.deepEqual(await snapshot(root), before);
 });
 
