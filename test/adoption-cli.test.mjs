@@ -33,6 +33,15 @@ const rulesReadmeSource = 'templates/rules.README.md';
 const specsReadmeTarget = `${DRAKOM_DIR}/specs/README.md`;
 const specsReadmeSource = 'templates/specs.README.md';
 
+/**
+ * A text file from this repository's checkout with CRLF read as LF. A Windows checkout with
+ * core.autocrlf turns this repository's installed kit files into CRLF, while the payload is always LF.
+ * @param {string} absolutePath
+ */
+async function readCheckoutText(absolutePath) {
+  return (await readFile(absolutePath, 'utf8')).replaceAll('\r\n', '\n');
+}
+
 test('publishes the strict TypeScript CLI from compiled dist output', async () => {
   const packageJson = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
   const sourceFiles = await readdir(path.join(repositoryRoot, 'src'));
@@ -512,11 +521,8 @@ test('packages a complete approval-gated setup workflow and assessment template'
   const payload = await loadPackagePayload();
   const skill = payload.files.setupSkill;
   const assessment = payload.files.assessmentTemplate;
-  const sourceSetupSkill = await readFile(
-    path.join(repositoryRoot, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'),
-    'utf8',
-  );
-  const sourcePlanAuditSkill = await readFile(path.join(repositoryRoot, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8');
+  const sourceSetupSkill = await readCheckoutText(path.join(repositoryRoot, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'));
+  const sourcePlanAuditSkill = await readCheckoutText(path.join(repositoryRoot, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'));
 
   assert.equal(skill, sourceSetupSkill);
   assert.equal(payload.files.planAuditSkill, sourcePlanAuditSkill);
@@ -568,7 +574,7 @@ test('packages a rule anatomy reference that the setup skill routes to by reposi
   const payload = await loadPackagePayload();
   const skill = payload.files.setupSkill;
   const anatomy = payload.files.ruleAnatomy;
-  const installedAnatomy = await readFile(path.join(repositoryRoot, ruleAnatomyTarget), 'utf8');
+  const installedAnatomy = await readCheckoutText(path.join(repositoryRoot, ruleAnatomyTarget));
 
   assert.equal(anatomy, installedAnatomy);
   const referencedPaths = [...skill.matchAll(/`\.agents\/(skills\/drakom-ai-setup\/references\/[^`]+)`/g)].map(
@@ -643,8 +649,8 @@ test('packages an approval-gated skill authoring skill that routes to its patter
   const skill = payload.files.skillAuthorSkill;
   const patterns = payload.files.skillPatterns;
 
-  assert.equal(skill, await readFile(path.join(repositoryRoot, skillAuthorTarget), 'utf8'));
-  assert.equal(patterns, await readFile(path.join(repositoryRoot, skillPatternsTarget), 'utf8'));
+  assert.equal(skill, await readCheckoutText(path.join(repositoryRoot, skillAuthorTarget)));
+  assert.equal(patterns, await readCheckoutText(path.join(repositoryRoot, skillPatternsTarget)));
   assert.match(skill, /^---\nname: drakom-skill-author\ndescription: [^\n]+\n---\n/);
 
   const referencedPaths = [...skill.matchAll(/`\.agents\/(skills\/drakom-skill-author\/references\/[^`]+)`/g)].map(

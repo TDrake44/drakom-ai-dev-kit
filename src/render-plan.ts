@@ -21,7 +21,7 @@ function renderResult(plan: OperationPlan): string {
 export function renderPlan(plan: OperationPlan): string {
   const lines = [
     `Drakom AI ${plan.command} plan`,
-    `Target: ${plan.root}`,
+    plan.typedRoot === undefined ? `Target: ${plan.root}` : `Target: ${plan.root} (resolved from ${plan.typedRoot})`,
     `Status: ${plan.targetStatus}`,
     '',
   ];

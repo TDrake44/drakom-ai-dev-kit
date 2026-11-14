@@ -49,11 +49,8 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     steps:
-      # CRLF checkout testing is a later step; keep LF for now.
-      - name: Disable CRLF conversion
-        if: runner.os == 'Windows'
-        run: git config --global core.autocrlf false
-
+      # Windows keeps Git's default core.autocrlf (true), so this job checks
+      # the CLI and its tests against a CRLF working tree.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

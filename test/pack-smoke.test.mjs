@@ -325,6 +325,12 @@ test('packed artifact contains only required publishable runtime files and metad
     assert.notEqual(item, 'BOOTSTRAP.md');
   }
 
+  // The payload ships with LF line endings, whatever the checkout it was packed from uses.
+  for (const item of packedPaths.filter((packed) => packed.startsWith('payload/'))) {
+    const content = await readFile(path.join(harness.unpackedDir, 'package', ...item.split('/')), 'utf8');
+    assert.equal(content.includes('\r'), false, `packed payload file ${item} contains a carriage return`);
+  }
+
   // Verify unpacked package metadata
   const unpackedPkg = JSON.parse(
     await readFile(path.join(harness.unpackedDir, 'package', 'package.json'), 'utf8'),
