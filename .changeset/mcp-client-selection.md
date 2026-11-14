@@ -2,14 +2,6 @@
 '@drakom/ai-dev-kit': minor
 ---
 
-Let the MCP registry choose its clients, and make three MCP dead ends passable. Existing registries generate the same files and state as before, with the two exceptions noted below.
+**Choose MCP clients.** Select clients with registry-level `clients` and per-server `skip`. Overrides can remove environment/header values with `null`; `notSecret` marks ordinary values without allowing token-shaped secrets. Adding a registry after `init --skip-mcp` now enables MCP on the next sync.
 
-- `clients:` at the registry root limits generation to the listed clients, and `skip:` on a server leaves that server out of the listed clients. A server that uses `${VAR}` can now be managed by skipping Antigravity, and a client file you do not use is no longer a conflict once its client is left out. When a server stops being generated for a client, `sync` removes the entry it wrote if it is unchanged, and otherwise leaves it and lists a `WARNING`.
-- In `overrides.<client>`, a `null` value removes an `env` or `headers` key for that client, and `env: null` or `headers: null` removes the whole map.
-- The literal-credential check no longer refuses names that only describe a credential, such as `AUTH_MODE`, `TOKEN_URL` or `PASSWORD_FILE`, unless the value is a URL that carries credentials. `notSecret:` on a server lists fields that hold plain values, and the conflict message names both ways out. Token-shaped values and URL credentials under a credential name are always refused.
-- After `init --skip-mcp`, creating `.drakom-ai/mcp-servers.yaml` and running `sync` turns MCP management on.
-
-Two things can change for an existing project:
-
-- An override that sets both `headers` and `http.headers` now has both checked for literal credentials. Before, only `headers` was checked, so a literal credential under `http.headers` reached the client file. A registry that holds one is now refused until the value becomes a `${VAR}` reference.
-- A project initialized with `--skip-mcp` that already has `.drakom-ai/mcp-servers.yaml` has MCP turned on by its next `sync`, and `sync --check` reports drift until then. To keep MCP off, remove the registry file.
+**Upgrade:** both header maps are now checked for literal credentials. Review the [0.6.0 upgrade notes](https://github.com/TDrake44/drakom-ai-dev-kit#upgrading-to-060) before syncing an existing project.

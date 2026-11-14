@@ -2,4 +2,4 @@
 '@drakom/ai-dev-kit': patch
 ---
 
-Print the install state path with forward slashes in error messages on Windows, matching the rest of the CLI output.
+**Windows diagnostics.** State-file errors use forward-slash paths, consistent with other CLI output.
