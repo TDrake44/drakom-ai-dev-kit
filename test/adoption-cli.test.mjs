@@ -591,7 +591,8 @@ test('packages a rule anatomy reference that the setup skill routes to by reposi
   for (const section of ['Scope', 'Required Patterns', 'Prohibited Patterns', 'Verification']) {
     assert.match(anatomy, new RegExp(`\\*\\*${section}\\*\\*`), section);
   }
-  assert.match(anatomy, /150.200 lines/);
+  assert.match(anatomy, /150 lines/);
+  assert.match(anatomy, /Prohibited Patterns\*\* \(optional\)/);
   assert.match(anatomy, /real.*in this repository/i);
   assert.match(anatomy, /reason/i);
   assert.match(anatomy, /formatters, linters, types, or tests/i);

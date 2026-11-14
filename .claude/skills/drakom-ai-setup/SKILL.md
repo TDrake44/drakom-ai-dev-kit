@@ -46,7 +46,7 @@ Present a concise recommendation using exactly these decision categories:
 - **Add:** a missing rule, skill, or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy at the repository-root path `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`. For each proposed skill, follow the Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md` instead of drafting it here.
 - **Omit:** plausible additions or existing context that do not justify their maintenance cost. Omit never means delete: omitted existing files stay in place unless the user separately approves removing them.
 
-Within each category, list every relevant source, or a bounded group of related sources, with:
+Within each category, list every relevant source, or a bounded group of related sources, as one row: the path, the evidence, and the decision. Give an item being added or changed (Add, Refine) the full set of fields below; Keep and Omit rows need only a one-line reason.
 
 - **Source path and evidence:** the file, directory, or group, and what in the repository supports the decision.
 - **Ownership:** kit-managed, generated, project-owned, unmanaged, or unknown.
@@ -70,7 +70,7 @@ Draft the adoption plan under `.drakom-ai/plans/` using the template at the repo
 
 ## Approval Gate
 
-Stop and request explicit approval before creating or changing any project-owned rule, skill, plan-derived entry-point prose, or MCP source. Approval of the recommendation authorizes only the listed changes. Conflicting MCP definitions, semantic rewrites, ownership takeover, and access to global configuration each require a separate decision.
+Stop and request explicit approval before creating or changing any project-owned rule, skill, plan-derived entry-point prose, or MCP source. Approval of the recommendation authorizes only the listed changes. For an approved skill, that approval covers the decision to add it and its name and purpose; the skill-author Write and Check procedure still ends at its own approval of the full draft, its `AGENTS.md` row, and any rule it routes to. Present the full draft there once; do not re-ask whether to add the skill. Conflicting MCP definitions, semantic rewrites, ownership takeover, and access to global configuration each require a separate decision.
 
 ## Implement and Verify After Approval
 
