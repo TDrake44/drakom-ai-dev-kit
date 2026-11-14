@@ -158,9 +158,10 @@ test('a registry without the new keys produces the same bytes and state as befor
     await read(root, VSCODE),
     '{\n  "servers": {\n    "project-tools": {\n      "type": "stdio",\n      "command": "node",\n      "args": [\n        "./scripts/mcp/server.mjs"\n      ],\n      "env": {\n        "LOG_LEVEL": "info"\n      }\n    },\n    "documentation": {\n      "type": "http",\n      "url": "https://mcp.example.com/docs",\n      "headers": {\n        "X-Client": "drakom-ai-dev-kit"\n      }\n    }\n  }\n}\n',
   );
+  // The one intended change: Antigravity no longer gets the undocumented transport and timeout fields.
   assert.equal(
     await read(root, ANTIGRAVITY),
-    '{\n  "mcpServers": {\n    "project-tools": {\n      "command": "node",\n      "args": [\n        "./scripts/mcp/server.mjs"\n      ],\n      "env": {\n        "LOG_LEVEL": "info"\n      }\n    },\n    "documentation": {\n      "serverUrl": "https://mcp.example.com/docs",\n      "transport": "http",\n      "timeout": 30000,\n      "headers": {\n        "X-Client": "drakom-ai-dev-kit"\n      }\n    }\n  }\n}\n',
+    '{\n  "mcpServers": {\n    "project-tools": {\n      "command": "node",\n      "args": [\n        "./scripts/mcp/server.mjs"\n      ],\n      "env": {\n        "LOG_LEVEL": "info"\n      }\n    },\n    "documentation": {\n      "serverUrl": "https://mcp.example.com/docs",\n      "headers": {\n        "X-Client": "drakom-ai-dev-kit"\n      }\n    }\n  }\n}\n',
   );
   assert.equal(
     await read(root, CODEX),
@@ -185,13 +186,20 @@ test('a registry without the new keys produces the same bytes and state as befor
         targetFingerprints: {
           '.mcp.json': 'sha256:4f97a08f13934887924d738cf9b8dbd57fc4876c427674f2fdaa7c4cd08a75dc',
           '.vscode/mcp.json': 'sha256:4f97a08f13934887924d738cf9b8dbd57fc4876c427674f2fdaa7c4cd08a75dc',
-          '.agents/mcp_config.json': 'sha256:9bc88f670a82385536c1b044c7d13d1efe7b402ba24ece622837494ae7f00118',
+          // Changed with the Antigravity output: the fingerprint of { serverUrl, headers }.
+          '.agents/mcp_config.json': 'sha256:4b375be0d0c80d27062ab719d79d705ea9e77f0f11c00f1f272b626009805bda',
           '.codex/config.toml': 'sha256:a7b3f561305646e92a6e9a786994fb39d027a96aa1f02c2bb3fe4526d78da61d',
         },
       },
     }),
   );
-  assertInSync(root);
+  // In sync; the only row beyond PRESERVE is the warning about the old Antigravity override keys.
+  const check = drakom('sync', root, ['--check']);
+  assert.equal(check.status, 0, `${check.stdout}\n${check.stderr}`);
+  assert.doesNotMatch(check.stdout, /^(CONFLICT|CREATE|UPDATE|DELETE)/m);
+  const warnings = check.stdout.split('\n').filter((line) => line.startsWith('WARNING'));
+  assert.equal(warnings.length, 1, check.stdout);
+  assert.match(warnings[0] ?? '', /"documentation".*overrides\.antigravity\.transport and overrides\.antigravity\.timeout/);
 });
 
 test('a managed server missing from a selected client file is still a conflict', async () => {

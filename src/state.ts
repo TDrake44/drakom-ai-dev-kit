@@ -100,6 +100,18 @@ export function isRelativePath(value: string): boolean {
   return value.length > 0 && !path.isAbsolute(value) && !value.split(/[\\/]/).includes('..');
 }
 
+/**
+ * Refuses a "__proto__" key in a name-keyed state map. Copying such an entry by assignment would
+ * set the copy's prototype instead of adding the entry, so it would vanish without a trace.
+ */
+function assertNoReservedName(map: Record<string, unknown>, statePath: string, mapName: string): void {
+  if (Object.hasOwn(map, '__proto__')) {
+    throw new Error(
+      `${statePath} has an entry named "__proto__" in ${mapName}; that name is reserved and cannot be recorded. Remove that entry from ${statePath}, and rename whatever it names.`,
+    );
+  }
+}
+
 export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.json`): InstallState {
   if (!isRecord(value)) {
     throw new Error(`${statePath} must contain a JSON object.`);
@@ -128,6 +140,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
   if (!isRecord(value.managedFiles)) {
     throw new Error(`${statePath} must define managedFiles as an object.`);
   }
+  assertNoReservedName(value.managedFiles, statePath, 'managedFiles');
   const managedFiles: Record<string, ManagedFileState> = {};
   for (const [managedPath, entry] of Object.entries(value.managedFiles)) {
     if (
@@ -152,6 +165,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
     if (!isRecord(value.managedBlocks)) {
       throw new Error(`${statePath} must define managedBlocks as an object when present.`);
     }
+    assertNoReservedName(value.managedBlocks, statePath, 'managedBlocks');
     managedBlocks = {};
     for (const [blockName, entry] of Object.entries(value.managedBlocks)) {
       if (!isRecord(entry) || typeof entry.fingerprint !== 'string' || !entry.fingerprint.startsWith('sha256:')) {
@@ -165,6 +179,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
     if (!isRecord(value.managedSkillMirrors)) {
       throw new Error(`${statePath} must define managedSkillMirrors as an object when present.`);
     }
+    assertNoReservedName(value.managedSkillMirrors, statePath, 'managedSkillMirrors');
     managedSkillMirrors = {};
     for (const [mirrorPath, entry] of Object.entries(value.managedSkillMirrors)) {
       if (
@@ -181,6 +196,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
   if (!isRecord(value.managedMcpServers)) {
     throw new Error(`${statePath} must define managedMcpServers as an object.`);
   }
+  assertNoReservedName(value.managedMcpServers, statePath, 'managedMcpServers');
   const managedMcpServers: Record<string, ManagedMcpServerState> = {};
   for (const [serverName, entry] of Object.entries(value.managedMcpServers)) {
     if (
@@ -191,6 +207,7 @@ export function validateState(value: unknown, statePath = `${DRAKOM_DIR}/state.j
     ) {
       throw new Error(`${statePath} has an invalid managedMcpServers entry for ${serverName}.`);
     }
+    assertNoReservedName(entry.targetFingerprints, statePath, `the managedMcpServers entry for ${serverName}`);
     const targetFingerprints: Record<string, string> = {};
     for (const [targetPath, fingerprint] of Object.entries(entry.targetFingerprints)) {
       if (!isRelativePath(targetPath) || typeof fingerprint !== 'string' || !fingerprint.startsWith('sha256:')) {

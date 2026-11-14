@@ -239,13 +239,49 @@ warning is not drift and does not change the exit code.
 Declare MCP servers once in `.drakom-ai/mcp-servers.yaml` and synchronize them
 into these repository-local client files:
 
-- `.mcp.json` for Claude Code and GitHub Copilot CLI
-- `.vscode/mcp.json` for VS Code Copilot
+- `.mcp.json` for Claude Code, GitHub Copilot CLI and VS Code
+- `.vscode/mcp.json` for VS Code's Local harness (deprecated, see below)
 - `.agents/mcp_config.json` for Antigravity CLI
 - `.codex/config.toml` for OpenAI Codex CLI
 
 `.vscode/mcp.json` is read as JSONC, so it may contain comments and trailing
 commas. `.mcp.json` and `.agents/mcp_config.json` must be strict JSON.
+
+Antigravity receives the fields its MCP documentation defines: `command`,
+`args` and `env` for a local server, `serverUrl` and `headers` for a remote one
+(remote servers must use Streamable HTTP), and `timeoutSeconds` for either. Set
+the timeout with `overrides.antigravity.timeoutSeconds`, in seconds. Earlier
+releases also wrote `transport` and `timeout`, which Antigravity does not
+define; `overrides.antigravity.type`, `transport` and `timeout` are still
+accepted, are no longer written, and `sync` lists a `WARNING` row for each
+server that sets them.
+
+#### VS Code and the root `.mcp.json`
+
+VS Code's Copilot harness reads the workspace-root `.mcp.json`, in the same
+format Claude Code uses. `.vscode/mcp.json` belongs to VS Code's Local harness,
+which is deprecated and will be removed in February 2027; a later release of
+the kit will stop generating `.vscode/mcp.json`. Until then:
+
+- `.mcp.json` is written when `clients` includes `claude` or `vscode`. A server
+  goes into it when it is generated for either of them, unless it has
+  `skip: [claude]`: Claude Code reads `.mcp.json`, so such a server stays out of
+  it, goes to `.vscode/mcp.json` only, and `sync` lists a `WARNING` row because
+  VS Code's Copilot harness will not see it from `.mcp.json`.
+- `.mcp.json` holds one version of each server. When both clients are
+  selected and `overrides.claude` and `overrides.vscode` give different
+  results, it holds the claude version, and `sync` lists a `WARNING` row: the
+  vscode override for that server only applies to `.vscode/mcp.json`. Without
+  `claude`, `.mcp.json` holds the vscode version.
+- A server that uses a `${input:...}` prompt for VS Code cannot be written to
+  `.mcp.json`. It goes to `.vscode/mcp.json` only, with a `WARNING` row.
+- `.vscode/mcp.json` is still written for `vscode`, as before.
+
+To stop generating `.vscode/mcp.json` today, select `claude` and leave `vscode`
+out of `clients` (for example `clients: [claude, codex]`). VS Code then reads
+the claude version of each server from `.mcp.json`; `overrides.vscode` and
+`${input:...}` prompts are not used anywhere. There is no key that keeps
+`vscode` selected but drops `.vscode/mcp.json`.
 
 Variable references in commands, arguments, URLs, environment values, and
 headers use each client's syntax. Claude Code receives `${VAR}` and VS Code
@@ -274,7 +310,9 @@ servers:
 - `clients` is a non-empty list of `claude`, `vscode`, `antigravity`, `codex`,
   without repeats. The kit does not generate a file for a client that is left
   out, and that client's file is never a conflict, whether it exists, is
-  missing, or is invalid.
+  missing, or is invalid. The shared `.mcp.json` is the exception: it belongs
+  to both `claude` and `vscode`, so it is generated, and can be a conflict,
+  while either of them is selected.
 - `skip` leaves one server out of the listed clients. It may name a client that
   `clients` already leaves out. A server that skips every selected client is an
   error; remove the server instead.

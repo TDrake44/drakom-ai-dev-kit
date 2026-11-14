@@ -33,9 +33,8 @@ interface ResolvedServerConfig {
   url?: string;
   serverUrl?: string;
   type?: string;
-  transport?: string;
   headers?: StringMap;
-  timeout?: number;
+  timeoutSeconds?: number;
 }
 
 /**
@@ -80,6 +79,7 @@ function resolveServerConfig(server: BaseServerConfig, client: McpClient): Resol
     const args = override.args ?? server.args;
     if (args) result.args = args;
     if (server.env || override.env) result.env = mergeStringMaps(server.env, override.env);
+    if (override.timeoutSeconds !== undefined) result.timeoutSeconds = override.timeoutSeconds;
     return result;
   }
 
@@ -92,12 +92,9 @@ function resolveServerConfig(server: BaseServerConfig, client: McpClient): Resol
     result.serverUrl = url;
     result.http = { url, ...(type ? { type } : {}), ...(Object.keys(headers).length > 0 ? { headers } : {}) };
   }
-  if (type) {
-    result.type = type;
-    result.transport = type;
-  }
+  if (type) result.type = type;
   if (Object.keys(headers).length > 0) result.headers = headers;
-  if (override.timeout !== undefined) result.timeout = override.timeout;
+  if (override.timeoutSeconds !== undefined) result.timeoutSeconds = override.timeoutSeconds;
   return result;
 }
 
@@ -113,14 +110,24 @@ function bearerVarRefName(value: string): string | undefined {
   return match?.[2] === undefined ? undefined : varRefName(match[2]);
 }
 
+/** A `${input:...}` prompt met where it cannot be written. */
+export class VscodeInputError extends Error {
+  readonly input: string;
+
+  constructor(field: string, input: string, client: McpClient) {
+    super(`${field} uses ${input}, which only VS Code supports; move it into overrides.vscode, or add "skip: [${client}]" to the server`);
+    this.input = input;
+  }
+}
+
 // `${input:...}` prompts are a VS Code feature; other clients would receive the literal text.
-function assertNoVscodeInput(value: string, field: string): void {
+function assertNoVscodeInput(value: string, field: string, client: McpClient): void {
   const input = value.match(INPUT_REF_REGEX)?.[0];
-  if (input) throw new Error(`${field} uses ${input}, which only VS Code supports; move it into overrides.vscode`);
+  if (input) throw new VscodeInputError(field, input, client);
 }
 
 function assertNoUnsupportedVarRef(value: string, client: 'Codex' | 'Antigravity', field: string): void {
-  assertNoVscodeInput(value, field);
+  assertNoVscodeInput(value, field, client === 'Codex' ? 'codex' : 'antigravity');
   const match = value.match(VAR_REFS_REGEX)?.[0];
   if (match) {
     const remedy = client === 'Codex'
@@ -134,35 +141,44 @@ function assertNoUnsupportedVarRef(value: string, client: 'Codex' | 'Antigravity
   }
 }
 
+/** The two JSON notations: the root `.mcp.json` takes `${VAR}`, `.vscode/mcp.json` takes `${env:VAR}`. */
+type JsonFormat = 'root' | 'vscode';
+
+const varFormats: Record<JsonFormat, (name: string) => string> = {
+  root: (name) => `\${${name}}`,
+  vscode: (name) => `\${env:${name}}`,
+};
+
+/** One JSON rendering: whose override applies (and who a refusal names), and the notation written. */
+interface JsonRendering {
+  client: 'claude' | 'vscode';
+  format: JsonFormat;
+}
+
 // Claude Code expands `${VAR}`; VS Code expands `${env:VAR}` (code.visualstudio.com/docs/reference/variables-reference).
-function translateVarRefs(value: string, client: 'claude' | 'vscode', field: string): string {
-  if (client !== 'vscode') assertNoVscodeInput(value, field);
+function translateVarRefs(value: string, rendering: JsonRendering, field: string): string {
+  if (rendering.format !== 'vscode') assertNoVscodeInput(value, field, rendering.client);
   return value.replace(VAR_REFS_REGEX, (_match, bracedName: string | undefined, bareName: string | undefined) =>
-    clientVarFormats[client](bracedName ?? bareName ?? ''),
+    varFormats[rendering.format](bracedName ?? bareName ?? ''),
   );
 }
 
-function translateStringMap(map: StringMap | undefined, client: 'claude' | 'vscode', field: string): StringMap | undefined {
+function translateStringMap(map: StringMap | undefined, rendering: JsonRendering, field: string): StringMap | undefined {
   if (!map) return map;
   const translated: StringMap = {};
   for (const [key, value] of Object.entries(map)) {
-    translated[key] = translateVarRefs(value, client, `${field}.${key}`);
+    translated[key] = translateVarRefs(value, rendering, `${field}.${key}`);
   }
   return translated;
 }
 
-const clientVarFormats: Record<'claude' | 'vscode', (name: string) => string> = {
-  claude: (name) => `\${${name}}`,
-  vscode: (name) => `\${env:${name}}`,
-};
-
-function generateJsonServer(server: BaseServerConfig, client: 'claude' | 'vscode'): Record<string, unknown> {
-  const resolved = resolveServerConfig(server, client);
+function generateJsonServer(server: BaseServerConfig, rendering: JsonRendering): Record<string, unknown> {
+  const resolved = resolveServerConfig(server, rendering.client);
   const rawUrl = resolved.http?.url ?? resolved.url;
-  const url = rawUrl ? translateVarRefs(rawUrl, client, 'url') : undefined;
+  const url = rawUrl ? translateVarRefs(rawUrl, rendering, 'url') : undefined;
   const rawHeaders = resolved.http?.headers ?? resolved.headers;
-  const headers = translateStringMap(rawHeaders, client, 'headers');
-  const env = translateStringMap(resolved.env, client, 'env');
+  const headers = translateStringMap(rawHeaders, rendering, 'headers');
+  const env = translateStringMap(resolved.env, rendering, 'env');
   if (url) {
     return {
       type: resolved.http?.type ?? resolved.type ?? 'http',
@@ -171,34 +187,54 @@ function generateJsonServer(server: BaseServerConfig, client: 'claude' | 'vscode
     };
   }
   return {
-    ...(client === 'vscode' ? { type: 'stdio' } : {}),
-    ...(resolved.command ? { command: translateVarRefs(resolved.command, client, 'command') } : {}),
-    ...(resolved.args ? { args: resolved.args.map((arg, index) => translateVarRefs(arg, client, `args[${index}]`)) } : {}),
+    ...(rendering.format === 'vscode' ? { type: 'stdio' } : {}),
+    ...(resolved.command ? { command: translateVarRefs(resolved.command, rendering, 'command') } : {}),
+    ...(resolved.args ? { args: resolved.args.map((arg, index) => translateVarRefs(arg, rendering, `args[${index}]`)) } : {}),
     ...(hasEntries(env) ? { env } : {}),
   };
 }
 
 export function generateClaudeServer(server: BaseServerConfig): Record<string, unknown> {
-  return generateJsonServer(server, 'claude');
+  return generateJsonServer(server, { client: 'claude', format: 'root' });
 }
 
 export function generateVscodeServer(server: BaseServerConfig): Record<string, unknown> {
-  return generateJsonServer(server, 'vscode');
+  return generateJsonServer(server, { client: 'vscode', format: 'vscode' });
 }
 
+/**
+ * The server as VS Code is to have it, written for the root `.mcp.json`: the vscode override
+ * applies, in the root file's notation. Throws a VscodeInputError for a `${input:...}` prompt,
+ * which that file cannot express.
+ */
+export function generateVscodeRootServer(server: BaseServerConfig): Record<string, unknown> {
+  return generateJsonServer(server, { client: 'vscode', format: 'root' });
+}
+
+/** Override keys that earlier releases passed through to Antigravity, whose configuration does not define them. */
+const ANTIGRAVITY_IGNORED_OVERRIDE_KEYS = ['type', 'transport', 'timeout'] as const;
+
+/** The keys of `overrides.antigravity` that are accepted and not written. */
+export function ignoredAntigravityOverrideKeys(server: BaseServerConfig): string[] {
+  const override = server.overrides?.antigravity;
+  if (!override) return [];
+  return ANTIGRAVITY_IGNORED_OVERRIDE_KEYS.filter((key) => override[key] !== undefined);
+}
+
+// Fields as documented at antigravity.google/docs/mcp: `serverUrl` for a remote server (Streamable
+// HTTP only, with no field naming the transport) and `timeoutSeconds` for either kind of server.
 export function generateAntigravityServer(server: BaseServerConfig): Record<string, unknown> {
   const resolved = resolveServerConfig(server, 'antigravity');
+  const timeout = resolved.timeoutSeconds !== undefined ? { timeoutSeconds: resolved.timeoutSeconds } : {};
   const url = resolved.serverUrl ?? resolved.http?.url ?? resolved.url;
   if (url) {
     assertNoUnsupportedVarRef(url, 'Antigravity', 'url');
-    const transport = resolved.transport ?? resolved.http?.type ?? resolved.type;
     const headers = resolved.headers ?? resolved.http?.headers;
     for (const [key, value] of Object.entries(headers ?? {})) assertNoUnsupportedVarRef(value, 'Antigravity', `headers.${key}`);
     return {
       serverUrl: url,
-      ...(transport ? { transport } : {}),
-      ...(resolved.timeout !== undefined ? { timeout: resolved.timeout } : {}),
       ...(hasEntries(headers) ? { headers } : {}),
+      ...timeout,
     };
   }
   if (resolved.command) assertNoUnsupportedVarRef(resolved.command, 'Antigravity', 'command');
@@ -208,6 +244,7 @@ export function generateAntigravityServer(server: BaseServerConfig): Record<stri
     ...(resolved.command ? { command: resolved.command } : {}),
     ...(resolved.args ? { args: resolved.args } : {}),
     ...(hasEntries(resolved.env) ? { env: resolved.env } : {}),
+    ...timeout,
   };
 }
 

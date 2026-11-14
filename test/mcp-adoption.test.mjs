@@ -1024,11 +1024,10 @@ test('sync correctly merges non-empty partial overrides without erasing base tra
   assert.match(codexConfig, /url = "https:\/\/api\.example\.com\/mcp"/);
   assert.match(codexConfig, /X-Base = "base"/);
 
-  // 3. Antigravity: http-tool has base URL and type, overridden headers
+  // 3. Antigravity: http-tool has base URL and overridden headers; Antigravity defines no transport field
   const agyConfig = JSON.parse(await readFile(path.join(root, '.agents', 'mcp_config.json'), 'utf8'));
   assert.deepEqual(agyConfig.mcpServers['http-tool'], {
     serverUrl: 'https://api.example.com/mcp',
-    transport: 'sse',
     headers: {
       'X-Base': 'base',
       'X-Tool': 'antigravity',

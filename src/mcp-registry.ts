@@ -25,6 +25,7 @@ const OVERRIDE_KEYS = new Set([
   'serverUrl',
   'transport',
   'timeout',
+  'timeoutSeconds',
 ]);
 const HTTP_KEYS = new Set(['url', 'type', 'headers']);
 const CLIENTS = new Set<string>(MCP_CLIENTS);
@@ -143,6 +144,13 @@ function validateOverride(
   if (value.timeout !== undefined && (typeof value.timeout !== 'number' || !Number.isFinite(value.timeout) || value.timeout < 0)) {
     return `${label} timeout must be a non-negative number`;
   }
+  // Negative values are valid: antigravity.google/docs/mcp says a negative value, such as -1, turns the timeouts off.
+  if (value.timeoutSeconds !== undefined) {
+    if (client !== 'antigravity') return `${label} timeoutSeconds is only supported in overrides.antigravity`;
+    if (typeof value.timeoutSeconds !== 'number' || !Number.isInteger(value.timeoutSeconds)) {
+      return `${label} timeoutSeconds must be an integer number of seconds`;
+    }
+  }
   if (value.headers !== undefined && !isRemovableStringMap(value.headers)) return `${label} headers must be a mapping of string to string or null`;
 
   const hasCommand = typeof value.command === 'string';
@@ -172,6 +180,7 @@ function toOverrideConfig(value: Record<string, unknown>): ClientOverrideConfig 
   if (typeof value.type === 'string') override.type = value.type;
   if (typeof value.transport === 'string') override.transport = value.transport;
   if (typeof value.timeout === 'number') override.timeout = value.timeout;
+  if (typeof value.timeoutSeconds === 'number') override.timeoutSeconds = value.timeoutSeconds;
   if (value.headers !== undefined && isRemovableStringMap(value.headers)) {
     override.headers = copyRemovableStringMap(value.headers);
   }
@@ -210,12 +219,35 @@ function validateNotSecret(serverName: string, value: unknown, server: BaseServe
   return [...value];
 }
 
+/** The path of the first mapping, anywhere in a server definition, that has a "__proto__" key. */
+function findReservedKey(value: unknown, field: string): string | undefined {
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) {
+      const found = findReservedKey(item, `${field}[${index}]`);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (!isRecord(value)) return undefined;
+  if (Object.hasOwn(value, '__proto__')) return field;
+  for (const [key, item] of Object.entries(value)) {
+    const found = findReservedKey(item, field ? `${field}.${key}` : key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 function validateServer(
   serverName: string,
   value: unknown,
   selectedClients: readonly McpClient[],
 ): BaseServerConfig | string {
   if (!isRecord(value)) return `MCP server "${serverName}" definition must be an object`;
+  // Merging and translating maps assign by key, which would drop such an entry without a trace.
+  const reservedIn = findReservedKey(value, '');
+  if (reservedIn !== undefined) {
+    return `MCP server "${serverName}" uses "__proto__" as a name${reservedIn ? ` in ${reservedIn}` : ''}; that name is reserved, so rename it`;
+  }
   const key = unsupportedKey(value, SERVER_KEYS);
   if (key) return `MCP server "${serverName}" contains unsupported field "${key}"`;
   const unsupportedRef = findUnsupportedVarRefInValue(value, '');
