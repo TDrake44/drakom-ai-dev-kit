@@ -169,10 +169,12 @@ test('Antigravity gets timeoutSeconds on a local server', () => {
 });
 
 test('timeoutSeconds is validated and belongs to the antigravity override only', () => {
-  assert.match(
-    validationErrorOf({ servers: { s: { command: 'node', overrides: { antigravity: { timeoutSeconds: '600' } } } } }),
-    /timeoutSeconds must be a finite number/,
-  );
+  for (const timeoutSeconds of [0.5, -0.5, '600', NaN, Infinity]) {
+    assert.match(
+      validationErrorOf({ servers: { s: { command: 'node', overrides: { antigravity: { timeoutSeconds } } } } }),
+      /timeoutSeconds must be an integer/,
+    );
+  }
   assert.match(
     validationErrorOf({ servers: { s: { command: 'node', overrides: { codex: { timeoutSeconds: 600 } } } } }),
     /timeoutSeconds is only supported in overrides\.antigravity/,

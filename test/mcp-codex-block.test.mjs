@@ -81,7 +81,7 @@ function assertInSync(root) {
 /**
  * Parses TOML into plain objects, so that deepEqual compares values and not the parser's prototypes.
  * @param {string} text
- * @returns {Record<string, any>}
+ * @returns {Record<string, unknown>}
  */
 function parseToml(text) {
   return JSON.parse(JSON.stringify(parseTomlText(text)));
@@ -274,7 +274,11 @@ test('adopting one inline server keeps its unmanaged neighbours as written', asy
 
   const text = await read(root, CODEX);
   assert.ok(text.startsWith('[mcp_servers]\n# mine\nother = { command = "keep" }\nlast.command = "also"\n'), text);
-  assert.deepEqual(Object.keys(parseToml(text).mcp_servers).sort(), ['alpha', 'last', 'other']);
+  assert.deepEqual(parseToml(text).mcp_servers, {
+    other: { command: 'keep' },
+    last: { command: 'also' },
+    alpha: { command: 'node', args: ['./alpha.mjs'] },
+  });
   assertInSync(root);
 });
 
@@ -368,7 +372,10 @@ test('servers between legacy Blueprint markers are kept as unmanaged content', a
   assert.doesNotMatch(result.stdout, /^(CONFLICT|WARNING)/m);
   const text = await read(root, CODEX);
   assert.equal(text, `${legacy.trimEnd()}\n\n${BLOCK_START}\n${ALPHA_TABLE}\n${BLOCK_END}\n`);
-  assert.deepEqual(Object.keys(parseToml(text).mcp_servers), ['legacy', 'alpha']);
+  assert.deepEqual(parseToml(text).mcp_servers, {
+    legacy: { command: 'node', args: ['legacy.js'] },
+    alpha: { command: 'node', args: ['./alpha.mjs'] },
+  });
   assertInSync(root);
 });
 

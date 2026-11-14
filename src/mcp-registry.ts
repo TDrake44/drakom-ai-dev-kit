@@ -147,8 +147,8 @@ function validateOverride(
   // Negative values are valid: antigravity.google/docs/mcp says a negative value, such as -1, turns the timeouts off.
   if (value.timeoutSeconds !== undefined) {
     if (client !== 'antigravity') return `${label} timeoutSeconds is only supported in overrides.antigravity`;
-    if (typeof value.timeoutSeconds !== 'number' || !Number.isFinite(value.timeoutSeconds)) {
-      return `${label} timeoutSeconds must be a finite number of seconds`;
+    if (typeof value.timeoutSeconds !== 'number' || !Number.isInteger(value.timeoutSeconds)) {
+      return `${label} timeoutSeconds must be an integer number of seconds`;
     }
   }
   if (value.headers !== undefined && !isRemovableStringMap(value.headers)) return `${label} headers must be a mapping of string to string or null`;
