@@ -1,39 +1,70 @@
 <!--
-Write for a reader with two minutes: 15 rendered lines or fewer. Every sentence here is a claim the
-reviewer has to check. History, alternatives and step-by-step detail belong in commits or the plan.
-These comments do not render; leave them or delete them.
+Write for a reader who has two minutes and has not opened the code. About 20 rendered lines.
+Plain words first: say what a user of the kit would see. Name files and functions only under
+"Where to look". Every sentence is a claim the reviewer will check; history, alternatives and
+step-by-step detail belong in commits or the plan. These comments do not render.
+
+The risk box comes first. Name each label that applies:
+  consumer files: writes, overwrites or deletes files in a consumer's repo
+  what ships: `payload/v1/**`, publish fields, release or CI workflows
+  credentials: touches credential handling
+  agent instructions: `AGENTS.md`, rules, skills
+  weakens a check: changes or removes an existing test, lint rule or type check
+Then set the level and keep the marker that matches it; GitHub colours the box:
+  High, `[!CAUTION]`, red: consumer files, what ships or credentials
+  Medium, `[!WARNING]`, yellow: agent instructions, weakens a check, or any other change to
+    `src/` or the dependencies
+  Low, `[!NOTE]`, blue: none of the above, such as docs people read, comments and typos
+The highest level wins; when unsure, pick the higher. With no label, write "no label". The level
+is a claim the reviewer checks, and every level still needs a person's approval.
 -->
 
-## What and why
+> [!CAUTION]
+> **Risk: High** · labels · because …
 
-<!-- Two or three sentences: what changes for a user or maintainer, and why. -->
+## What changes
 
-## Read first
+<!-- What the kit did before, what it does now, and why, in two or three sentences. For several
+separate changes, one line each. -->
 
-<!-- Up to three places where a mistake would cost the most: `path:line`, then the question to ask
-there. Write "Nothing stands out" when that is true. -->
+## Needs your decision
+
+<!-- What only a person can settle: scope, a trade-off, a stopgap, a pattern later work will copy.
+One line each, ending with the choice this pull request makes. "Nothing" is an answer. -->
 
 1.
 
-## Risk and limits
+## Where to look
 
-<!-- Risk names each consequence that applies, or "none": writes, overwrites or deletes files in a
-consumer's repo; changes what ships (`payload/v1/**`, publish fields, release or CI workflows);
-touches credential handling; changes instructions agents follow (`AGENTS.md`, rules, skills);
-weakens a check (tests, CI, lint config). The reviewer checks this like any other claim.
-Not covered is what was not tested or was left out on purpose; "nothing" is an answer. -->
+<!-- Up to three places where a mistake would cost the most: `path:line`, what the code there
+does, and what to check. "Nothing stands out" is an answer.
+Proved by a check: parts a named check already covers, such as synced copies under
+`.agents/skills/` (`pnpm sync:check`) or the lockfile. Leave the line out when there are none. -->
 
-- Risk: … because …
+1.
+
+Proved by a check: …
+
+## Undo and limits
+
+<!-- Undo: "revert this pull request", or what a revert leaves behind (a published version, files
+already written into consumer repos) and how that is put right.
+Not covered: what no test exercises and what was left out on purpose. "Nothing" is an answer. -->
+
+- Undo: …
 - Not covered: …
 
-## Checks
+## Evidence
 
-<!-- Changeset: "added", or "not needed" for docs, tests and internal configuration.
+<!-- Tested: what shows the change does what "What changes" says: the test or command and its
+result; for a fix, that the test failed before it. CI runs `pnpm lint`, `pnpm typecheck`,
+`pnpm test` and `pnpm sync:check` on every pull request, so list those only when one could not run.
+Changeset: "added", or "not needed" for docs, tests and internal configuration.
 Reviewed: tool and model, base SHA, head SHA, clean or dirty tree, findings found and still open;
 "not yet" until a review has run, and update it after a review of later commits.
-Plan or issue: a link, "Closes #123", or "none". -->
+Plan or issue: the plan's name, "Closes #123", or "none". -->
 
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm run test` and `pnpm sync:check` pass locally
+- Tested: …
 - Changeset: …
 - Reviewed: …
 - Plan or issue: …
