@@ -9,7 +9,6 @@ Applies to all source code files across application and script modules.
 - Defensive argument parsing and clear validation errors on invalid inputs.
 
 ## 3. Prohibited Patterns
-- **No `any` types**: Never bypass compiler validation using `any` or untyped casts.
 - **No Implicit Globals**: Every dependency must be cleanly imported.
 - **No Logic in Entry Hubs**: Keep `AGENTS.md` and `CLAUDE.md` as routers, not code dumps.
 
