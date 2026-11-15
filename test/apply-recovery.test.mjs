@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { applyPlan } from '../dist/apply-plan.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
+import { runCli } from '../dist/run-cli.js';
 
 /**
  * @typedef {import('../dist/operation-plan.js').Operation} Operation
@@ -307,8 +308,39 @@ test('a restore that fails during rollback does not stop the remaining restores'
   const [outcome] = await Promise.allSettled([applyPlan(plan)]);
   restoreFs();
 
-  assert.equal(outcome.status, 'rejected');
+  assert(outcome.status === 'rejected');
   assert.deepEqual(exceptUnrestorable(await snapshot(root)), before);
+  assert.match(outcome.reason.message, /^EEXIST: .*late\.md.*\nThe rollback could not undo the change to: unrestorable\.md\. Review it before running sync again\.$/);
+});
+
+test('a rename that fails is rolled back without leaving its temporary file', async (t) => {
+  const root = await scratch(t);
+  await write(root, 'first.md', 'first, before\n');
+  await write(root, 'held-open.md', 'held open, before\n');
+  const plan = syncPlan(root, [
+    operation('update', 'first.md', { before: 'first, before\n', content: 'first, after\n' }),
+    operation('update', 'held-open.md', { before: 'held open, before\n', content: 'held open, after\n' }),
+  ]);
+  const before = await snapshot(root);
+  // Windows refuses to rename over a file another program holds open; no file on disk can stage
+  // that on every platform.
+  const heldOpen = resolve(root, 'held-open.md');
+  const realRename = fsPromises.rename;
+  const restoreFs = replaceFsPromises({
+    rename: async (from, to) => {
+      if (to === heldOpen) {
+        throw Object.assign(new Error(`EPERM: operation not permitted, rename '${from}' -> '${to}'`), { code: 'EPERM' });
+      }
+      return realRename(from, to);
+    },
+  });
+
+  const [outcome] = await Promise.allSettled([applyPlan(plan)]);
+  restoreFs();
+
+  assert(outcome.status === 'rejected');
+  assert.equal(outcome.reason.code, 'EPERM');
+  assert.deepEqual(await snapshot(root), before);
 });
 
 // A file changes between inspection and apply: first before the apply step starts, then while
@@ -534,6 +566,59 @@ for (const action of /** @type {const} */ (['update', 'merge'])) {
     },
   );
 }
+
+test(
+  'a run that fails and rolls back leaves permissions as they were',
+  { skip: process.platform === 'win32' ? 'Windows has no POSIX permission bits' : false },
+  async (t) => {
+    const root = await scratch(t);
+    await write(root, 'private.json', '{"setting": "before"}\n');
+    await chmod(resolve(root, 'private.json'), 0o600);
+    await write(root, 'retired/tool.sh', '#!/bin/sh\necho before\n');
+    await chmod(resolve(root, 'retired/tool.sh'), 0o755);
+    await write(root, 'late.md', 'late, before\n');
+    // late.md is the plan's second update; blocking its temporary copy starts the rollback.
+    await writeFile(temporaryPathFor(root, 'late.md', 1), 'in the way\n', 'utf8');
+    const plan = syncPlan(root, [
+      operation('update', 'private.json', { before: '{"setting": "before"}\n', content: '{"setting": "after"}\n' }),
+      operation('delete', 'retired/tool.sh', { before: '#!/bin/sh\necho before\n' }),
+      operation('update', 'late.md', { before: 'late, before\n', content: 'never written\n' }),
+    ]);
+
+    const applied = applyPlan(plan);
+
+    await assert.rejects(applied, { code: 'EEXIST' });
+    assert.equal(await read(root, 'private.json'), '{"setting": "before"}\n');
+    assert.equal(await permissions(root, 'private.json'), '600');
+    assert.equal(await permissions(root, 'retired/tool.sh'), '755');
+  },
+);
+
+// A file that is not UTF-8 cannot be rewritten without changing bytes the plan does not mention.
+
+test('init refuses to merge into a file that is not valid UTF-8 and changes nothing', async (t) => {
+  const root = await scratch(t);
+  // "Café" in Latin-1: the byte e9 on its own is not valid UTF-8.
+  const latin1 = Buffer.concat([Buffer.from('# Caf'), Buffer.from([0xe9]), Buffer.from(' rules\n')]);
+  await writeFile(resolve(root, 'AGENTS.md'), latin1);
+  const before = await snapshot(root);
+  let stderr = '';
+
+  const status = await runCli(['init', root], {
+    stdout: { write: () => true },
+    stderr: {
+      write: (content) => {
+        stderr += content;
+        return true;
+      },
+    },
+    confirm: async () => true,
+  });
+
+  assert.equal(status, 1, stderr);
+  assert.match(stderr, /Preflight failed: AGENTS\.md is not valid UTF-8, .*convert it to UTF-8 and rerun init\./);
+  assert.deepEqual(await snapshot(root), before);
+});
 
 // --dry-run and --check leave every byte alone when they report conflicts.
 

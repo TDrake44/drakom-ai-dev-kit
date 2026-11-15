@@ -77,6 +77,23 @@ A kit file that is present but not managed, and differs from the kit's version,
 is listed as a `WARNING` row. This is what a released file looks like. A
 warning is not drift and does not change the exit code.
 
+### Failed and interrupted runs
+
+`init` and `sync` check every planned change before the first write, and write
+`state.json` last.
+
+- If a write fails, the changes already made in that run are undone and the
+  command exits `1`. If a file cannot be put back, the error names it.
+- A file saved after the plan was built, even while the run is writing other
+  files, is not overwritten. The run stops with "changed after inspection";
+  run the command again.
+- A rewritten file keeps its permissions.
+- A file that is not valid UTF-8 is never rewritten; the run stops before any
+  write. Convert the file to UTF-8 and run the command again.
+- After a killed `sync`, run `sync` again to finish. A killed run can leave a
+  `.<name>.drakom-ai-<pid>-<n>.tmp` file next to the file it was writing; it is
+  never read and is safe to delete.
+
 ## CLI Reference
 
 | Command | Effect |
