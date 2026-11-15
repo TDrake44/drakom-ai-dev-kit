@@ -311,8 +311,8 @@ test('a restore that fails during rollback does not stop the remaining restores'
   assert.deepEqual(exceptUnrestorable(await snapshot(root)), before);
 });
 
-// A file changes between inspection and apply. These cover a change made before the apply step
-// starts; a change made while it runs is a known gap, see the recovery tests plan.
+// A file changes between inspection and apply: first before the apply step starts, then while
+// it runs.
 
 for (const action of /** @type {const} */ (['update', 'merge', 'delete'])) {
   test(`a file edited after it was inspected is not overwritten by a planned ${action}`, async (t) => {
@@ -336,6 +336,42 @@ for (const action of /** @type {const} */ (['update', 'merge', 'delete'])) {
 
     await assert.rejects(applied, /Preflight failed: edited\.md changed after inspection; rerun sync\./);
     assert.deepEqual(await snapshot(root), before);
+  });
+}
+
+for (const action of /** @type {const} */ (['update', 'merge', 'delete'])) {
+  test(`a file saved while the apply step runs is not overwritten by a planned ${action}`, async (t) => {
+    const root = await scratch(t);
+    await write(root, 'first.md', 'first, as inspected\n');
+    await write(root, 'raced.md', 'raced, as inspected\n');
+    const plan = syncPlan(root, [
+      operation('update', 'first.md', { before: 'first, as inspected\n', content: 'first, from the kit\n' }),
+      operation(action, 'raced.md', {
+        before: 'raced, as inspected\n',
+        ...(action === 'delete' ? {} : { content: 'raced, from the kit\n' }),
+      }),
+    ]);
+    const saved = 'saved by the user while the apply step ran\n';
+    // The rename that puts first.md in place runs after every check of the plan has passed and
+    // before raced.md is touched, so the save lands where an editor or another agent could land one.
+    const first = resolve(root, 'first.md');
+    const raced = resolve(root, 'raced.md');
+    const realRename = fsPromises.rename;
+    const realWriteFile = fsPromises.writeFile;
+    const restoreFs = replaceFsPromises({
+      rename: async (from, to) => {
+        if (to === first) {
+          await realWriteFile(raced, saved, 'utf8');
+        }
+        return realRename(from, to);
+      },
+    });
+
+    const [outcome] = await Promise.allSettled([applyPlan(plan)]);
+    restoreFs();
+
+    assert.equal((await snapshot(root))['raced.md'], saved);
+    assert.equal(outcome.status, 'rejected', 'a run that met the save must not report success');
   });
 }
 
