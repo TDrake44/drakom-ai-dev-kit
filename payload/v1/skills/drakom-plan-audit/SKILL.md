@@ -14,8 +14,8 @@ document this in `.drakom-ai/specs/README.md`. Report plans that lack the header
 or whose status no longer matches the code, and offer to add or fix it. A
 missing header is a finding, not an error; never delete a plan for it.
 
-Inventory plan names, sizes, status headers, active-step pointers, and incoming
-links before reading large plans. Check material status claims against the
+Inventory plan names, sizes, status headers, and incoming links before reading
+large plans. Check material status claims against the
 current worktree, code, tests, documentation, and relevant commits. Classify
 each plan as current, deferred but useful, completed history, superseded, or
 uncertain. Read only the sections needed to justify that classification.
