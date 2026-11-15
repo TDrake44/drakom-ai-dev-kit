@@ -16,5 +16,5 @@ Applies to all test files, test fixtures, and mock configurations.
 ## 4. Verification
 Run:
 ```bash
-pnpm test
+pnpm run test
 ```

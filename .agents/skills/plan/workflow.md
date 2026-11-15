@@ -7,7 +7,7 @@
    - Locate affected files, call sites, and interfaces.
    - Do not edit any implementation files during this stage.
 3. **Draft Architecture Spec:**
-   - Create a scratchpad document at `.drakom-ai/plans/<feature-or-bug-name>.md`.
+   - Create a scratchpad document at `.drakom-ai/plans/<feature-or-bug-name>.md`, starting with the Status and Synopsis header described in `.drakom-ai/specs/README.md`.
    - Specify: Context, Proposed Architecture, Interfaces, Test Strategy, and Migration/Deprecation notes.
 4. **Plan Storage Decision:**
    - Ask the user where the plan should be stored:
