@@ -59,12 +59,9 @@ Not covered: what no test exercises and what was left out on purpose. "Nothing" 
 <!-- Tested: what shows the change does what "What changes" says: the test or command and its
 result; for a fix, that the test failed before it. CI runs `pnpm lint`, `pnpm typecheck`,
 `pnpm test` and `pnpm sync:check` on every pull request, so list those only when one could not run.
-Changeset: "added", or "not needed" for docs, tests and internal configuration.
-Reviewed: tool and model, base SHA, head SHA, clean or dirty tree, findings found and still open;
-"not yet" until a review has run, and update it after a review of later commits.
-Plan or issue: the plan's name, "Closes #123", or "none". -->
+A review run locally leaves no trace on GitHub, so if one ran, add the tool, the commit it read
+and the findings still open.
+Changeset: "added", or "not needed" for docs, tests and internal configuration. -->
 
 - Tested: …
 - Changeset: …
-- Reviewed: …
-- Plan or issue: …
