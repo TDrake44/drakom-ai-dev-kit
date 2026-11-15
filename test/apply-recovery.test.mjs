@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import fsPromises, { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import fsPromises, { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -499,6 +499,41 @@ test('a state file cut short by a killed init is refused by sync and by a second
   assert.match(init.stderr, /state\.json must contain valid JSON\./);
   assert.deepEqual(await snapshot(root), before);
 });
+
+// File permissions survive an update and a merge.
+
+/**
+ * @param {string} root
+ * @param {string} relativePath
+ * @returns {Promise<string>} the permission bits in octal, such as `600`
+ */
+async function permissions(root, relativePath) {
+  return ((await lstat(resolve(root, relativePath))).mode & 0o777).toString(8);
+}
+
+for (const action of /** @type {const} */ (['update', 'merge'])) {
+  test(
+    `a planned ${action} keeps the permissions of the file it rewrites`,
+    { skip: process.platform === 'win32' ? 'Windows has no POSIX permission bits' : false },
+    async (t) => {
+      const root = await scratch(t);
+      await write(root, 'private.json', '{"setting": "before"}\n');
+      await chmod(resolve(root, 'private.json'), 0o600);
+      await write(root, 'tool.sh', '#!/bin/sh\necho before\n');
+      await chmod(resolve(root, 'tool.sh'), 0o755);
+      const plan = syncPlan(root, [
+        operation(action, 'private.json', { before: '{"setting": "before"}\n', content: '{"setting": "after"}\n' }),
+        operation(action, 'tool.sh', { before: '#!/bin/sh\necho before\n', content: '#!/bin/sh\necho after\n' }),
+      ]);
+
+      await applyPlan(plan);
+
+      assert.equal(await read(root, 'private.json'), '{"setting": "after"}\n');
+      assert.equal(await permissions(root, 'private.json'), '600');
+      assert.equal(await permissions(root, 'tool.sh'), '755');
+    },
+  );
+}
 
 // --dry-run and --check leave every byte alone when they report conflicts.
 
