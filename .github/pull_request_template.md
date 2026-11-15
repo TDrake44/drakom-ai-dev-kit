@@ -1,21 +1,39 @@
-## Summary
+<!--
+Write for a reader with two minutes: 15 rendered lines or fewer. Every sentence here is a claim the
+reviewer has to check. History, alternatives and step-by-step detail belong in commits or the plan.
+These comments do not render; leave them or delete them.
+-->
 
-<!-- What does this PR change, and why is the change needed? -->
+## What and why
 
-## Verification
+<!-- Two or three sentences: what changes for a user or maintainer, and why. -->
 
-<!-- List focused checks or manual verification not covered by CI. -->
+## Read first
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] `pnpm sync:check`
+<!-- Up to three places where a mistake would cost the most: `path:line`, then the question to ask
+there. Write "Nothing stands out" when that is true. -->
 
-## Changeset
+1.
 
-- [ ] Added a changeset with `pnpm changeset` for a user-facing package change.
-- [ ] No changeset is needed because this is documentation, testing, or internal repository configuration.
+## Risk and limits
 
-## Related Issues
+<!-- Risk names each consequence that applies, or "none": writes, overwrites or deletes files in a
+consumer's repo; changes what ships (`payload/v1/**`, publish fields, release or CI workflows);
+touches credential handling; changes instructions agents follow (`AGENTS.md`, rules, skills);
+weakens a check (tests, CI, lint config). The reviewer checks this like any other claim.
+Not covered is what was not tested or was left out on purpose; "nothing" is an answer. -->
 
-<!-- Link issues, plans, or follow-up work. Use "Closes #123" where applicable. -->
+- Risk: … because …
+- Not covered: …
+
+## Checks
+
+<!-- Changeset: "added", or "not needed" for docs, tests and internal configuration.
+Reviewed: tool and model, base SHA, head SHA, clean or dirty tree, findings found and still open;
+"not yet" until a review has run, and update it after a review of later commits.
+Plan or issue: a link, "Closes #123", or "none". -->
+
+- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm run test` and `pnpm sync:check` pass locally
+- Changeset: …
+- Reviewed: …
+- Plan or issue: …
