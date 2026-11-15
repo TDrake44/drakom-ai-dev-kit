@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import fsPromises, { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, truncate, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -201,6 +202,24 @@ async function createKitCopy(t, mutate) {
   return path.join(kitRoot, 'dist', 'cli.js');
 }
 
+/**
+ * Replace `node:fs/promises` functions for the code under test until the returned function is
+ * called. `applyPlan` imports them by name, and `syncBuiltinESMExports` is what makes a named
+ * import see the replacement. Only for a failure that has to happen partway through a run, which
+ * files on disk cannot time.
+ * @param {Partial<typeof fsPromises>} replacements
+ * @returns {() => void} puts the real functions back
+ */
+function replaceFsPromises(replacements) {
+  const originals = { ...fsPromises };
+  Object.assign(fsPromises, replacements);
+  syncBuiltinESMExports();
+  return () => {
+    Object.assign(fsPromises, originals);
+    syncBuiltinESMExports();
+  };
+}
+
 // A write fails midway.
 
 test('a write that fails midway restores every earlier change and reports the original error', async (t) => {
@@ -240,6 +259,56 @@ test('a write that fails midway restores every earlier change and reports the or
     return true;
   });
   assert.deepEqual(await snapshot(root), before);
+});
+
+// A restore fails during rollback.
+
+test('a restore that fails during rollback does not stop the remaining restores', async (t) => {
+  const root = await scratch(t);
+  const files = {
+    'first.md': 'first, before\n',
+    'second.md': 'second, before\n',
+    'unrestorable.md': 'unrestorable, before\n',
+    'merged.json': '{"merged": "before"}\n',
+    'retired/deleted.md': 'deleted, before\n',
+    'late.md': 'late, before\n',
+  };
+  for (const [relativePath, content] of Object.entries(files)) {
+    await write(root, relativePath, content);
+  }
+  // late.md is the plan's fifth update or merge; blocking its temporary copy starts the rollback.
+  await writeFile(temporaryPathFor(root, 'late.md', 4), 'in the way\n', 'utf8');
+  const plan = syncPlan(root, [
+    operation('create', 'created.md', { content: 'created\n' }),
+    operation('update', 'first.md', { before: files['first.md'], content: 'first, after\n' }),
+    operation('update', 'second.md', { before: files['second.md'], content: 'second, after\n' }),
+    operation('update', 'unrestorable.md', { before: files['unrestorable.md'], content: 'unrestorable, after\n' }),
+    operation('merge', 'merged.json', { before: files['merged.json'], content: '{"merged": "after"}\n' }),
+    operation('delete', 'retired/deleted.md', { before: files['retired/deleted.md'] }),
+    operation('update', 'late.md', { before: files['late.md'], content: 'never written\n' }),
+  ]);
+  /** @param {Record<string, string>} tree */
+  const exceptUnrestorable = (tree) =>
+    Object.fromEntries(Object.entries(tree).filter(([relativePath]) => relativePath !== 'unrestorable.md'));
+  const before = exceptUnrestorable(await snapshot(root));
+  // New content reaches a file through a temporary copy, so a direct write to this path is its
+  // restore. Rollback restores the newest update first, which makes this the first restore tried.
+  const unrestorable = resolve(root, 'unrestorable.md');
+  const realWriteFile = fsPromises.writeFile;
+  const restoreFs = replaceFsPromises({
+    writeFile: async (file, data, options) => {
+      if (file === unrestorable) {
+        throw Object.assign(new Error(`EIO: i/o error, write '${unrestorable}'`), { code: 'EIO' });
+      }
+      return realWriteFile(file, data, options);
+    },
+  });
+
+  const [outcome] = await Promise.allSettled([applyPlan(plan)]);
+  restoreFs();
+
+  assert.equal(outcome.status, 'rejected');
+  assert.deepEqual(exceptUnrestorable(await snapshot(root)), before);
 });
 
 // A file changes between inspection and apply. These cover a change made before the apply step
