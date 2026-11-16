@@ -59,8 +59,8 @@ Not covered: what no test exercises and what was left out on purpose. "Nothing" 
 <!-- Tested: what shows the change does what "What changes" says: the test or command and its
 result; for a fix, that the test failed before it. CI runs `pnpm lint`, `pnpm typecheck`,
 `pnpm test` and `pnpm sync:check` on every pull request, so list those only when one could not run.
-A review run locally leaves no trace on GitHub, so if one ran, add the tool, the commit it read
-and the findings still open.
+A review run locally leaves no trace on GitHub, so if one ran, add the tool, the commit it read,
+whether the bug review was fresh or by the author, and the findings still open.
 Changeset: "added", or "not needed" for docs, tests and internal configuration. -->
 
 - Tested: …
