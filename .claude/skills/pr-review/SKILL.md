@@ -8,8 +8,8 @@ description: Review a pull request or local branch diff against repository rules
 
 # PR Review Skill
 
-Resolve the review target before inspecting changes. If the user invokes
-`$pr-review` without a PR, review mode, or base branch, ask them to choose:
+Resolve the review target before inspecting changes. If this skill is invoked
+without a PR, review mode, or base branch, ask the user to choose:
 
 1. A pull request link or number.
 2. Local changes compared with `main`.
