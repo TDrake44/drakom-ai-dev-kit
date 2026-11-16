@@ -39,7 +39,7 @@
   },
   "managedSkillMirrors": {
     ".claude/skills/dev/SKILL.md": {
-      "fingerprint": "sha256:4b0367e97961b359dbccc780810f0a2d58c9b0ce3fd4812db730e95ae78c56f0"
+      "fingerprint": "sha256:c186e12d7732e393b48bb3aad132e87ad57e7c43ddb8d0c997e3988442ab0ab9"
     },
     ".claude/skills/document/SKILL.md": {
       "fingerprint": "sha256:0fd691db50396e0f0a472b38fcfd86ef69abfce3fc17ef4164b7777d9c524953"

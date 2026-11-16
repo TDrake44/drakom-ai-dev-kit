@@ -8,6 +8,7 @@ description: Implementation driver executing features and bug fixes using Test-D
 ## Preparation
 1. Use an existing plan in `.drakom-ai/plans/` or `.drakom-ai/specs/` when one applies. Otherwise, derive acceptance criteria from the user's request and repository evidence. Do not require or create a plan solely to use this skill.
 2. Load only the necessary rules: `.drakom-ai/rules/coding.md` and `.drakom-ai/rules/testing.md`.
+3. Work on one pull request at a time. When the plan lists several, do only the next one. If the work grows past that pull request's purpose, or past the size limit in `AGENTS.md`, stop and propose a new split to the user before going on.
 
 ## Execution Loop (TDD)
 1. Write failing tests covering the acceptance criteria from the plan or request.
