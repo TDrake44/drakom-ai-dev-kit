@@ -2,4 +2,4 @@
 '@drakom/ai-dev-kit': patch
 ---
 
-**Clearer skills.** Shorter setup assessments, explicit approval handoffs, optional rule prohibitions and a 150-line ceiling. Plan-audit defines its expected header; starter guidance no longer suggests a fixed rule set.
+**Clearer setup and rule guidance.** Setup assessments are shorter and identify when to ask for approval. Projects choose which rules they need. Include prohibitions when relevant, and split a rule file before it exceeds 150 lines.

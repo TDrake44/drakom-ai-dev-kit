@@ -2,4 +2,4 @@
 '@drakom/ai-dev-kit': patch
 ---
 
-**Safer failed runs.** A file saved while `init` or `sync` is writing is no longer overwritten, and rewritten files keep their permissions. When a write fails, the rollback now continues past a file it cannot restore and names it, and no temporary file is left behind. A file that is not valid UTF-8 is refused before any write, where a merge used to replace its non-ASCII bytes.
+**Safer writes and recovery.** `init` and `sync` recheck files before rewriting them and stop if they detect an intervening edit. Rewritten files keep their permissions. Before applying changes, the CLI checks that files it plans to rewrite or delete contain valid UTF-8. If a write fails, rollback attempts each remaining recovery step and reports any paths it could not restore.
