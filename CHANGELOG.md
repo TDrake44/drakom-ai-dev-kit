@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0
+
+### Minor Changes
+
+- 926b03f: **Sync preserves local edits and applies unrelated updates.** When conflicts remain, sync exits `2`, even if it updated other files. Use `sync --accept <path>` to keep your edit under kit management. Sync flags it again when a later kit release changes that file. Use `sync --release <path>` to make the file project-owned. Sync warns when a detached file differs from the kit.
+- 5aa8455: **Updated MCP output.** VS Code can use the shared root `.mcp.json`; `.vscode/mcp.json` remains available during its deprecation period. Antigravity uses `serverUrl` and `timeoutSeconds`. Codex blocks stay in place, preserve surrounding text and recognize inline/dotted server definitions.
+  
+  Sync also preserves legacy Codex content, accepts entries already matching generated output, and rejects unsafe `__proto__` keys.
+- e8461e1: **Before your first sync from 0.5:** Preview the changes with `pnpm drakom-ai sync . --dry-run`. If you previously used `init --skip-mcp`, an existing `.drakom-ai/mcp-servers.yaml` now enables MCP on the next sync. Remove the registry if MCP should stay off. Both `headers` and `http.headers` are checked for literal credentials. Use `${VAR}` references for those values. See the [0.6 upgrade guide](https://github.com/TDrake44/drakom-ai-dev-kit/blob/main/docs/upgrading.md#upgrading-to-060) for client-specific settings, line endings, and downgrade limits.
+  
+  **Choose MCP clients.** Select clients with registry-level `clients` and per-server `skip`. Overrides can remove environment/header values with `null`; `notSecret` marks ordinary values without allowing token-shaped secrets.
+
+### Patch Changes
+
+- 15809c5: **Safer writes and recovery.** `init` and `sync` recheck files before rewriting them and stop if they detect an intervening edit. Rewritten files keep their permissions. Before applying changes, the CLI checks that files it plans to rewrite or delete contain valid UTF-8. If a write fails, rollback attempts each remaining recovery step and reports any paths it could not restore.
+- ca923c1: **Project-owned READMEs.** Editing or deleting the starter rules/specs READMEs no longer blocks sync. Existing files are preserved; their old managed records are removed automatically.
+- 62764f0: **Windows line endings.** Preserve existing LF/CRLF conventions and avoid false conflicts after checkout conversion. Sync migrates matching legacy fingerprints automatically; unrecoverable old mixed-ending records remain conflicts.
+- 54d29eb: **Smaller package.** Stop shipping TypeScript declarations for the CLI; no importable API is exposed.
+- 186797b: **Fresh-install instructions.** Skills create missing AGENTS.md sections outside the managed block and invoke the CLI through the project's package runner.
+- e9366fc: **Consistent plan headers.** The setup assessment template and the skill-author plan example now use the `Status` and `Synopsis` header expected by `drakom-plan-audit`.
+- ff8a724: **Windows diagnostics.** State-file errors use forward-slash paths, consistent with other CLI output.
+- 9cf9a0a: **Clearer setup and rule guidance.** Setup assessments are shorter and identify when to ask for approval. Projects choose which rules they need. Include prohibitions when relevant, and split a rule file before it exceeds 150 lines.
+- 362615a: **Safe Claude symlinks.** Accept `.claude/skills` and `CLAUDE.md` links to their canonical targets; refuse writes through other links. Unanswered initialization prompts exit cleanly.
+- 62764f0: **Linked target directories.** Init and sync accept a directory symlink as their target. Broken, looping and file links produce actionable errors.
+- bbd8dc4: **Accurate summaries.** Applied plans no longer say "no changes made". Dry-run and check retain their own no-change summaries.
+
 ## 0.5.0
 
 ### Minor Changes
