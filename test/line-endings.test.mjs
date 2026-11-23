@@ -209,7 +209,7 @@ test('fingerprints that 0.5.0 recorded over CRLF bytes are re-recorded once, the
   const crlfAnatomy = toCrlf(await read(root, ruleAnatomy));
   await write(root, ruleAnatomy, crlfAnatomy);
   const state = JSON.parse(await read(root, statePath));
-  const payloadSkill = await readFile(path.join(repositoryRoot, 'payload/v1/skills/drakom-ai-setup/SKILL.md'), 'utf8');
+  const payloadSkill = await readFile(path.join(repositoryRoot, 'skills/drakom-ai-setup/SKILL.md'), 'utf8');
   state.managedFiles[setupSkill].fingerprint = fingerprint(toCrlf(payloadSkill));
   state.managedFiles[setupSkill].acceptedFingerprint = fingerprint(editedSkill);
   state.managedFiles[ruleAnatomy].fingerprint = fingerprint(crlfAnatomy);

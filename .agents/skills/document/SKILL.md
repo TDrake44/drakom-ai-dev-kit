@@ -1,6 +1,8 @@
 ---
 name: document
 description: Documentation audit and synchronization suite keeping user docs, API specs, and READMEs aligned with code changes.
+metadata:
+  internal: true
 ---
 
 # Document Skill

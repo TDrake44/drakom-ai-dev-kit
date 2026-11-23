@@ -9,7 +9,6 @@ Commands below use `drakom-ai` as shorthand: run `pnpm drakom-ai` when installed
 Managed by Drakom AI Dev Kit:
 
 - `drakom-ai-setup` skill and its references (`assessment-plan-template.md`, `rule-anatomy.md`)
-- `drakom-skill-author` skill and its reference (`skill-patterns.md`)
 - `drakom-plan-audit` skill
 - The managed block in `AGENTS.md`
 - Generated Claude skill mirrors
@@ -51,7 +50,7 @@ file, choose one:
 
 | You want | Do this |
 | --- | --- |
-| The kit's version back | Restore the file (from Git, or from `payload/v1/` in the installed package) and run `drakom-ai sync`. |
+| The kit's version back | Restore the file (from Git, or from `skills/` or `payload/v1/` in the installed package) and run `drakom-ai sync`. |
 | To keep your edit and stay managed | `drakom-ai sync --accept <path>` |
 | To own the file yourself | `drakom-ai sync --release <path>` |
 

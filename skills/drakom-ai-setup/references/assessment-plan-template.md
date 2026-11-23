@@ -33,7 +33,7 @@ List every relevant source, or a bounded group of related sources, under Keep, R
 
 ## Add
 
-- Proposed rule, skill, or router change. Draft rules from `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
+- Proposed rule or router change, or a suggested skill (its name and a one-line purpose; setup does not write skills). Draft rules from the setup skill's `references/rule-anatomy.md`.
 
 ## Omit
 
@@ -59,4 +59,4 @@ List every relevant source, or a bounded group of related sources, under Keep, R
 
 ## Approval Gate
 
-No project-owned rule, skill, entry-point prose, or MCP source changes occur until the user explicitly approves the exact items above.
+No project-owned rule, entry-point prose, or MCP source changes occur until the user explicitly approves the exact items above.
