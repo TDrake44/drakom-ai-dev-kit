@@ -1,6 +1,6 @@
 ---
 name: drakom-review
-description: Review a pull request or local branch diff before it opens or merges, with a blind risk check, a bug review by a fresh reviewer against the repo's review rules, and a report of confirmed findings. Use before opening a pull request and after each round of fixes; pass `fix` for up to three rounds of review, fix and re-review. The reviewer never edits, and neither mode commits, pushes or posts.
+description: Review a pull request or local branch diff before it opens or merges, with a blind risk check, a bug review by a fresh reviewer against the repo's review rules, and a report of confirmed findings. Use before opening a pull request and after each round of fixes; pass `fix` for up to three rounds of review, fix and re-review. The reviewer never edits. Neither mode pushes or posts, and fix rounds commit only when the user or the repo's rules allow it.
 ---
 
 # Review
@@ -39,7 +39,7 @@ Read each fact from the first place that has it:
 - **Topic rules:** the files that `.drakom-ai/rules/README.md` or `AGENTS.md` routes to for the
   changed paths.
 - **Verification commands and manual checks:** `.drakom-ai/rules/verification.md`, then
-  `AGENTS.md` or `CLAUDE.md`, then the package scripts, Makefile or CI configuration. Manual
+  `AGENTS.md` or `CLAUDE.md`. When none of them names the commands, see below. Manual
   checks, things only a person can settle such as a check on a phone, a device or a browser, come
   only from a `Manual checks` section in `.drakom-ai/rules/verification.md`.
 - **Risk labels:** the opening comment of `.github/pull_request_template.md`, else the kit's
@@ -95,8 +95,9 @@ edited any of the change does steps 1 and 2, then hands steps 3 to 6 to a fresh 
    round with important findings still open, recommend `Rethink the approach` and propose no
    further rounds.
 
-Posting comments, creating a review on GitHub, committing or pushing needs the user's go-ahead
-first, because others see those and they are hard to retract.
+Posting comments, creating a review on GitHub or pushing needs the user's go-ahead first, because
+others see those and they are hard to retract. So does committing, except for fix-round fixes in
+a repo whose rules allow commits.
 
 ## Next step
 

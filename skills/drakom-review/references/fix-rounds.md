@@ -11,10 +11,11 @@ fixer are never the same agent, so no one reviews their own fixes.
    describes. It stays read-only.
 3. **Fix.** The calling session, which is the author, fixes the important findings, then runs the
    verification commands. Nits and pre-existing bugs are listed, not fixed. Changes stay in the
-   working tree unless the user or the repo's rules allow commits.
+   working tree unless the user or the repo's rules allow commits. Never push or post.
 4. The next round re-reviews the fixes and the behavior they affect.
 
-Without subagents, every round is reported `Bug review: by the author`.
+Without subagents, the author reviews every round itself, rather than offering a fresh session
+each round, and every round is reported `Bug review: by the author`.
 
 ## Acceptance criteria
 
