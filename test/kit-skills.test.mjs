@@ -10,7 +10,10 @@ import yaml from 'js-yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
-const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
+const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit', 'drakom-review'];
+
+/** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
+const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
 
 /** Files Git tracks, which is what an install from GitHub sees. */
 function trackedFiles() {
@@ -85,16 +88,16 @@ test('every kit skill under skills/ is named after its folder', async () => {
   }
 });
 
-test('the payload manifest and skills/ list the same skill files', async () => {
+test('the payload manifest lists every file of the CLI-installed skills, and no other skill', async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'payload', 'v1', 'payload.json'), 'utf8'));
   const manifestSkillFiles = Object.values(manifest.files)
     .filter((source) => source.startsWith('skills/'))
     .sort();
-  const shippedSkillFiles = trackedFiles()
-    .filter((file) => file.startsWith('skills/'))
+  const payloadSkillFiles = trackedFiles()
+    .filter((file) => PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)))
     .sort();
 
-  assert.deepEqual(manifestSkillFiles, shippedSkillFiles);
+  assert.deepEqual(manifestSkillFiles, payloadSkillFiles);
   assert.equal(
     trackedFiles().some((file) => file.startsWith('payload/v1/skills/')),
     false,
@@ -118,9 +121,85 @@ test('the setup skill says where its references are for both kinds of install, a
 });
 
 test('this repository hides its own workflow skills from npx skills add', async () => {
-  for (const name of ['dev', 'document', 'plan', 'pr-review']) {
+  for (const name of ['dev', 'document', 'plan']) {
     for (const folder of ['.agents/skills', '.claude/skills']) {
       assert.equal(isInternal(await readFrontmatter(`${folder}/${name}/SKILL.md`)), true, `${folder}/${name} is not internal`);
     }
   }
+});
+
+const REVIEW_DIR = 'skills/drakom-review';
+
+/** Every Markdown file of the review skill, keyed by its path inside the skill folder. */
+async function reviewSkillFiles() {
+  const files = new Map();
+  for (const file of trackedFiles().filter((tracked) => tracked.startsWith(`${REVIEW_DIR}/`))) {
+    files.set(file.slice(REVIEW_DIR.length + 1), await readFile(path.join(repositoryRoot, file), 'utf8'));
+  }
+  return files;
+}
+
+test('the review skill names each of its references, and each one exists in its own folder', async () => {
+  const files = await reviewSkillFiles();
+  const text = [...files.values()].join('\n');
+
+  const named = new Set([...text.matchAll(/`references\/([^`<]+)`/g)].map(([, file]) => `references/${file}`));
+  const shipped = [...files.keys()].filter((file) => file.startsWith('references/'));
+  assert.ok(shipped.length > 0);
+  assert.deepEqual([...named].sort(), shipped.sort());
+  const skill = files.get('SKILL.md') ?? '';
+  for (const reference of shipped) {
+    assert.ok(skill.includes(`\`${reference}\``), `SKILL.md does not name ${reference}`);
+  }
+});
+
+test('the review skill stands alone: it names no file in another skill or a repo file it has no default for', async () => {
+  const text = [...(await reviewSkillFiles()).values()].join('\n');
+
+  assert.doesNotMatch(text, /skills\/(?!drakom-review\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  // Repo files the skill reads, each with a default when it is missing (see "When the repo has nothing"),
+  // and the rules folder whose changes it judges against the base branch.
+  const repoFacts = new Set([
+    '.drakom-ai/plans/',
+    '.drakom-ai/rules/',
+    '.drakom-ai/rules/README.md',
+    '.drakom-ai/rules/review.md',
+    '.drakom-ai/rules/verification.md',
+    '.github/pull_request_template.md',
+    'AGENTS.md',
+    'CLAUDE.md',
+  ]);
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual([...named].sort(), [...repoFacts].sort());
+});
+
+test('the review skill gives a default for each repo fact a repo may lack', async () => {
+  const skill = (await reviewSkillFiles()).get('SKILL.md') ?? '';
+
+  const section = skill.match(/## When the repo has nothing\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "When the repo has nothing" section');
+  for (const fact of [/review rules/i, /verification commands/i, /risk labels/i]) {
+    assert.match(section[1], fact);
+  }
+});
+
+test('the review skill acts as if no earlier kit version existed', async () => {
+  const text = [...(await reviewSkillFiles()).values()].join('\n');
+
+  assert.ok(text.length > 0, 'the review skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the review skill offers the kit\'s default risk labels', async () => {
+  const riskCheck = (await reviewSkillFiles()).get('references/risk-check.md') ?? '';
+
+  const section = riskCheck.match(/## Default labels\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Default labels" section');
+  const labels = [...section[1].matchAll(/^- \*\*([^*]+)\*\*/gm)].map(([, label]) => label);
+  assert.deepEqual(labels, ['credentials', 'user data', 'agent instructions', 'weakens a check']);
 });

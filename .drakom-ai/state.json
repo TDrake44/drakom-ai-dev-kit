@@ -42,9 +42,6 @@
     ".claude/skills/plan/SKILL.md": {
       "fingerprint": "sha256:54b8622500a5c0ff3df94ea4a37079cf3270b5d4bc21a23d4c4bcafff602a56a"
     },
-    ".claude/skills/pr-review/SKILL.md": {
-      "fingerprint": "sha256:17f1061e29e612cb2bc8091bbaafba37f2fb1d8154ee2a6fb79493c541f74bdf"
-    },
     ".claude/skills/drakom-plan-audit/SKILL.md": {
       "fingerprint": "sha256:635420999c078dd740ec4e486aa33915a565227f64787a0c5f4d4bc43ca8dd28"
     }
