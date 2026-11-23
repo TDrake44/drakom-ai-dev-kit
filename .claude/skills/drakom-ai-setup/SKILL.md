@@ -12,6 +12,8 @@ Assess the repository from evidence, recommend the smallest useful project-speci
 
 Run the kit CLI through the project's package runner, because a bare `drakom-ai` is not on PATH: `pnpm drakom-ai <command>` when the kit is a dev dependency, otherwise `npx @drakom/ai-dev-kit <command>`. Steps below write `drakom-ai <command>` and mean this invocation.
 
+This skill's references, named below as `references/<file>`, are in the `references/` folder beside this SKILL.md when the skill was installed with `npx skills`. In a project set up with the kit CLI they are at the repository-root path `.agents/skills/drakom-ai-setup/references/`, because the CLI's Claude Code copy in `.claude/skills/` holds only SKILL.md.
+
 ## Inspect
 
 Inspect only repository-local evidence unless the user explicitly broadens scope:
@@ -43,7 +45,7 @@ Present a concise recommendation using exactly these decision categories:
 
 - **Keep:** useful existing context that should remain unchanged.
 - **Refine:** existing context that is valuable but inaccurate, duplicated, or poorly routed.
-- **Add:** a missing rule or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy in `references/rule-anatomy.md`, in this skill's folder. A recurring workflow that deserves a skill goes here as a suggestion only, with its name and a one-line purpose; setup does not write skills.
+- **Add:** a missing rule or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy in `references/rule-anatomy.md`. A recurring workflow that deserves a skill goes here as a suggestion only, with its name and a one-line purpose; setup does not write skills.
 - **Omit:** plausible additions or existing context that do not justify their maintenance cost. Omit never means delete: omitted existing files stay in place unless the user separately approves removing them.
 
 Within each category, list every relevant source, or a bounded group of related sources, as one row: the path, the evidence, and the decision. Give an item being added or changed (Add, Refine) the full set of fields below; Keep and Omit rows need only a one-line reason.
@@ -66,7 +68,7 @@ Identical servers are adopted safely into `.drakom-ai/mcp-servers.yaml`. Conflic
 
 Ask focused questions only when repository evidence cannot resolve a choice that materially changes the recommendation, including which recurring workflows deserve skills. Do not ask the user to restate facts already present in the repository.
 
-Draft the adoption plan under `.drakom-ai/plans/` using the template in `references/assessment-plan-template.md`, in this skill's folder. Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
+Draft the adoption plan under `.drakom-ai/plans/` using the template in `references/assessment-plan-template.md`. Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
 
 ## Approval Gate
 
@@ -76,7 +78,7 @@ Stop and request explicit approval before creating or changing any project-owned
 
 Apply only the approved items while preserving unrelated content. Then:
 
-1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `references/rule-anatomy.md`, in this skill's folder.
+1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `references/rule-anatomy.md`.
 2. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. If `AGENTS.md` has no Standards Index (a fresh init writes only the managed block), create one outside the managed block, after approval. Never edit inside the `drakom-ai:start`/`drakom-ai:end` markers; the kit overwrites them. Do not globally load rules; companion deep-dive references may instead be routed on demand.
 3. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
 4. Verify every referenced path exists or is explicitly marked as prospective.

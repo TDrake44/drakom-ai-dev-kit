@@ -17,11 +17,11 @@ the recorded `kitVersion` is newer than the installed kit.
 
 - **`drakom-skill-author` is removed.** Sync reports a conflict for
   `.agents/skills/drakom-skill-author/SKILL.md` and its `references/skill-patterns.md`
-  and exits `2`. Delete the `.agents/skills/drakom-skill-author/` folder, or keep
-  it as your own skill, then run
+  and exits `2`. Delete the `.agents/skills/drakom-skill-author/` folder, then run
   `drakom-ai sync . --release .agents/skills/drakom-skill-author/SKILL.md --release .agents/skills/drakom-skill-author/references/skill-patterns.md`.
-  Sync removes its generated Claude mirror and the line naming it in the
-  `AGENTS.md` managed block.
+  Sync then removes its generated Claude mirror and the line naming it in the
+  `AGENTS.md` managed block. To keep the skill instead, rename it without the
+  reserved `drakom-` prefix, then release the two paths the same way.
 
 ## Upgrading to 0.6.0
 

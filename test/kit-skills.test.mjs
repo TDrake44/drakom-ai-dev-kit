@@ -102,10 +102,18 @@ test('the payload manifest and skills/ list the same skill files', async () => {
   );
 });
 
-test('kit skills name their references inside their own folder, not by a repo-root path', async () => {
-  for (const file of trackedFiles().filter((tracked) => tracked.startsWith('skills/'))) {
-    const content = await readFile(path.join(repositoryRoot, file), 'utf8');
-    assert.doesNotMatch(content, /\.agents\/skills\/drakom-[^/`]+\/references\//, `${file} names a repo-root reference path`);
+test('the setup skill says where its references are for both kinds of install, and each one exists', async () => {
+  const skill = await readFile(path.join(repositoryRoot, 'skills/drakom-ai-setup/SKILL.md'), 'utf8');
+
+  // An `npx skills` install keeps references/ beside SKILL.md; the CLI's Claude mirror holds only
+  // SKILL.md, so a CLI-set-up project needs the repo-root path.
+  assert.match(skill, /`references\/` folder beside this SKILL\.md when the skill was installed with `npx skills`/);
+  assert.match(skill, /set up with the kit CLI they are at the repository-root path `\.agents\/skills\/drakom-ai-setup\/references\/`/);
+  const named = [...skill.matchAll(/`references\/([^`<]+)`/g)].map(([, file]) => file);
+  assert.ok(named.length > 0);
+  const tracked = trackedFiles();
+  for (const file of named) {
+    assert.ok(tracked.includes(`skills/drakom-ai-setup/references/${file}`), `${file} is not shipped`);
   }
 });
 

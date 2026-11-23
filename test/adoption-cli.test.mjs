@@ -573,16 +573,16 @@ test('packages a rule anatomy reference that the setup skill routes to inside it
   const installedAnatomy = await readCheckoutText(path.join(repositoryRoot, ruleAnatomyTarget));
 
   assert.equal(anatomy, installedAnatomy);
-  // The skill names its references relative to its own folder, which holds for a CLI install in
-  // `.agents/skills/` and for an `npx skills` install alike.
-  const referencedPaths = [...skill.matchAll(/`(references\/[^`]+)`/g)].map(([, rel]) => `skills/drakom-ai-setup/${rel}`);
+  // The skill names its references as `references/<file>` and says where that folder is for each
+  // kind of install (see test/kit-skills.test.mjs).
+  const referencedPaths = [...skill.matchAll(/`(references\/[^`<]+)`/g)].map(([, rel]) => `skills/drakom-ai-setup/${rel}`);
   assert.ok(referencedPaths.includes(ruleAnatomySource), 'setup skill must reference rule-anatomy.md');
   for (const rel of referencedPaths) {
     assert.ok(Object.values(payload.manifest.files).includes(rel), `${rel} is not packaged`);
   }
-  assert.doesNotMatch(skill, /\.agents\/skills\/drakom-ai-setup\/references\//);
+  assert.match(skill, /`\.agents\/skills\/drakom-ai-setup\/references\/`/);
   const addSection = skill.slice(skill.indexOf('**Add:**'), skill.indexOf('**Omit:**'));
-  assert.match(addSection, /`references\/rule-anatomy\.md`, in this skill's folder/);
+  assert.match(addSection, /`references\/rule-anatomy\.md`/);
   assert.match(skill, /Create each approved rule[^\n]*`references\/rule-anatomy\.md`/i);
 
   for (const section of ['Scope', 'Required Patterns', 'Prohibited Patterns', 'Verification']) {

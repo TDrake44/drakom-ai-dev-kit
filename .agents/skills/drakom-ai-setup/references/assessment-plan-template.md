@@ -33,7 +33,7 @@ List every relevant source, or a bounded group of related sources, under Keep, R
 
 ## Add
 
-- Proposed rule or router change, or a suggested skill (its name and a one-line purpose; setup does not write skills). Draft rules from `references/rule-anatomy.md` in the setup skill's folder.
+- Proposed rule or router change, or a suggested skill (its name and a one-line purpose; setup does not write skills). Draft rules from the setup skill's `references/rule-anatomy.md`.
 
 ## Omit
 
