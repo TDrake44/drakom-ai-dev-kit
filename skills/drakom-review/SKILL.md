@@ -26,8 +26,8 @@ once and report; that pass is read-only.
 
 A repo adds to these steps through its rules; it cannot remove them. The bug review goes to a
 fresh reviewer when the tool allows one. The risk check is blind. Only confirmed findings are
-reported. A command that did not run, or failed, is never reported as passing. The reviewer never
-edits a file.
+reported. A command that did not run, or failed, is never reported as passing. A reviewer never
+edits a file while it reviews.
 
 ## Repo facts
 

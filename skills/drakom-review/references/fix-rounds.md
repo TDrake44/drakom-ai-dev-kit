@@ -1,7 +1,8 @@
 # Fix rounds
 
-With the argument `fix`, review, fix and re-review for up to three rounds. The reviewer and the
-fixer are never the same agent, so no one reviews their own fixes.
+With the argument `fix`, review, fix and re-review for up to three rounds. With subagents, the
+reviewer and the fixer are never the same agent, so no one reviews their own fixes. Without them,
+the author does both, as below, and the report says so.
 
 ## Each round
 
