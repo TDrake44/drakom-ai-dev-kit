@@ -1,6 +1,6 @@
 ---
 name: drakom-review
-description: Review a pull request or local branch diff before it opens or merges, with a blind risk check, a bug review by a fresh reviewer against the repo's review rules, and a report of confirmed findings. Use before opening a pull request and after each round of fixes; pass `fix` for up to three rounds of review, fix and re-review. The reviewer never edits. Neither mode pushes or posts, and fix rounds commit only when the user or the repo's rules allow it.
+description: Review a pull request or local branch diff before it opens or merges, with a blind risk check, a bug review by a fresh reviewer against the repo's review rules, and a report of confirmed findings. Use before opening a pull request and after each round of fixes; pass `fix` for up to three rounds of review, fix and re-review. A reviewer never edits while it reviews. Neither mode pushes or posts, and fix rounds commit only when the user or the repo's rules allow it.
 ---
 
 # Review
