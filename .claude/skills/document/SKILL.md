@@ -1,6 +1,8 @@
 ---
 name: document
 description: Documentation audit and synchronization suite keeping user docs, API specs, and READMEs aligned with code changes.
+metadata:
+  internal: true
 ---
 
 <!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->

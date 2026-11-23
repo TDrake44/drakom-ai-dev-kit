@@ -1,6 +1,6 @@
 ---
 name: drakom-ai-setup
-description: Assess a repository before adopting or revising Drakom AI project context, then propose and verify the smallest useful set of project-owned rules and skills.
+description: Assess a repository before adopting or revising Drakom AI project context, then propose and verify the smallest useful set of project-owned rules, and suggest skills worth adding.
 ---
 
 <!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->
@@ -31,11 +31,11 @@ Do not inspect user-global AI or MCP configuration without explicit permission.
 Separate durable constraints from repeatable procedures:
 
 - Stable policy that changes implementation decisions may become a rule.
-- A recurring multi-step workflow that benefits from a reliable sequence may become a skill.
+- A recurring multi-step workflow that benefits from a reliable sequence may deserve a skill; suggest it, but do not write it.
 - One-off knowledge should remain documentation or be omitted.
 - Constraints already made obvious by formatters, linters, types, or tests should be omitted unless an agent needs them to choose the correct approach.
 
-Do not assume the project needs custom rules or additional skills, and never install a fixed skill suite. Every rule or skill proposed by this workflow becomes project-owned immediately and is not managed by `drakom-ai sync`.
+Do not assume the project needs custom rules or additional skills, and never install a fixed skill suite. Every rule this workflow creates becomes project-owned immediately and is not managed by `drakom-ai sync`.
 
 ## Recommend Before Changing
 
@@ -43,7 +43,7 @@ Present a concise recommendation using exactly these decision categories:
 
 - **Keep:** useful existing context that should remain unchanged.
 - **Refine:** existing context that is valuable but inaccurate, duplicated, or poorly routed.
-- **Add:** a missing rule, skill, or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy at the repository-root path `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`. For each proposed skill, follow the Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md` instead of drafting it here.
+- **Add:** a missing rule or entry-point link supported by repository evidence. Draft each proposed rule's content from the rule anatomy in `references/rule-anatomy.md`, in this skill's folder. A recurring workflow that deserves a skill goes here as a suggestion only, with its name and a one-line purpose; setup does not write skills.
 - **Omit:** plausible additions or existing context that do not justify their maintenance cost. Omit never means delete: omitted existing files stay in place unless the user separately approves removing them.
 
 Within each category, list every relevant source, or a bounded group of related sources, as one row: the path, the evidence, and the decision. Give an item being added or changed (Add, Refine) the full set of fields below; Keep and Omit rows need only a one-line reason.
@@ -66,23 +66,22 @@ Identical servers are adopted safely into `.drakom-ai/mcp-servers.yaml`. Conflic
 
 Ask focused questions only when repository evidence cannot resolve a choice that materially changes the recommendation, including which recurring workflows deserve skills. Do not ask the user to restate facts already present in the repository.
 
-Draft the adoption plan under `.drakom-ai/plans/` using the template at the repository-root path `.agents/skills/drakom-ai-setup/references/assessment-plan-template.md`. Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
+Draft the adoption plan under `.drakom-ai/plans/` using the template in `references/assessment-plan-template.md`, in this skill's folder. Record context, exact proposed files, ownership, interfaces, verification, and MCP decisions. Never copy literal credentials into the plan, logs, state, or MCP source.
 
 ## Approval Gate
 
-Stop and request explicit approval before creating or changing any project-owned rule, skill, plan-derived entry-point prose, or MCP source. Approval of the recommendation authorizes only the listed changes. For an approved skill, that approval covers the decision to add it and its name and purpose; the skill-author Write and Check procedure still ends at its own approval of the full draft, its `AGENTS.md` row, and any rule it routes to. Present the full draft there once; do not re-ask whether to add the skill. Conflicting MCP definitions, semantic rewrites, ownership takeover, and access to global configuration each require a separate decision.
+Stop and request explicit approval before creating or changing any project-owned rule, plan-derived entry-point prose, or MCP source. Approval of the recommendation authorizes only the listed changes. Conflicting MCP definitions, semantic rewrites, ownership takeover, and access to global configuration each require a separate decision.
 
 ## Implement and Verify After Approval
 
 Apply only the approved items while preserving unrelated content. Then:
 
-1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
-2. Create each approved skill by completing the drakom-skill-author Write and Check procedure in `.agents/skills/drakom-skill-author/SKILL.md`, including its `AGENTS.md` skill table row and mirror sync. If `AGENTS.md` has no skill table, the row needs a new one, created outside the managed block.
-3. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. If `AGENTS.md` has no Standards Index (a fresh init writes only the managed block), create one outside the managed block, after approval. Never edit inside the `drakom-ai:start`/`drakom-ai:end` markers; the kit overwrites them. Do not globally load rules; companion deep-dive references may instead be routed on demand.
-4. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
-5. Verify every referenced path exists or is explicitly marked as prospective.
-6. Verify every documented command against the repository's actual package manager and tooling.
-7. Verify every cross-file reference, skill name, and entry-point link resolves.
-8. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
-9. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .`.
-10. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.
+1. Create each approved rule in `.drakom-ai/rules/`, following the anatomy and budget in `references/rule-anatomy.md`, in this skill's folder.
+2. Add an explicit, task-based link for each approved rule to the `AGENTS.md` Standards Index. If `AGENTS.md` has no Standards Index (a fresh init writes only the managed block), create one outside the managed block, after approval. Never edit inside the `drakom-ai:start`/`drakom-ai:end` markers; the kit overwrites them. Do not globally load rules; companion deep-dive references may instead be routed on demand.
+3. Remove or revise stale task routes when an approved rule supersedes or renames an existing rule, while preserving unrelated `AGENTS.md` content.
+4. Verify every referenced path exists or is explicitly marked as prospective.
+5. Verify every documented command against the repository's actual package manager and tooling.
+6. Verify every cross-file reference, skill name, and entry-point link resolves.
+7. Run the repository's native formatting, lint, typecheck, and test commands that are relevant to the approved changes.
+8. Run `drakom-ai sync . --dry-run`, then `drakom-ai sync .`.
+9. Summarize created project-owned files, preserved unmanaged context, verification results, and unresolved decisions.

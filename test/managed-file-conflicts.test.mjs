@@ -12,7 +12,7 @@ import { renderCliHelp } from '../dist/cli-help.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
 import { normalizeTargetRelativePath } from '../dist/managed-file-options.js';
 import { createMirrorContent } from '../dist/operation-plan.js';
-import { loadPackagePayload } from '../dist/package-payload.js';
+import { loadPackagePayload, payloadFileLocation } from '../dist/package-payload.js';
 import { loadState, serializeState } from '../dist/state.js';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -116,20 +116,25 @@ async function snapshot(root) {
 
 /**
  * Copy the compiled kit into a standalone directory so a test can alter its payload.
- * @param {(manifest: FixtureManifest, payloadRoot: string) => Promise<void> | void} mutate
+ * @param {(manifest: FixtureManifest, writePayloadFile: (source: string, content: string) => Promise<void>) => Promise<void> | void} mutate
+ *   `writePayloadFile` takes a manifest path and writes it where the kit reads it.
  * @returns {Promise<string>} path to the copied cli.js
  */
 async function createKitCopy(mutate) {
   const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-kit-copy-'));
   await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
   await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'skills'), path.join(kitRoot, 'skills'), { recursive: true });
   await cp(path.join(repositoryRoot, 'package.json'), path.join(kitRoot, 'package.json'));
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(kitRoot, 'node_modules'), 'junction');
-  const payloadRoot = path.join(kitRoot, 'payload', 'v1');
-  const manifestPath = path.join(payloadRoot, 'payload.json');
+  const manifestPath = path.join(kitRoot, 'payload', 'v1', 'payload.json');
   /** @type {FixtureManifest} */
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  await mutate(manifest, payloadRoot);
+  await mutate(manifest, async (source, content) => {
+    const filePath = path.join(kitRoot, ...payloadFileLocation(source).split('/'));
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, content, 'utf8');
+  });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   return path.join(kitRoot, 'dist', 'cli.js');
 }
@@ -141,7 +146,7 @@ async function createKitCopy(mutate) {
  * @returns {Promise<string>} path to the copied cli.js
  */
 function createKitWithPayloadFile(source, content) {
-  return createKitCopy((_manifest, payloadRoot) => writeFile(path.join(payloadRoot, ...source.split('/')), content, 'utf8'));
+  return createKitCopy((_manifest, writePayloadFile) => writePayloadFile(source, content));
 }
 
 const exampleSkill = '.agents/skills/drakom-example-default/SKILL.md';
@@ -154,13 +159,11 @@ const exampleSkillContent = '---\nname: drakom-example-default\ndescription: Syn
  * @returns {Promise<string>} path to the copied cli.js
  */
 function createKitWithNewDefaults() {
-  return createKitCopy(async (manifest, payloadRoot) => {
-    const skillDir = path.join(payloadRoot, 'skills', 'drakom-example-default');
-    await mkdir(path.join(skillDir, 'references'), { recursive: true });
-    await writeFile(path.join(skillDir, 'SKILL.md'), exampleSkillContent, 'utf8');
-    await writeFile(path.join(skillDir, 'references', 'example.md'), '# Example reference\n', 'utf8');
+  return createKitCopy(async (manifest, writePayloadFile) => {
     manifest.files.exampleSkill = 'skills/drakom-example-default/SKILL.md';
     manifest.files.exampleReference = 'skills/drakom-example-default/references/example.md';
+    await writePayloadFile(manifest.files.exampleSkill, exampleSkillContent);
+    await writePayloadFile(manifest.files.exampleReference, '# Example reference\n');
     manifest.defaults = {
       ...manifest.defaults,
       exampleSkill: { target: exampleSkill, addedIn: manifest.kitVersion },
@@ -433,7 +436,7 @@ test('an accepted edit conflicts again when the kit changes that file, and can b
 
   assert.equal(sync.status, 2, sync.stdout + sync.stderr);
   assert.match(sync.stdout, /CONFLICT \.agents\/skills\/drakom-ai-setup\/SKILL\.md — Kit version \S+ changed this file, which has an accepted local edit\./);
-  assert.match(sync.stdout, /payload\/v1\/skills\/drakom-ai-setup\/SKILL\.md/);
+  assert.match(sync.stdout, /the kit.s copy \(skills\/drakom-ai-setup\/SKILL\.md in the installed package\)/);
   assert.match(sync.stdout, /sync --accept \.agents\/skills\/drakom-ai-setup\/SKILL\.md/);
   assert.match(sync.stdout, /sync --release \.agents\/skills\/drakom-ai-setup\/SKILL\.md/);
   assert.deepEqual(await snapshot(root), before);

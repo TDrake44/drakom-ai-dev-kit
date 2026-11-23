@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { applyPlan } from '../dist/apply-plan.js';
 import { DRAKOM_DIR } from '../dist/constants.js';
+import { payloadFileLocation } from '../dist/package-payload.js';
 import { runCli } from '../dist/run-cli.js';
 
 /**
@@ -24,8 +25,8 @@ const setupSkill = '.agents/skills/drakom-ai-setup/SKILL.md';
 const setupSkillSource = 'skills/drakom-ai-setup/SKILL.md';
 const ruleAnatomy = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
 const ruleAnatomySource = 'skills/drakom-ai-setup/references/rule-anatomy.md';
-const skillAuthor = '.agents/skills/drakom-skill-author/SKILL.md';
-const skillAuthorSource = 'skills/drakom-skill-author/SKILL.md';
+const planAudit = '.agents/skills/drakom-plan-audit/SKILL.md';
+const planAuditSource = 'skills/drakom-plan-audit/SKILL.md';
 
 /**
  * @param {string} cli
@@ -190,16 +191,18 @@ function syncPlan(root, operations) {
 /**
  * Copy the compiled kit into a standalone directory so a test can alter its payload.
  * @param {import('node:test').TestContext} t
- * @param {(payloadRoot: string) => Promise<void>} mutate
+ * @param {(writePayloadFile: (source: string, content: string) => Promise<void>, kitRoot: string) => Promise<void>} mutate
+ *   `writePayloadFile` takes a manifest path and writes it where the kit reads it.
  * @returns {Promise<string>} path to the copied cli.js
  */
 async function createKitCopy(t, mutate) {
   const kitRoot = await scratch(t, 'drakom-recovery-kit-');
   await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
   await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
+  await cp(path.join(repositoryRoot, 'skills'), path.join(kitRoot, 'skills'), { recursive: true });
   await cp(path.join(repositoryRoot, 'package.json'), path.join(kitRoot, 'package.json'));
   await symlink(path.join(repositoryRoot, 'node_modules'), path.join(kitRoot, 'node_modules'), 'junction');
-  await mutate(path.join(kitRoot, 'payload', 'v1'));
+  await mutate((source, content) => write(kitRoot, payloadFileLocation(source), content), kitRoot);
   return path.join(kitRoot, 'dist', 'cli.js');
 }
 
@@ -414,12 +417,12 @@ test('a sync killed between two updates is finished by the next sync, which neve
   const newer = {
     [setupSkill]: '---\nname: drakom-ai-setup\ndescription: Newer kit\n---\n\n# Newer setup skill\n',
     [ruleAnatomy]: '# Newer rule anatomy\n',
-    [skillAuthor]: '---\nname: drakom-skill-author\ndescription: Newer kit\n---\n\n# Newer skill author\n',
+    [planAudit]: '---\nname: drakom-plan-audit\ndescription: Newer kit\n---\n\n# Newer plan audit\n',
   };
-  const newerKit = await createKitCopy(t, async (payloadRoot) => {
-    await write(payloadRoot, setupSkillSource, newer[setupSkill]);
-    await write(payloadRoot, ruleAnatomySource, newer[ruleAnatomy]);
-    await write(payloadRoot, skillAuthorSource, newer[skillAuthor]);
+  const newerKit = await createKitCopy(t, async (writePayloadFile) => {
+    await writePayloadFile(setupSkillSource, newer[setupSkill]);
+    await writePayloadFile(ruleAnatomySource, newer[ruleAnatomy]);
+    await writePayloadFile(planAuditSource, newer[planAudit]);
   });
   // The killed run renamed the first update into place and was writing the temporary copy of the
   // second. The third file, both skill mirrors and state.json were never reached.
@@ -456,14 +459,13 @@ test('a file half-written by a killed sync is reported as a conflict, never reco
   const root = await createInstalled(t);
   const state = await readState(root);
   await write(root, statePath, `${JSON.stringify({ ...state, kitVersion: '0.0.9' }, null, 2)}\n`);
-  const newerKit = await createKitCopy(t, async (payloadRoot) => {
-    await write(
-      payloadRoot,
+  const newerKit = await createKitCopy(t, async (writePayloadFile, kitRoot) => {
+    await writePayloadFile(
       'skills/drakom-example-default/SKILL.md',
       '---\nname: drakom-example-default\ndescription: Synthetic default skill\n---\n\n# Example\n',
     );
-    await write(payloadRoot, 'skills/drakom-example-default/references/example.md', exampleReferenceContent);
-    const manifest = JSON.parse(await read(payloadRoot, 'payload.json'));
+    await writePayloadFile('skills/drakom-example-default/references/example.md', exampleReferenceContent);
+    const manifest = JSON.parse(await read(kitRoot, 'payload/v1/payload.json'));
     manifest.files.exampleSkill = 'skills/drakom-example-default/SKILL.md';
     manifest.files.exampleReference = 'skills/drakom-example-default/references/example.md';
     manifest.defaults = {
@@ -471,7 +473,7 @@ test('a file half-written by a killed sync is reported as a conflict, never reco
       exampleSkill: { target: exampleSkill, addedIn: manifest.kitVersion },
       exampleReference: { target: exampleReference, addedIn: manifest.kitVersion },
     };
-    await write(payloadRoot, 'payload.json', `${JSON.stringify(manifest, null, 2)}\n`);
+    await write(kitRoot, 'payload/v1/payload.json', `${JSON.stringify(manifest, null, 2)}\n`);
   });
   // A new file is written in place, so a kill leaves the start of it. state.json was never reached.
   const halfWritten = exampleReferenceContent.slice(0, 6);

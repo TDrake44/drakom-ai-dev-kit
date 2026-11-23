@@ -29,7 +29,8 @@
   "files": [
     "dist",
     "!dist/**/*.d.ts",
-    "payload"
+    "payload",
+    "skills"
   ],
   "bin": {
     "drakom-ai": "dist/cli.js"

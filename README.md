@@ -53,6 +53,23 @@ $drakom-ai-setup    # OpenAI Codex CLI
 It inspects the repository and proposes project-specific context for your
 approval.
 
+## Install the skills with `npx skills`
+
+The kit's skills also install on their own with the
+[`skills` CLI](https://github.com/vercel-labs/skills), which finds them in this
+repository's `skills/` folder. For every project on your machine (user level):
+
+```bash
+npx skills add TDrake44/drakom-ai-dev-kit -g
+npx skills update -g    # later, to update
+```
+
+For one project (project level), run it in that project without `-g`. The CLI
+then keeps its copies and a `skills-lock.json` in the project.
+
+Until 0.7.0, `drakom-ai-setup` still expects the CLI above for `init`, `sync`
+and MCP, so use the Quick start for a full setup.
+
 ## Project layout
 
 ```text
@@ -75,7 +92,6 @@ covers the full scaffold, ownership and worktree behavior.
 | Skill | When to use it |
 | --- | --- |
 | `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
-| `drakom-skill-author` | Find, draft or refine useful project skills, with approval before changes. |
 | `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
 
 ## Day-to-day use

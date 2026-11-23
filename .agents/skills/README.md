@@ -1,6 +1,6 @@
 # Canonical Agent Skills
 
-The `plan`, `dev`, `pr-review` and `document` folders are this repository's own hand-authored skills, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of `payload/v1/skills/`: edit the payload and run `pnpm sync`, because sync treats a direct edit here as a conflict.
+The `plan`, `dev`, `pr-review` and `document` folders are this repository's own hand-authored skills, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of the kit skills in the root `skills/` folder: edit those and run `pnpm sync`, because sync treats a direct edit here as a conflict. This repository's own skills carry `metadata.internal: true`, so `npx skills add` does not offer them.
 
 The included skills are defaults, not required framework components. A project
 may edit, replace, or delete them. After removing a skill, update `AGENTS.md`
@@ -32,5 +32,5 @@ other files in that Claude skill directory remain in place.
 ## Authoring Standards
 
 1. **Folder & Name Matching**: The YAML frontmatter `name` must match the directory name exactly (e.g. `plan/SKILL.md` has `name: plan`).
-2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.drakom-ai/rules/coding.md`, `.agents/skills/plan/workflow.md`).
+2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.drakom-ai/rules/coding.md`, `.agents/skills/plan/workflow.md`). The kit skills in `skills/` are the exception: they name their own references relative to their folder, because an `npx skills` install puts them outside the repository.
 3. **Single-Copy Workflows**: A skill with a procedural recipe co-locates `workflow.md` next to `SKILL.md`. Supporting files are not mirrored to `.claude/skills/`; only `SKILL.md` is mirrored, and it points back to the single canonical `workflow.md`.

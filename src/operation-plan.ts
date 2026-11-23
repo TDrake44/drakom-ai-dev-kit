@@ -3,7 +3,7 @@ import { load as loadYaml } from 'js-yaml';
 import type { SymlinkEntry, TargetInventory } from './inspect-target.js';
 import { checkLiteralCredentials } from './mcp-discovery.js';
 import { generateMcpOperations, validateMcpRegistry } from './mcp-generation.js';
-import type { PackagePayload } from './package-payload.js';
+import { type PackagePayload, payloadFileLocation } from './package-payload.js';
 import {
   compareVersions,
   DRAKOM_DIR,
@@ -30,7 +30,6 @@ export const MANAGED_BLOCK = `<!-- drakom-ai:start -->
 
 Project-specific AI context is stored under \`${DRAKOM_DIR}/\`.
 Use \`$drakom-ai-setup\` to assess or revise the project's agent configuration.
-Use \`$drakom-skill-author\` to find, write, check, refine, or retire project-owned skills.
 Use \`$drakom-plan-audit\` to audit or clean up local plans in \`${DRAKOM_DIR}/plans/\`.
 <!-- drakom-ai:end -->`;
 
@@ -743,7 +742,7 @@ function planManagedFiles(
       } else {
         conflict(
           managedPath,
-          `Kit version ${kitVersion} changed this file, which has an accepted local edit. Compare it with the kit's copy (payload/v1/${entry.source} in the installed package) and merge what you want, then ${resolutionHint(managedPath, { accept: true })}; or restore the kit version.`,
+          `Kit version ${kitVersion} changed this file, which has an accepted local edit. Compare it with the kit's copy (${payloadFileLocation(entry.source)} in the installed package) and merge what you want, then ${resolutionHint(managedPath, { accept: true })}; or restore the kit version.`,
         );
       }
       continue;

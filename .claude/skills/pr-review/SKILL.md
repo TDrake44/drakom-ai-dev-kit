@@ -1,6 +1,8 @@
 ---
 name: pr-review
 description: Review a pull request or local branch diff against repository rules and safety constraints, then report severity-ranked findings and verification results.
+metadata:
+  internal: true
 ---
 
 <!-- GENERATED MIRROR from .agents/skills/. DO NOT EDIT DIRECTLY. Run "drakom-ai sync ." through your package runner to update. -->

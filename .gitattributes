@@ -1,3 +1,4 @@
-# Line endings: the published package ships payload files with LF line endings,
+# Line endings: the published package ships payload files and kit skills with LF line endings,
 # wherever it is packed. Target repositories may use either; the CLI handles both.
 payload/** text eol=lf
+skills/** text eol=lf

@@ -13,6 +13,16 @@ conflict if one is missing or edited (see [conflicts](sync.md#conflicts)). The r
 installed because an unmanaged file is in its place. Sync refuses to run when
 the recorded `kitVersion` is newer than the installed kit.
 
+## Upgrading from 0.6.0
+
+- **`drakom-skill-author` is removed.** Sync reports a conflict for
+  `.agents/skills/drakom-skill-author/SKILL.md` and its `references/skill-patterns.md`
+  and exits `2`. Delete the `.agents/skills/drakom-skill-author/` folder, or keep
+  it as your own skill, then run
+  `drakom-ai sync . --release .agents/skills/drakom-skill-author/SKILL.md --release .agents/skills/drakom-skill-author/references/skill-patterns.md`.
+  Sync removes its generated Claude mirror and the line naming it in the
+  `AGENTS.md` managed block.
+
 ## Upgrading to 0.6.0
 
 Update the kit, preview with `pnpm drakom-ai sync . --dry-run`, then run

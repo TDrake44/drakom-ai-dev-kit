@@ -283,25 +283,17 @@ test('packed artifact contains only required publishable runtime files and metad
   assert.ok(packedPaths.includes('dist/cli.js'), 'dist/cli.js missing');
   assert.ok(packedPaths.includes('dist/run-cli.js'), 'dist/run-cli.js missing');
   assert.ok(packedPaths.includes('payload/v1/payload.json'), 'payload manifest missing');
-  assert.ok(packedPaths.includes('payload/v1/skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
+  assert.ok(packedPaths.includes('skills/drakom-ai-setup/SKILL.md'), 'setup skill missing');
   assert.ok(
-    packedPaths.includes('payload/v1/skills/drakom-ai-setup/references/assessment-plan-template.md'),
+    packedPaths.includes('skills/drakom-ai-setup/references/assessment-plan-template.md'),
     'assessment plan template missing',
   );
-  assert.ok(
-    packedPaths.includes('payload/v1/skills/drakom-ai-setup/references/rule-anatomy.md'),
-    'rule anatomy reference missing',
-  );
-  assert.ok(packedPaths.includes('payload/v1/skills/drakom-skill-author/SKILL.md'), 'skill authoring skill missing');
-  assert.ok(
-    packedPaths.includes('payload/v1/skills/drakom-skill-author/references/skill-patterns.md'),
-    'skill patterns reference missing',
-  );
-  assert.ok(packedPaths.includes('payload/v1/skills/drakom-plan-audit/SKILL.md'), 'plan audit skill missing');
-  assert.equal(
-    packedPaths.includes('payload/v1/skills/plan-audit/SKILL.md'),
-    false,
-    'legacy plan-audit payload path must not be packed',
+  assert.ok(packedPaths.includes('skills/drakom-ai-setup/references/rule-anatomy.md'), 'rule anatomy reference missing');
+  assert.ok(packedPaths.includes('skills/drakom-plan-audit/SKILL.md'), 'plan audit skill missing');
+  // Kit skills ship from skills/ only, and the removed skill-author skill ships nowhere.
+  assert.deepEqual(
+    packedPaths.filter((packed) => packed.startsWith('payload/v1/skills/') || packed.includes('drakom-skill-author')),
+    [],
   );
   assert.ok(packedPaths.includes('payload/v1/templates/drakom-ai.gitignore'), 'gitignore template missing');
   assert.ok(packedPaths.includes('payload/v1/templates/mcp-servers.yaml'), 'mcp template missing');
@@ -327,8 +319,8 @@ test('packed artifact contains only required publishable runtime files and metad
     assert.notEqual(item, 'BOOTSTRAP.md');
   }
 
-  // The payload ships with LF line endings, whatever the checkout it was packed from uses.
-  for (const item of packedPaths.filter((packed) => packed.startsWith('payload/'))) {
+  // The payload and the kit skills ship with LF line endings, whatever the checkout they were packed from uses.
+  for (const item of packedPaths.filter((packed) => packed.startsWith('payload/') || packed.startsWith('skills/'))) {
     const content = await readFile(path.join(harness.unpackedDir, 'package', ...item.split('/')), 'utf8');
     assert.equal(content.includes('\r'), false, `packed payload file ${item} contains a carriage return`);
   }
@@ -687,17 +679,16 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     const ruleAnatomyContent = await readFile(path.join(consumer, ruleAnatomyTarget), 'utf8');
     assert.match(ruleAnatomyContent, /Required Patterns/);
     assert.equal(updatedState.managedFiles[ruleAnatomyTarget].fingerprint, sha256(ruleAnatomyContent));
-    for (const target of [
-      '.agents/skills/drakom-skill-author/SKILL.md',
-      '.agents/skills/drakom-skill-author/references/skill-patterns.md',
-    ]) {
-      const content = await readFile(path.join(consumer, target), 'utf8');
-      assert.equal(updatedState.managedFiles[target].fingerprint, sha256(content), target);
-    }
+    const planAuditTarget = '.agents/skills/drakom-plan-audit/SKILL.md';
+    const planAuditContent = await readFile(path.join(consumer, planAuditTarget), 'utf8');
+    assert.equal(updatedState.managedFiles[planAuditTarget].fingerprint, sha256(planAuditContent));
     assert.match(
-      await readFile(path.join(consumer, '.claude', 'skills', 'drakom-skill-author', 'SKILL.md'), 'utf8'),
+      await readFile(path.join(consumer, '.claude', 'skills', 'drakom-plan-audit', 'SKILL.md'), 'utf8'),
       /GENERATED MIRROR/,
     );
+    await assert.rejects(readFile(path.join(consumer, '.agents', 'skills', 'drakom-skill-author', 'SKILL.md'), 'utf8'), {
+      code: 'ENOENT',
+    });
 
     // Post-update sync --check passes clean
     const postCheck = runDrakom(['sync', '.', '--check']);

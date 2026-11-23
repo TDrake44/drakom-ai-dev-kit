@@ -27,17 +27,12 @@ For a fresh repository, `drakom-ai init .` creates:
     │   └── references/
     │       ├── assessment-plan-template.md
     │       └── rule-anatomy.md
-    ├── drakom-skill-author/
-    │   ├── SKILL.md
-    │   └── references/
-    │       └── skill-patterns.md
     └── drakom-plan-audit/
         └── SKILL.md
 
 .claude/
 └── skills/                       # generated SKILL.md-only mirrors for Claude Code
     ├── drakom-ai-setup/SKILL.md
-    ├── drakom-skill-author/SKILL.md
     └── drakom-plan-audit/SKILL.md
 
 AGENTS.md
@@ -80,28 +75,13 @@ skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
 4. Verifies links, commands, and relevant project checks.
 
 Skills are procedures rather than policy. Author them in `.agents/skills/`; run
-`drakom-ai sync .` to generate their Claude Code mirrors. The
-`drakom-skill-author` skill (`/drakom-skill-author` or `$drakom-skill-author`)
-manages project skills, and setup hands approved skill additions to it:
-
-1. **Find**: proposes a candidate only from evidence of repeated work (git and
-   pull request history, CI configuration, package scripts, contribution docs,
-   plans and specs) or an explicit request.
-2. **Write**: drafts a short skill that routes to rules instead of copying
-   them, with stop points, verification commands, and a report.
-3. **Check**: walks the draft through a recent real task and verifies its paths
-   and commands.
-4. **Refine or retire**: makes targeted fixes to stale or misfiring skills, or
-   proposes removing unused ones.
-
-It asks for approval before creating, changing, or removing any project skill.
-Common archetypes and a worked example are in
-`.agents/skills/drakom-skill-author/references/skill-patterns.md`.
+`drakom-ai sync .` to generate their Claude Code mirrors. The setup skill may
+suggest a skill for a recurring workflow, with its name and a one-line purpose,
+but it does not write skills.
 
 A project may add, replace, or remove its own rules and skills—the kit does not
 claim ownership of them. Kit-managed skills use the `drakom-` prefix
-(`drakom-ai-setup`, `drakom-skill-author`, `drakom-plan-audit`); projects should
-not name their own skills with that prefix, to avoid colliding with skills the
+(`drakom-ai-setup`, `drakom-plan-audit`); projects should not name their own skills with that prefix, to avoid colliding with skills the
 kit may add in the future.
 
 ## Git Worktrees and Parallel Sessions (`.worktreeinclude`)

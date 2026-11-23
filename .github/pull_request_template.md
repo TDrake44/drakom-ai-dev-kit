@@ -6,7 +6,7 @@ step-by-step detail belong in commits or the plan. These comments do not render.
 
 The risk box comes first. Name each label that applies:
   consumer files: writes, overwrites or deletes files in a consumer's repo
-  what ships: `payload/v1/**`, publish fields, release or CI workflows
+  what ships: `skills/**`, `payload/v1/**`, publish fields, release or CI workflows
   credentials: touches credential handling
   agent instructions: `AGENTS.md`, rules, skills
   weakens a check: changes or removes an existing test, lint rule or type check

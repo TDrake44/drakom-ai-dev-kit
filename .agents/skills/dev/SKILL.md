@@ -1,6 +1,8 @@
 ---
 name: dev
 description: Implementation driver executing features and bug fixes using Test-Driven Development loops against established plans and rules.
+metadata:
+  internal: true
 ---
 
 # Dev Skill

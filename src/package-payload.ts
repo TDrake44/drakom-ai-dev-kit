@@ -7,6 +7,18 @@ import { isRecord } from './util.js';
 
 const payloadRoot = path.join(packageRoot, 'payload', 'v1');
 
+/** Kit skills live in the package's `skills/` folder, where `npx skills add` finds them. */
+const SKILLS_PREFIX = 'skills/';
+
+/**
+ * Where a manifest path is read from, relative to the package root. Paths under `skills/` are
+ * read from the package's `skills/` folder and every other path from `payload/v1/`. The manifest
+ * path itself is what state records as a managed file's source, so it keeps the same form.
+ */
+export function payloadFileLocation(relativePath: string): string {
+  return relativePath.startsWith(SKILLS_PREFIX) ? relativePath : `payload/v1/${relativePath}`;
+}
+
 /** A payload file that sync installs into projects whose recorded kit version predates `addedIn`. */
 export interface PayloadDefault {
   target: string;
@@ -61,7 +73,7 @@ export async function loadPackagePayload(): Promise<PackagePayload> {
       throw new Error(`Invalid payload path for ${name}.`);
     }
     manifestFiles[name] = relativePath;
-    files[name] = await readFile(path.join(payloadRoot, relativePath), 'utf8');
+    files[name] = await readFile(path.join(packageRoot, payloadFileLocation(relativePath)), 'utf8');
   }
 
   const defaults = validateDefaults(parsed.defaults, manifestFiles);
