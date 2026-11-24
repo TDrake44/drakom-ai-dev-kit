@@ -30,10 +30,13 @@ approval.
 
 One sentence on why.
 
-**2 important · 1 nit · Risk: High**
+<details open>
+<summary><b>2 open issues</b></summary>
 
-- 🟠 [Title of the finding](link to its comment) · `path:line`
-- 🔵 [Title of the finding](link to its comment) · `path:line`
+- ![Important](https://img.shields.io/badge/Important-orange?style=flat) [Title of the finding](link to its comment) · `path:line`
+- ![Nit](https://img.shields.io/badge/Nit-blue?style=flat) [Title of the finding](link to its comment) · `path:line`
+
+</details>
 
 <details>
 <summary><b>Risk: High</b> · credentials · matches the risk box</summary>
@@ -67,16 +70,18 @@ Goal, as read from the PR description: the report's Goal line.
 
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
   the approach, from the report's recommendation.
-- **Findings:** 🟠 important, 🔵 nit, ⚪ pre-existing, every one listed. No open findings: write
-  `No open issues 🎉` in place of the list. Findings with no line in the diff follow under
+- **Findings:** every open one is listed in the open section, each led by its chip: a shields.io
+  badge, orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written `Pre--existing` in
+  the badge's address). The status heading doesn't repeat counts or risk. No open findings: write
+  `No open issues 🎉` in place of the section. Findings with no line in the diff end the list under
   `Outside the diff:`, with where they apply and no link.
 - **Sections:** a section opens itself (`<details open>`) on a failed or skipped check, or on a risk
   above the risk box. `N files not reviewed`, with why, appears only when some were not read.
-- **Later reviews:** the counts line names what was fixed and declined (`2 fixed · 1 declined thread
-  for you to resolve · Risk: High`). Then `N resolved since last review` (each with the commit that
-  fixed it) and `N declined` (each with the user's reason, linked, not raised again). Risk says
-  `highest so far`; What changed counts only the changes since the last review's head. `New` marks
-  a finding only when new and carried ones are mixed. No round numbers.
+- **Later reviews:** after the open issues, collapsed `N resolved since last review` (each with the
+  commit that fixed it) and `N declined` (each with the user's reason, linked, not raised again,
+  for the user to resolve). Risk says `highest so far`; What changed counts only the changes since
+  the last review's head. ` · New` ends a finding's line only when new and carried ones are mixed.
+  No round numbers.
 - **Models:** the risk check's and the reviewer's, as each tool reports them. Leave out any part a
   tool doesn't report, effort included; never write "not reported". A footer link to the run log
   is added only when an automated run posts the review.
@@ -84,7 +89,7 @@ Goal, as read from the PR description: the report's Goal line.
 ## A finding's comment
 
 ````markdown
-🟠 **Important** · Title of the finding
+![Important](https://img.shields.io/badge/Important-orange?style=flat) **Title of the finding**
 
 What breaks.
 
