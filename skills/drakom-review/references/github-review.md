@@ -117,5 +117,6 @@ fence one backtick longer than the longest run of backticks in the replacement.
 - Submit: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events -f event=COMMENT
   -F body=@summary.md`. After a 5xx, check whether it went through before trying again.
 - Earlier review: `gh api user --jq .login` for the signed-in account, then
-  `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for
-  its comments and the replies to them.
+  `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the
+  marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for its comments
+  and the replies to them.
