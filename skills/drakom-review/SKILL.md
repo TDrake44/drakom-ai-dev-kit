@@ -1,6 +1,6 @@
 ---
 name: drakom-review
-description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes.
+description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes, and `post` to post the report to the pull request as one review.
 ---
 
 # Review
@@ -40,25 +40,29 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    rules are, the risk result and, on a re-review, the round number, the changes since the last
    review, the user's answers so far and the last report's important findings, copied as they were
    with no notes. Nothing else. Without subagents, review it yourself and say so.
-4. **Review.** Read the description or plan, apply the rules, and read the callers and tests
-   around each change; on a re-review, only the changes since the last review, the behavior they
-   affect and the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`,
-   `.drakom-ai/rules/`, a skill, a test or CI, judge it against the base branch's version too. Run
-   the verification commands. Keep only findings you confirmed by reading the code or reproducing
-   them. Important: wrong behavior, lost files, a false claim, a broken build, a risk box below the
-   risk result, or something the plan or description asks for that is missing or partial, unless
-   they or the user's answers say why. At most three nits. No style. The reviewer never edits.
+4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
+   each change; on a re-review, only the changes since the last review, the behavior they affect and
+   the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
+   skill, a test or CI, judge it against the base branch's version too. Run the verification
+   commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
+   wrong behavior, lost files, a false claim, a broken build, a template's risk box below the risk
+   result, or something the plan or description asks for that is missing or partial, unless they or
+   the user's answers say why. At most three nits. No style. The reviewer never edits.
 5. **Report:**
-   - Recommendation: `Rethink the approach` (round 3, important findings open), `Fix before merge`,
-     `Could not judge` (say what did not run or was not read) or `Ready to merge`
+   - Recommendation: `Changes recommended`, `Needs a closer look` (say what did not run, was not
+     read or needs a person's check), `Approval recommended`, or `Rethink the approach` (round 3,
+     important findings open)
    - Goal: what the change is for, in one sentence from the description or plan
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box
    - Review: fresh, or by the author
-   - Reviewer: the tool, model and effort, as the tool reports them
+   - Reviewer: the tool, model and effort, as the tool reports them; omit any it does not report
    - Findings: a short title, file and line range, what breaks and the fix, as exact replacement
      lines for a small edit, checked against every input the code must still accept
    - Verification: each command and whether it passed, failed or did not run
+
+When neither `fix` nor `post` was passed, end by offering what fits, and start neither without a
+yes: fix rounds when important findings are open, posting when the target is a pull request.
 
 ## Fix rounds
 
@@ -75,5 +79,7 @@ at its source: a test, a lint rule or a review rule.
 ## What it may do
 
 By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting
-or editing the pull request. A repo can change this in `.drakom-ai/rules/review.md`, and the
-tool's own permissions and hooks still apply. A recommendation is never an approval.
+or editing the pull request. `post` adds one thing: the final report, posted to the pull request as
+one review, laid out as `references/github-review.md` says. A repo can change this in
+`.drakom-ai/rules/review.md`, and the tool's own permissions and hooks still apply. A
+recommendation is never an approval.

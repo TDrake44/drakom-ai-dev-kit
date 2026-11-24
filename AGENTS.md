@@ -24,7 +24,7 @@ Prefer invoking the standardized skills over ad-hoc prompting. Skills guarantee 
 | :--- | :--- |
 | `/plan` (or `$plan`) | Issue/ticket intake → structured specification at `.drakom-ai/plans/<feature>.md` |
 | `/dev` | Feature, bug, or refactor implementation (TDD loop) |
-| `/drakom-review` | Review the branch diff against repo rules before opening a PR; `fix` runs up to three review and fix rounds. Installed at user level with `npx skills add` |
+| `/drakom-review` | Review the branch diff against repo rules before opening a PR; `fix` runs up to three review and fix rounds, and `post` posts the report to the pull request as one review. Installed at user level with `npx skills add` |
 | `/document` | Audit and synchronize documentation with code |
 
 *Note: In Claude Code, Copilot, and Antigravity, invoke with `/`. In OpenAI Codex CLI, invoke with `$`.*
