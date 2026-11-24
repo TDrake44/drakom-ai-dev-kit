@@ -20,8 +20,8 @@ signed in to an account that can review the pull request.
 
 ## The review
 
-Post one review with the `COMMENT` event and one comment per finding, then edit the summary so each
-listed finding links to its comment. Never use `APPROVE` or `REQUEST_CHANGES`: open comments block a
+Post one review with one comment per finding: create it pending, link the summary to its comments,
+then submit it with the `COMMENT` event. Never use `APPROVE` or `REQUEST_CHANGES`: open comments block a
 merge where the repo requires conversations to be resolved, and a recommendation is never an
 approval.
 
@@ -104,11 +104,13 @@ fence one backtick longer than the longest run of backticks in the replacement.
 
 ## Commands
 
-- Post: `gh api repos/{owner}/{repo}/pulls/{number}/reviews --input review.json`, where
-  `review.json` holds `commit_id` (the head), `event: "COMMENT"`, `body` (the summary) and
-  `comments`, each with `path`, `line`, `start_line` for a range, `side: "RIGHT"` and `body`.
+- Create: `gh api repos/{owner}/{repo}/pulls/{number}/reviews --input review.json`, where
+  `review.json` holds `commit_id` (the head) and `comments`, each with `path`, `line`,
+  `start_line` for a range, `side: "RIGHT"` and `body`, and no `event`, so it stays pending. Delete
+  any pending review of yours left on the pull request first: GitHub allows one.
 - Links: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/comments` gives each comment's
-  `html_url`; `gh api -X PUT repos/{owner}/{repo}/pulls/{number}/reviews/{id} -F body=@summary.md`
-  replaces the summary.
+  `html_url`, the link for its line in the summary.
+- Submit: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events -f event=COMMENT
+  -F body=@summary.md`. After a 5xx, check whether it went through before trying again.
 - Earlier review: `gh api repos/{owner}/{repo}/pulls/{number}/reviews` for the marker, and
   `gh api repos/{owner}/{repo}/pulls/{number}/comments` for its comments and the replies to them.
