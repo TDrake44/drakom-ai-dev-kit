@@ -23,9 +23,9 @@ signed in to an account that can review the pull request.
 ## The review
 
 Post one review with one comment per finding: create it pending, link the summary to its comments,
-then submit it with the `COMMENT` event. Never use `APPROVE` or `REQUEST_CHANGES`: open comments block a
-merge where the repo requires conversations to be resolved, and a recommendation is never an
-approval.
+then submit it with the `COMMENT` event. Never use `APPROVE` or `REQUEST_CHANGES`: open comments
+block a merge where the repo requires conversations to be resolved, and a recommendation is never
+an approval.
 
 ```markdown
 ### 🟡 Changes recommended
