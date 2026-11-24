@@ -70,11 +70,14 @@ Goal, as read from the PR description: the report's Goal line.
 
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
   the approach, from the report's recommendation.
-- **Findings:** every open one is listed in the open section, each led by its chip: a shields.io
-  badge, orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written `Pre--existing` in
-  the badge's address), wrapped in `<sub><sub>` so it sits at text height. The status heading doesn't repeat counts or risk. No open findings: write
-  `No open issues 🎉` in place of the section. Findings with no line in the diff end the list under
-  `Outside the diff:`, with where they apply and no link.
+- **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
+  text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
+  `Pre--existing` in the badge's address). Important findings and nits go in the open section; the
+  status heading doesn't repeat counts or risk. None open: write `No open issues 🎉` in place of
+  the section. A finding with no line in the diff ends its list under `Outside the diff:`, with
+  where it applies and no link.
+- **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
+  section after the open issues, not in its count, since they don't hold up this pull request.
 - **Sections:** a section opens itself (`<details open>`) on a failed or skipped check, or on a risk
   above the risk box. `N files not reviewed`, with why, appears only when some were not read.
 - **Later reviews:** after the open issues, collapsed `N resolved since last review` (each with the
