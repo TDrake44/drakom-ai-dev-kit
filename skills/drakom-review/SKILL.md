@@ -37,8 +37,9 @@ fresh reviewer, or the rule that only confirmed findings are reported.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the base and head, the uncommitted
    paths, the description or the plan in `.drakom-ai/plans/`, where the rules are, the risk result
-   and, on a re-review, the changes since the last review and the last report's important findings,
-   copied as they were with no notes. Nothing else. Without subagents, review it yourself and say so.
+   and, on a re-review, the round number, the changes since the last review, the user's answers so
+   far and the last report's important findings, copied as they were with no notes. Nothing else.
+   Without subagents, review it yourself and say so.
 4. **Review.** Read the description or plan, apply the rules, and read the callers and tests
    around each change; on a re-review, only the changes since the last review, the behavior they
    affect and the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`,
@@ -46,7 +47,7 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    the verification commands. Keep only findings you confirmed by reading the code or reproducing
    them. Important: wrong behavior, lost files, a false claim, a broken build, a risk box below the
    risk result, or something the plan or description asks for that is missing or partial, unless
-   they record why. At most three nits. No style. The reviewer never edits.
+   they or the user's answers say why. At most three nits. No style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Rethink the approach` (round 3, important findings open), `Fix before merge`,
      `Could not judge` (say what did not run or was not read) or `Ready to merge`
