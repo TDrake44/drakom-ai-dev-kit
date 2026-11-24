@@ -18,6 +18,8 @@ If no pull request, local review or base is given, ask the user to choose:
 
 Do not infer a remote pull request or choose a comparison scope silently. Do not fetch or switch
 branches to resolve the target.
+Before any other step, check that the base and head resolve and that the diff is not empty. If
+either check fails, say which and stop, rather than starting a review of nothing.
 
 With the argument `fix`, run fix rounds as `references/fix-rounds.md` describes. Otherwise review
 once and report; that pass is read-only.
