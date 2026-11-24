@@ -56,7 +56,7 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box
    - Review: fresh, or by the author
-   - Reviewer: the tool, model and effort, as the tool reports them; omit any it does not report
+   - Reviewer: tool, exact model and effort, as the tool reports them; omit any it does not report
    - Findings: a short title, file and line range, what breaks and the fix, as exact replacement
      lines for a small edit, checked against every input the code must still accept
    - Verification: each command and whether it passed, failed or did not run

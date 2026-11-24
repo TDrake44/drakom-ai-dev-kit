@@ -212,7 +212,7 @@ test('the review report gives what a posted review needs', async () => {
     ['Recommendation', 'Goal', 'Reviewed', 'Risk', 'Review', 'Reviewer', 'Findings', 'Verification'],
   );
   assert.match(items.get('Reviewed') ?? '', /not read/);
-  assert.match(items.get('Reviewer') ?? '', /tool, model and effort/);
+  assert.match(items.get('Reviewer') ?? '', /tool, exact model and effort/);
   for (const part of [/short title/, /line range/, /exact replacement lines/, /every input/]) {
     assert.match(items.get('Findings') ?? '', part);
   }
