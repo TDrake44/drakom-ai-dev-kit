@@ -105,12 +105,15 @@ fence one backtick longer than the longest run of backticks in the replacement.
 ## Commands
 
 - Create: `gh api repos/{owner}/{repo}/pulls/{number}/reviews --input review.json`, where
-  `review.json` holds `commit_id` (the head) and `comments`, each with `path`, `line`,
-  `start_line` for a range, `side: "RIGHT"` and `body`, and no `event`, so it stays pending. Delete
-  any pending review of yours left on the pull request first: GitHub allows one.
-- Links: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/comments` gives each comment's
-  `html_url`, the link for its line in the summary.
+  `review.json` holds `commit_id` (the head) and `comments`, and no `event`, so it stays pending.
+  Each comment has `path`, `line` and `body`, and `side`: `RIGHT` for an added or unchanged line,
+  `LEFT` for a deleted one; a range adds `start_line` and `start_side`. A range the diff can't hold
+  anchors to its last line. If the account already has a pending review on the pull request, stop
+  and ask the user: GitHub allows one per person, and it may be their own draft.
+- Links: `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews/{id}/comments` gives each
+  comment's `html_url`, the link for its line in the summary.
 - Submit: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events -f event=COMMENT
   -F body=@summary.md`. After a 5xx, check whether it went through before trying again.
-- Earlier review: `gh api repos/{owner}/{repo}/pulls/{number}/reviews` for the marker, and
-  `gh api repos/{owner}/{repo}/pulls/{number}/comments` for its comments and the replies to them.
+- Earlier review: `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking the
+  latest with the marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for
+  its comments and the replies to them.
