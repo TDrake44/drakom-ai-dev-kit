@@ -16,7 +16,7 @@ signed in to an account that can review the pull request.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
 - Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
-  line (the description, a missing requirement, an untouched file) goes under "Outside the diff".
+  line (the description, a missing requirement, an untouched file) gets no comment.
 
 ## The review
 
@@ -35,13 +35,6 @@ One sentence on why.
 
 - <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
 - <sub><sub>![Nit](https://img.shields.io/badge/Nit-blue?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
-
-</details>
-
-<details>
-<summary><b>Risk: High</b> · credentials · matches the risk box</summary>
-
-- `path:line` and what it does, without repeating the label<br><sub>`Assessed by <model> from the diff in a fresh context.`</sub>
 
 </details>
 
@@ -74,19 +67,19 @@ Goal, as read from the PR description: the report's Goal line.
   text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
   `Pre--existing` in the badge's address). Important findings and nits go in the open section; the
   status heading doesn't repeat counts or risk. None open: write `No open issues 🎉` in place of
-  the section. A finding with no line in the diff ends its list under `Outside the diff:`, with
-  where it applies and no link.
+  the section. A finding with no line in the diff ends its list, with where it applies and no link.
 - **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
   section after the open issues, not in its count, since they don't hold up this pull request.
-- **Sections:** a section opens itself (`<details open>`) on a failed or skipped check, or on a risk
-  above the risk box. `N files not reviewed`, with why, appears only when some were not read.
+- **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
+  isn't shown: it is checked against the pull request's risk box, and a box that claims too little
+  is a finding. `N files not reviewed`, with why, appears only when some were not read.
 - **Later reviews:** after the open issues, collapsed `N resolved since last review` (each with the
   commit that fixed it) and `N declined` (each with the user's reason, linked, not raised again,
-  for the user to resolve). Risk says `highest so far`; What changed counts only the changes since
-  the last review's head. ` · New` ends a finding's line only when new and carried ones are mixed.
+  for the user to resolve). What changed counts only the changes since the last review's
+  head. ` · New` ends a finding's line only when new and carried ones are mixed.
   No round numbers.
-- **Models:** the risk check's and the reviewer's, as each tool reports them. Leave out any part a
-  tool doesn't report, effort included; never write "not reported". A footer link to the run log
+- **Model:** the reviewer's, as its tool reports it. Leave out any part the tool doesn't report,
+  effort included; never write "not reported". A footer link to the run log
   is added only when an automated run posts the review.
 
 ## A finding's comment
