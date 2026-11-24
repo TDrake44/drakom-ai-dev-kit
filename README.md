@@ -93,6 +93,7 @@ covers the full scaffold, ownership and worktree behavior.
 | --- | --- |
 | `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
 | `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
+| `drakom-review` | Review a branch or pull request with a blind risk check and a fresh reviewer, once or in up to three fix rounds. Installed with `npx skills add` only, not by the CLI. |
 
 ## Day-to-day use
 
