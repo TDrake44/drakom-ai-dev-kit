@@ -77,8 +77,7 @@ Goal, as read from the PR description: the report's Goal line.
   fixed it) and `N declined` (each with the user's reason, linked, not raised again). Risk says
   `highest so far`; What changed counts only the changes since the last review's head. `New` marks
   a finding only when new and carried ones are mixed. No round numbers.
-- **Models:** the risk check's and the reviewer's, each as the exact model identifier its tool
-  reports, never a family name, in the Risk section and the footer alike. Leave out any part a
+- **Models:** the risk check's and the reviewer's, as each tool reports them. Leave out any part a
   tool doesn't report, effort included; never write "not reported". A footer link to the run log
   is added only when an automated run posts the review.
 
