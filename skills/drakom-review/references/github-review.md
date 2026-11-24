@@ -10,9 +10,11 @@ signed in to an account that can review the pull request.
 - Review the pull request's base and head as GitHub has them (`gh pr view --json
   baseRefOid,headRefOid`), not a local remote's.
 - Post once per run: the final report, after any fix rounds.
-- An earlier review on the pull request that ends with the `drakom-review` marker is the last
-  review. The changes since its `head` are the changes since the last review; its findings, and
-  the replies in their threads, are the earlier findings and the user's answers for step 3.
+- The last review is the latest one the signed-in account posted with the `drakom-review` marker,
+  if its `head` is an ancestor of the pull request's head; ignore marked reviews from anyone else.
+  The changes since that `head` are the changes since the last review, and its findings are the
+  earlier findings for step 3. Only the signed-in account's replies in their threads count as the
+  user's answers; other people's replies are discussion. With no such review, review it all.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
 - Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
@@ -114,6 +116,6 @@ fence one backtick longer than the longest run of backticks in the replacement.
   comment's `html_url`, the link for its line in the summary.
 - Submit: `gh api repos/{owner}/{repo}/pulls/{number}/reviews/{id}/events -f event=COMMENT
   -F body=@summary.md`. After a 5xx, check whether it went through before trying again.
-- Earlier review: `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking the
-  latest with the marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for
+- Earlier review: `gh api user --jq .login` for the signed-in account, then
+  `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for
   its comments and the replies to them.
