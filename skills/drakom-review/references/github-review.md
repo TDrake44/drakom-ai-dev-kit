@@ -33,8 +33,8 @@ One sentence on why.
 <details open>
 <summary><b>2 open issues</b></summary>
 
-- ![Important](https://img.shields.io/badge/Important-orange?style=flat) [Title of the finding](link to its comment) · `path:line`
-- ![Nit](https://img.shields.io/badge/Nit-blue?style=flat) [Title of the finding](link to its comment) · `path:line`
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
+- <sub><sub>![Nit](https://img.shields.io/badge/Nit-blue?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
 
 </details>
 
@@ -72,7 +72,7 @@ Goal, as read from the PR description: the report's Goal line.
   the approach, from the report's recommendation.
 - **Findings:** every open one is listed in the open section, each led by its chip: a shields.io
   badge, orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written `Pre--existing` in
-  the badge's address). The status heading doesn't repeat counts or risk. No open findings: write
+  the badge's address), wrapped in `<sub><sub>` so it sits at text height. The status heading doesn't repeat counts or risk. No open findings: write
   `No open issues 🎉` in place of the section. Findings with no line in the diff end the list under
   `Outside the diff:`, with where they apply and no link.
 - **Sections:** a section opens itself (`<details open>`) on a failed or skipped check, or on a risk
@@ -89,7 +89,7 @@ Goal, as read from the PR description: the report's Goal line.
 ## A finding's comment
 
 ````markdown
-![Important](https://img.shields.io/badge/Important-orange?style=flat) **Title of the finding**
+<sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> **Title of the finding**
 
 What breaks.
 
