@@ -40,14 +40,14 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    rules are, the risk result and, on a re-review, the round number, the changes since the last
    review, the user's answers so far and the last report's important findings, copied as they were
    with no notes. Nothing else. Without subagents, review it yourself and say so.
-4. **Review.** Read the description or plan, apply the rules, and read the callers and tests
-   around each change; on a re-review, only the changes since the last review, the behavior they
-   affect and the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`,
-   `.drakom-ai/rules/`, a skill, a test or CI, judge it against the base branch's version too. Run
-   the verification commands. Keep only findings you confirmed by reading the code or reproducing
-   them. Important: wrong behavior, lost files, a false claim, a broken build, a risk box below the
-   risk result, or something the plan or description asks for that is missing or partial, unless
-   they or the user's answers say why. At most three nits. No style. The reviewer never edits.
+4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
+   each change; on a re-review, only the changes since the last review, the behavior they affect and
+   the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
+   skill, a test or CI, judge it against the base branch's version too. Run the verification
+   commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
+   wrong behavior, lost files, a false claim, a broken build, a template's risk box below the risk
+   result, or something the plan or description asks for that is missing or partial, unless they or
+   the user's answers say why. At most three nits. No style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Changes recommended`, `Needs a closer look` (say what did not run, was not
      read or needs a person's check), `Approval recommended`, or `Rethink the approach` (round 3,
