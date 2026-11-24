@@ -61,6 +61,9 @@ fresh reviewer, or the rule that only confirmed findings are reported.
      lines for a small edit, checked against every input the code must still accept
    - Verification: each command and whether it passed, failed or did not run
 
+When neither `fix` nor `post` was passed, end by offering what fits, and start neither without a
+yes: fix rounds when important findings are open, posting when the target is a pull request.
+
 ## Fix rounds
 
 With `fix`, run up to three rounds. Each round runs steps 2 to 5 with a new fresh reviewer. Stop
