@@ -27,6 +27,9 @@ before.
 
 ## Without subagents
 
+In fix rounds, the author reviews each round instead, as `references/fix-rounds.md` describes.
+Outside them:
+
 Offer the user a fresh session for the review. Write a short prompt they can paste into it: run
 this skill on the target (base and head SHAs, the working-tree paths included), the description or
 plan to read, the risk check's result and whether it was blind, and on a re-review the round

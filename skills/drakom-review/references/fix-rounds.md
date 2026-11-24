@@ -8,11 +8,13 @@ the author does both, as below, and the report says so.
 
 1. **Risk check** on the current diff, as `references/risk-check.md` describes. A fix can touch a
    new area, so it runs every round.
-2. **Review.** A new fresh reviewer reviews the current state, as `references/fresh-reviewer.md`
-   describes. It stays read-only.
+2. **Review.** With subagents, a new fresh reviewer reviews the current state, as
+   `references/fresh-reviewer.md` describes; without them, the author does, as below. The review
+   stays read-only.
 3. **Fix.** The calling session, which is the author, fixes the important findings, then runs the
    verification commands. Nits and pre-existing bugs are listed, not fixed. Changes stay in the
-   working tree unless the user or the repo's rules allow commits. Never push or post.
+   working tree unless the user or the repo's rules allow commits. Never push, post or edit the pull
+   request's description.
 4. The next round re-reviews the fixes and the behavior they affect.
 
 Without subagents, the author reviews every round itself, rather than offering a fresh session
