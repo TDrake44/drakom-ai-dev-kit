@@ -197,3 +197,23 @@ test('the review skill offers the kit\'s default risk labels', async () => {
   const labels = [...item[1].matchAll(/\*\*([^*]+)\*\*/g)].map(([, label]) => label);
   assert.deepEqual(labels, ['credentials', 'user data', 'agent instructions', 'weakens a check']);
 });
+
+test('the review report gives what a posted review needs', async () => {
+  const skill = (await reviewSkillFiles()).get('SKILL.md') ?? '';
+
+  const report = skill.replaceAll('\r\n', '\n').match(/\*\*Report:\*\*\n([\s\S]*?)(?=\n\n)/);
+  assert.ok(report, 'no report step');
+  const items = new Map(
+    [...report[1].matchAll(/^ +- (\w+): ([\s\S]*?)(?=\n +- |(?![\s\S]))/gm)].map(([, name, text]) => [name, text.replace(/\s+/g, ' ')]),
+  );
+
+  assert.deepEqual(
+    [...items.keys()],
+    ['Recommendation', 'Goal', 'Reviewed', 'Risk', 'Review', 'Reviewer', 'Findings', 'Verification'],
+  );
+  assert.match(items.get('Reviewed') ?? '', /not read/);
+  assert.match(items.get('Reviewer') ?? '', /tool, model and effort/);
+  for (const part of [/short title/, /line range/, /exact replacement lines/, /every input/]) {
+    assert.match(items.get('Findings') ?? '', part);
+  }
+});
