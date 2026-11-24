@@ -157,6 +157,7 @@ test('the review skill stands alone: it names no file in another skill or a repo
   const repoFacts = new Set([
     '.drakom-ai/plans/',
     '.drakom-ai/rules/',
+    '.drakom-ai/rules/README.md',
     '.drakom-ai/rules/review.md',
     '.drakom-ai/rules/verification.md',
     '.github/pull_request_template.md',
