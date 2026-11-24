@@ -139,18 +139,12 @@ async function reviewSkillFiles() {
   return files;
 }
 
-test('the review skill names each of its references, and each one exists in its own folder', async () => {
+test('the review skill is one short file, so its rules are stated once', async () => {
   const files = await reviewSkillFiles();
-  const text = [...files.values()].join('\n');
 
-  const named = new Set([...text.matchAll(/`references\/([^`<]+)`/g)].map(([, file]) => `references/${file}`));
-  const shipped = [...files.keys()].filter((file) => file.startsWith('references/'));
-  assert.ok(shipped.length > 0);
-  assert.deepEqual([...named].sort(), shipped.sort());
-  const skill = files.get('SKILL.md') ?? '';
-  for (const reference of shipped) {
-    assert.ok(skill.includes(`\`${reference}\``), `SKILL.md does not name ${reference}`);
-  }
+  assert.deepEqual([...files.keys()], ['SKILL.md']);
+  const lines = (files.get('SKILL.md') ?? '').replaceAll('\r\n', '\n').trimEnd().split('\n');
+  assert.ok(lines.length <= 80, `SKILL.md has ${lines.length} lines; keep it to 80`);
 });
 
 test('the review skill stands alone: it names no file in another skill or a repo file it has no default for', async () => {
@@ -158,12 +152,11 @@ test('the review skill stands alone: it names no file in another skill or a repo
 
   assert.doesNotMatch(text, /skills\/(?!drakom-review\b)[\w-]+\//, 'names a file in another skill folder');
   assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
-  // Repo files the skill reads, each with a default when it is missing (see "When the repo has nothing"),
+  // Repo files the skill reads, each with a default when it is missing (see "Repo facts and defaults"),
   // and the rules folder whose changes it judges against the base branch.
   const repoFacts = new Set([
     '.drakom-ai/plans/',
     '.drakom-ai/rules/',
-    '.drakom-ai/rules/README.md',
     '.drakom-ai/rules/review.md',
     '.drakom-ai/rules/verification.md',
     '.github/pull_request_template.md',
@@ -179,8 +172,8 @@ test('the review skill stands alone: it names no file in another skill or a repo
 test('the review skill gives a default for each repo fact a repo may lack', async () => {
   const skill = (await reviewSkillFiles()).get('SKILL.md') ?? '';
 
-  const section = skill.match(/## When the repo has nothing\n([\s\S]*?)(?=\n## |$)/);
-  assert.ok(section, 'no "When the repo has nothing" section');
+  const section = skill.match(/## Repo facts and defaults\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Repo facts and defaults" section');
   for (const fact of [/review rules/i, /verification commands/i, /risk labels/i]) {
     assert.match(section[1], fact);
   }
@@ -196,10 +189,10 @@ test('the review skill acts as if no earlier kit version existed', async () => {
 });
 
 test('the review skill offers the kit\'s default risk labels', async () => {
-  const riskCheck = (await reviewSkillFiles()).get('references/risk-check.md') ?? '';
+  const skill = (await reviewSkillFiles()).get('SKILL.md') ?? '';
 
-  const section = riskCheck.match(/## Default labels\n([\s\S]*?)(?=\n## |$)/);
-  assert.ok(section, 'no "Default labels" section');
-  const labels = [...section[1].matchAll(/^- \*\*([^*]+)\*\*/gm)].map(([, label]) => label);
+  const item = skill.match(/^- \*\*Risk labels:\*\*([\s\S]*?)(?=\n- |\n\n)/m);
+  assert.ok(item, 'no "Risk labels" item');
+  const labels = [...item[1].matchAll(/\*\*([^*]+)\*\*/g)].map(([, label]) => label);
   assert.deepEqual(labels, ['credentials', 'user data', 'agent instructions', 'weakens a check']);
 });
