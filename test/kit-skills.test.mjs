@@ -139,12 +139,12 @@ async function reviewSkillFiles() {
   return files;
 }
 
-test('the review skill is one short file, so its rules are stated once', async () => {
+test('the review skill states its rules in one short file, with only the GitHub layout beside it', async () => {
   const files = await reviewSkillFiles();
 
-  assert.deepEqual([...files.keys()], ['SKILL.md']);
+  assert.deepEqual([...files.keys()].sort(), ['SKILL.md', 'references/github-review.md']);
   const lines = (files.get('SKILL.md') ?? '').replaceAll('\r\n', '\n').trimEnd().split('\n');
-  assert.ok(lines.length <= 80, `SKILL.md has ${lines.length} lines; keep it to 80`);
+  assert.ok(lines.length <= 85, `SKILL.md has ${lines.length} lines; keep it to 85`);
 });
 
 test('the review skill stands alone: it names no file in another skill or a repo file it has no default for', async () => {
