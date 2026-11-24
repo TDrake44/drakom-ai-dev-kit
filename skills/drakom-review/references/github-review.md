@@ -7,14 +7,16 @@ signed in to an account that can review the pull request.
 
 ## Before posting
 
+- Review the pull request's base and head as GitHub has them (`gh pr view --json
+  baseRefOid,headRefOid`), not a local remote's.
 - Post once per run: the final report, after any fix rounds.
 - An earlier review on the pull request that ends with the `drakom-review` marker is the last
   review. The changes since its `head` are the changes since the last review; its findings, and
   the replies in their threads, are the earlier findings and the user's answers for step 3.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
-- Anchor each finding to a line in the pull request's diff (`gh pr diff`). A finding on a line
-  outside the diff goes in the summary instead, with its `path:line`.
+- Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
+  line (the description, a missing requirement, an untouched file) goes under "Outside the diff".
 
 ## The review
 
@@ -26,66 +28,78 @@ approval.
 ```markdown
 ### 🟡 Changes recommended
 
-One sentence on what the review found.
+One sentence on why.
 
-<details open>
-<summary><b>2 open issues</b></summary>
+**2 important · 1 nit · Risk: High**
 
-- 🟠 **Important** · [Title of the finding](link to its comment) · New
-- 🔵 **Nit** · [Title of the finding](link to its comment) · New
+- 🟠 [Title of the finding](link to its comment) · `path:line`
+- 🔵 [Title of the finding](link to its comment) · `path:line`
+
+<details>
+<summary><b>Risk: High</b> · credentials · matches the risk box</summary>
+
+- `path:line` and what it does, without repeating the label<br><sub>`Assessed by <model> from the diff in a fresh context.`</sub>
 
 </details>
 
 <details>
-<summary><b>What changed in this PR</b></summary>
+<summary><b>What changed</b> · 4 files (+42 / −7)</summary>
 
-The Goal line, then a table: | File | Change |, one row per changed file.
+Goal, as read from the PR description: the report's Goal line.
 
-</details>
-
-<details>
-<summary><b>Risk: High</b></summary>
-
-Each label with its `path:line`, whether the check was blind, and how it compares with the risk box.
+| File | Change |
+| --- | --- |
+| `path` | One line on what changed |
 
 </details>
 
 <details>
-<summary><b>Checks</b></summary>
+<summary><b>Checks</b> · 1/1 passed</summary>
 
-Each verification command and its result.
+- ✅ `command` · the result
 
 </details>
 
-<sub>`/drakom-review` · tool · model · effort: level · reviewed `head`</sub>
+---
+<sub>`/drakom-review` · <tool> · <model> · effort: <effort> · reviewed [`<short head>`](<commit link>)</sub>
 <!-- drakom-review head=<full head sha> -->
 ```
 
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
   the approach, from the report's recommendation.
-- **Severity:** 🟠 Important, 🔵 Nit, ⚪ Pre-existing.
-- **No open findings:** write `No open issues 🎉` in place of the list.
-- **Only when they apply:** `N resolved since last review` and `N declined` (each with the user's
-  reason) on a later review; `N files not reviewed`, with why; a failed or missing check, on its own
-  line under the status sentence rather than inside Checks. Mark a finding `New` only on a later
-  review.
-- **Footer:** the report's Reviewer line. No round numbers.
+- **Findings:** 🟠 important, 🔵 nit, ⚪ pre-existing, every one listed. No open findings: write
+  `No open issues 🎉` in place of the list. Findings with no line in the diff follow under
+  `Outside the diff:`, with where they apply and no link.
+- **Sections:** a section opens itself (`<details open>`) on a failed or skipped check, or on a risk
+  above the risk box. `N files not reviewed`, with why, appears only when some were not read.
+- **Later reviews:** the counts line names what was fixed and declined (`2 fixed · 1 declined thread
+  for you to resolve · Risk: High`). Then `N resolved since last review` (each with the commit that
+  fixed it) and `N declined` (each with the user's reason, linked, not raised again). Risk says
+  `highest so far`; What changed counts only the changes since the last review's head. `New` marks
+  a finding only when new and carried ones are mixed. No round numbers.
+- **Models:** the risk check's and the reviewer's, as each tool reports them. Leave out any part a
+  tool doesn't report, effort included; never write "not reported". A footer link to the run log
+  is added only when an automated run posts the review.
 
 ## A finding's comment
 
 ````markdown
 🟠 **Important** · Title of the finding
 
-What breaks, and how it was confirmed.
+What breaks.
+
+**Repro:** the input, what it gives, and what was expected.
 
 ```suggestion
 the exact replacement lines
 ```
+
+Checked with this change: each input tried and what it gives.
 ````
 
-Add the suggestion block only when the finding gives exact replacement lines for exactly the lines
-the comment covers, checked against every input the code must still accept. A finding with a line
-range anchors to all of it.
+Add the suggestion block only when the reviewer checked the replacement's behaviour and it replaces
+exactly the lines the comment covers; a finding with a line range anchors to all of it. Make the
+fence one backtick longer than the longest run of backticks in the replacement.
 
 ## Commands
 
