@@ -15,6 +15,10 @@ import { createMirrorContent } from '../dist/operation-plan.js';
 import { loadPackagePayload, payloadFileLocation } from '../dist/package-payload.js';
 import { loadState, serializeState } from '../dist/state.js';
 
+/** One temp folder for this file. Every fixture is made inside it, and the hook removes it even when tests fail. */
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-test-managed-file-conflicts-'));
+test.after(() => rm(tempRoot, { recursive: true, force: true }));
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
 const setupSkill = '.agents/skills/drakom-ai-setup/SKILL.md';
@@ -42,7 +46,7 @@ function drakom(args) {
 
 /** @returns {Promise<string>} an initialized target */
 async function createInstalled() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-conflicts-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-conflicts-'));
   const init = drakom(['init', root, '--yes']);
   assert.equal(init.status, 0, init.stderr);
   return root;
@@ -121,7 +125,7 @@ async function snapshot(root) {
  * @returns {Promise<string>} path to the copied cli.js
  */
 async function createKitCopy(mutate) {
-  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-kit-copy-'));
+  const kitRoot = await mkdtemp(path.join(tempRoot, 'drakom-kit-copy-'));
   await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
   await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
   await cp(path.join(repositoryRoot, 'skills'), path.join(kitRoot, 'skills'), { recursive: true });
@@ -925,7 +929,7 @@ test('a path that only misses the target-relative form gets a hint, not just a r
 test('an absolute path reaches its managed file through a differently spelled route to the target', async () => {
   const root = await createInstalled();
   await write(root, setupSkill, editedSkill);
-  const aliasParent = await mkdtemp(path.join(os.tmpdir(), 'drakom-alias-'));
+  const aliasParent = await mkdtemp(path.join(tempRoot, 'drakom-alias-'));
   const alias = path.join(aliasParent, 'link');
   await symlink(root, alias, 'junction');
 

@@ -18,6 +18,10 @@ import {
   generateVscodeServer,
 } from '../dist/mcp-renderers.js';
 
+/** One temp folder for this file. Every fixture is made inside it, and the hook removes it even when tests fail. */
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-test-mcp-client-selection-'));
+test.after(() => rm(tempRoot, { recursive: true, force: true }));
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
 const REGISTRY = `${DRAKOM_DIR}/mcp-servers.yaml`;
@@ -75,7 +79,7 @@ function readState(root) {
  * @param {string[]} [initOptions]
  */
 async function createTarget(registry, initOptions = []) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-selection-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-mcp-selection-'));
   const init = drakom('init', root, ['--yes', ...initOptions]);
   assert.equal(init.status, 0, init.stderr);
   await write(root, REGISTRY, registry);
@@ -935,7 +939,7 @@ test('discovery ignores a notSecret key written into a client file', () => {
 // ---------------------------------------------------------------------------
 
 test('sync without a registry leaves a --skip-mcp project as it is', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-selection-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-mcp-selection-'));
   assert.equal(drakom('init', root, ['--yes', '--skip-mcp']).status, 0);
   const before = await read(root, `${DRAKOM_DIR}/state.json`);
 
@@ -1173,7 +1177,7 @@ test('sync refuses a credential in a descriptively named env value and writes no
 });
 
 test('init discovery flags a credential in a descriptively named env value', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-selection-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-mcp-selection-'));
   await write(
     root,
     CLAUDE,
