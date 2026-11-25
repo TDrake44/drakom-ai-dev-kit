@@ -228,3 +228,10 @@ test('the review skill names the cheap tier by rule, not by model, apart from Cl
     assert.doesNotMatch(text, model);
   }
 });
+
+test('the PR template keeps the Risk line to the level and the label names', async () => {
+  const template = (await readFile(path.join(repositoryRoot, '.github/pull_request_template.md'), 'utf8')).replace(/\s+/g, ' ');
+
+  assert.match(template, /The Risk line is a quick eye catch: the level and the label names, nothing more\./);
+  assert.match(template, /Paths and reasons go in Reviewer focus\./);
+});

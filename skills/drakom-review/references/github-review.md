@@ -153,12 +153,14 @@ last review is listed under `N resolved since last review` with its chip, its bo
   the section. A finding with no line in the diff ends its list, with where it applies and no link.
 - **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
   section after the open issues, not in its count, since they don't hold up this pull request.
-- **Description fixes:** a wrong or missing claim in the pull request's description gets a grey
-  `Description` chip in its own collapsed `N description fixes` section, with the corrected text,
-  and no comment. It doesn't count as open: editing the description fixes it, with no re-review.
-  The next review that runs for new commits checks the description again and lists the ones fixed
-  under `N resolved since last review`. One exception: a stated risk that claims too little stays an
-  important finding, since the risk level decides how closely a person reads.
+- **Description fixes:** a wrong or missing claim in the pull request's description, or a part that
+  breaks a rule in its template's opening comment (a Risk line with more than the level and label
+  names, for one), gets a grey `Description` chip in its own collapsed `N description fixes`
+  section, with the corrected text, and no comment. It doesn't count as open: editing the
+  description fixes it, with no re-review. The next review that runs for new commits checks the
+  description again and lists the ones fixed under `N resolved since last review`. One exception: a
+  stated risk that claims too little stays an important finding, since the risk level decides how
+  closely a person reads.
 - **Order:** the status and its sentence, then the open issues (or `No open issues 🎉`), description
   fixes, resolved since last review, declined, threads that look fixed, pre-existing, files not
   reviewed, What changed and Checks. Leave out any section with nothing in it.
