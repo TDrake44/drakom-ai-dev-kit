@@ -41,8 +41,8 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the
    rules are, the risk result and, on a re-review, the round number, the changes since the last
    review, the user's answers so far and every finding of the last report, copied as they were with
-   no notes. Nothing else. Without subagents, offer a fresh session, its prompt written by
-   `drakom-handoff` when that skill is installed, or review it yourself and say so.
+   no notes. Nothing else. Without subagents, offer a fresh session, with `drakom-handoff` writing
+   its prompt when installed; if declined, review it yourself and say so.
 4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
    each change; on a re-review, only the changes since the last review, the behavior they affect and
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a

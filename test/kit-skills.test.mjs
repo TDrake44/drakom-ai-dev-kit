@@ -314,6 +314,6 @@ test('the review skill hands off to a fresh session through drakom-handoff when 
 
   assert.match(
     skill,
-    /Without subagents, offer a fresh session, its prompt written by `drakom-handoff` when that skill is installed, or review it yourself and say so\./,
+    /Without subagents, offer a fresh session, with `drakom-handoff` writing its prompt when installed; if declined, review it yourself and say so\./,
   );
 });
