@@ -438,6 +438,8 @@ test('the review risk check classifies the whole change on every review, re-revi
 
   assert.match(skill, /On a re-review too, classify the whole change\./);
   assert.doesNotMatch(skill, /classify only the changes since/);
+  assert.match(skill, /Report the last round's risk\./, 'every round classifies the whole change, so the last one is current');
+  assert.doesNotMatch(skill, /highest risk any round/);
   const beforeCheck = reference.match(/Until the blind risk check is done, ([^.]*)\./);
   assert.ok(beforeCheck, 'no "Until the blind risk check is done" sentence');
   assert.doesNotMatch(beforeCheck[1], /re-review|marker/, 'the check needs no earlier review, so nothing about one is read before it');

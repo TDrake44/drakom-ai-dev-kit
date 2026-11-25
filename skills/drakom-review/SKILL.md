@@ -76,8 +76,8 @@ when no important finding is open, and after round 3's report, saying the approa
 rethinking if important ones remain; otherwise the author fixes the important findings and runs the
 verification commands. The changes since the last review are the commits since its head and every
 file the fixes touched, committed or not; when they cannot be told apart, review the whole change
-and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the highest
-risk any round found. Ask the user before building what the change left out, when a fix would change
+and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the last
+round's risk. Ask the user before building what the change left out, when a fix would change
 the scope or a decision they made, when you believe a finding is wrong, or when the risk rises. When
 a kind of finding comes back, say where to stop it: a test, a lint rule or a review rule.
 
