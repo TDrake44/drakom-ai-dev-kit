@@ -11,8 +11,9 @@ review and give its report in chat.
 
 - Review the pull request's base and head as GitHub has them (`gh api
   repos/{owner}/{repo}/pulls/{number} --jq '.base.sha, .head.sha'`), not a local remote's. Until
-  the blind risk check is done, read only those and the diff (`gh pr diff`): `gh pr view` prints
-  the title and description, which the check must not see.
+  the blind risk check is done, read only those, the diff (`gh pr diff`) and, on a re-review, the
+  `head` in the last review's marker (below), printed alone with `--jq`: `gh pr view` prints the
+  title and description, which the check must not see.
 - Post once per run: the final report, after any fix rounds.
 - The last review is the latest one the signed-in account posted with the `drakom-review` marker,
   if its `head` is an ancestor of the pull request's head; ignore marked reviews from anyone else.
