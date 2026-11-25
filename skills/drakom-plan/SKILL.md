@@ -25,8 +25,8 @@ the header or the stop for approval.
    it can handle the task; decisions are the user's.
 4. **Interview**, unless the user asked for `quick`. Each round, ask every open decision whose
    answer does not hang on another still open: numbered, each with your recommended answer and
-   worded so a yes accepts it. Record the answers in the plan, then ask the next round. Stop when
-   no decision is open or silently assumed.
+   worded so a yes accepts it. Record the answers in the plan file, creating it after the first
+   round, then ask the next round. Stop when no decision is open or silently assumed.
 5. Write the plan, sized to the change: a small fix needs a few lines. Cover what changes and why,
    the acceptance criteria, how it will be tested, and any questions still open.
 6. When the work outgrows one pull request, such as one passing about 1,000 changed lines or

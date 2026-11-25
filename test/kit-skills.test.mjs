@@ -523,7 +523,7 @@ test('the plan skill keeps the kit steps, which a repo\'s rules add to but canno
     /recommended answer/,
     /worded so a yes accepts it/,
     /hang on another still open/,
-    /[Rr]ecord the answers in the plan/,
+    /[Rr]ecord the answers in the plan file, creating it after the first round/,
     /no decision is open or silently assumed/,
     /sized to the change/,
     /acceptance criteria/,
@@ -564,7 +564,7 @@ test('the plan skill writes the header plan-audit reads', async () => {
 
 const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;
 
-test('every kit skill that writes under .drakom-ai/ carries the same setup step', async () => {
+test('every kit skill that names .drakom-ai/.gitignore carries the same setup step', async () => {
   /** @type {Map<string, string>} */
   const copies = new Map();
   for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/SKILL\.md$/.test(tracked))) {
