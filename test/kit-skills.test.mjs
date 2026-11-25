@@ -609,6 +609,9 @@ test('in an empty repository the setup step adds only .drakom-ai/.gitignore, and
   assert.equal(status.status, 0, status.stderr);
   assert.equal(status.stdout, '?? .drakom-ai/.gitignore\n');
   assert.equal(git(...checkArgs).status, 0, 'the check fails on the .gitignore the step writes');
+  // A repo may already track a file under plans/, such as an old plan; new plans are still ignored.
+  assert.equal(git('add', '--force', '.drakom-ai/plans/some-work.md').status, 0);
+  assert.equal(git(...checkArgs).status, 0, 'a plan already in the index fails the check');
 
   await writeFile(path.join(repo, '.drakom-ai', '.gitignore'), `${ignoreLines[2]}\n`);
   assert.equal(git(...checkArgs).status, 1, 'the check passes when plans are not ignored');

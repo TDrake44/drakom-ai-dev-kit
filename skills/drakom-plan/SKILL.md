@@ -44,8 +44,8 @@ paragraph; the word is Active, Next, Later or Done. A new plan is Next, waiting 
 
 Before writing under `.drakom-ai/`, create only what is missing and change nothing that exists:
 `.drakom-ai/.gitignore` holding the two lines `plans/` and `assets/`, and the folder the file goes
-in. In a Git repository, `git check-ignore -q .drakom-ai/plans/` must then succeed; if it fails,
-stop and tell the user, and edit no ignore file.
+in. In a Git repository, `git check-ignore -q --no-index .drakom-ai/plans/` must then succeed; if
+it fails, stop and tell the user, and edit no ignore file.
 
 ## Next step
 
