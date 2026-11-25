@@ -16,14 +16,15 @@ Levels; the highest wins, and when unsure pick the higher:
   🟡 Medium: read the focus. Agent instructions, weakens a check, or any other change to `src/`
     or the dependencies.
   🟢 Low: skim. None of the above, such as docs people read, comments and typos.
-With no label, write "No label". The second line says who assessed it; without a fresh context,
-"Assessed by the author, not blind." Every level still needs a person's approval.
+With no label, write "No label". The second line, in <sub>, says who assessed it: the tool and
+the model identifier as the tool reports it; without a fresh context, "Assessed by the author,
+not blind." Every level still needs a person's approval.
 -->
 
 ## Risk
 
 🟢 **Low: skim.** No label.
-Assessed by <model> from the diff alone, in a fresh context. A starting point, not a verdict.
+<sub>Assessed by … from the diff alone, in a fresh context. A starting point, not a verdict.</sub>
 
 ## Reviewer focus
 
