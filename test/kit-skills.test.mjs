@@ -651,6 +651,7 @@ test('the pull request skill stands alone: it names no other skill file and only
       '.drakom-ai/.gitignore',
       '.drakom-ai/plans/',
       '.drakom-ai/rules/pr.md',
+      '.drakom-ai/rules/review.md',
       '.drakom-ai/rules/verification.md',
       '.github/',
       'AGENTS.md',
@@ -672,7 +673,7 @@ test('the pull request skill gives a default for each repo fact a repo may lack'
   assert.match(text, /\*\*Risk labels:\*\* [^*]*, else \*\*credentials\*\*[\s\S]*Low for the rest\./);
   assert.match(
     text,
-    /commit conventions,\*\* and any review a pull request needs first: `\.drakom-ai\/rules\/pr\.md`, `AGENTS\.md` or `CLAUDE\.md`; else match the recent `git log`\./,
+    /commit conventions,\*\* the risk-check tier, and any review a pull request needs first: `\.drakom-ai\/rules\/pr\.md`, `\.drakom-ai\/rules\/review\.md`, `AGENTS\.md` or `CLAUDE\.md`; else match the recent `git log`\./,
   );
   assert.match(text, /`\.drakom-ai\/rules\/verification\.md`, when present/, 'verification.md must stay optional');
 });
@@ -695,8 +696,7 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
     /[Ii]f a pull request is open for this branch, give its link and stop/,
     /[Oo]n the default branch or with uncommitted changes, say what is needed/,
     /do it on a yes/,
-    /no visible heading or box for the risk/,
-    /offer once to add the starter as `pull_request_template\.md` in `\.github\/`, or, to a template found, only its risk section/,
+    /[Ww]ith no template, offer once to add the starter as `pull_request_template\.md` in `\.github\/`; with a template that has no visible heading or box for the risk, offer once to add only the starter's risk section \(its label comment as the opening comment, and the `## Risk` block\) to that file\./,
     /record the answer in one line of `\.drakom-ai\/rules\/pr\.md`/,
     /commit what you wrote, on its own, before the risk check/,
     /[Ww]ith no template and a no, the description still follows the starter/,
