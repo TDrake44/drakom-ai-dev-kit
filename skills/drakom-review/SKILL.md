@@ -31,14 +31,14 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    staged, unstaged and untracked changes.
 2. **Risk, from the diff alone.** Before reading the description, plan or commit messages,
    classify the diff: on a cheaper subagent, if the tool has one, given the labels, the command
-   that prints the diff and the untracked paths, and told to read nothing else. On a re-review,
-   classify only the changes since the last review. One `path:line` per label; when unsure, the
-   higher level.
+   that prints the diff and the untracked paths, and told to read nothing else and use only those
+   labels. On a re-review, classify only the changes since the last review. One `path:line` per
+   label; when unsure, the higher level.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the
    rules are, the risk result and, on a re-review, the round number, the changes since the last
-   review, the user's answers so far and the last report's important findings, copied as they were
+   review, the user's answers so far and every finding of the last report, copied as they were
    with no notes. Nothing else. Without subagents, review it yourself and say so.
 4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
    each change; on a re-review, only the changes since the last review, the behavior they affect and
@@ -56,7 +56,7 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box
    - Review: fresh, or by the author
-   - Reviewer: the tool, model and effort, as the tool reports them; omit any it does not report
+   - Reviewer: tool, model and effort from the tool's output, not the model's word; omit any missing
    - Findings: a short title, file and line range, what breaks and the fix, as exact replacement
      lines for a small edit, checked against every input the code must still accept
    - Verification: each command and whether it passed, failed or did not run

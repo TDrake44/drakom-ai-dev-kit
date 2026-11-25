@@ -7,18 +7,25 @@ signed in to an account that can review the pull request.
 
 ## Before posting
 
-- Review the pull request's base and head as GitHub has them (`gh pr view --json
-  baseRefOid,headRefOid`), not a local remote's.
+- Review the pull request's base and head as GitHub has them (`gh api
+  repos/{owner}/{repo}/pulls/{number} --jq '.base.sha, .head.sha'`), not a local remote's.
 - Post once per run: the final report, after any fix rounds.
 - The last review is the latest one the signed-in account posted with the `drakom-review` marker,
   if its `head` is an ancestor of the pull request's head; ignore marked reviews from anyone else.
   The changes since that `head` are the changes since the last review, and its findings are the
-  earlier findings for step 3. Only the signed-in account's replies in their threads count as the
-  user's answers; other people's replies are discussion. With no such review, review it all.
+  earlier findings for step 3, nits included. The user's answers are the signed-in account's
+  replies in their threads and the threads it resolved; other people's are discussion. With no
+  such review, review it all.
+- An earlier finding is resolved when a later commit fixes it, whatever its thread says. Otherwise
+  the user's reply decides by what it means, not its words: agreeing leaves the finding open, even
+  in a resolved thread, and refusing declines it. With no reply, a thread the user resolved is
+  declined. Anything else, an unclear reply included, stays open.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
 - Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
-  line (the description, a missing requirement, an untouched file) gets no comment.
+  line (the description, a missing requirement, an untouched file) gets no comment. A finding
+  still open from the last review keeps its thread: link that comment and post no new one, so a
+  review can have no comments.
 
 ## The review
 
@@ -63,6 +70,24 @@ Goal, as read from the PR description: the report's Goal line.
 <!-- drakom-review head=<full head sha> -->
 ```
 
+The later-review sections, after the open issues:
+
+```markdown
+<details>
+<summary><b>1 resolved since last review</b></summary>
+
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · fixed in [`<short sha>`](<commit link>)
+
+</details>
+
+<details>
+<summary><b>1 declined</b></summary>
+
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line` · [“the user's reply, in full”](link to the reply)
+
+</details>
+```
+
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
   the approach, from the report's recommendation.
 - **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
@@ -75,12 +100,13 @@ Goal, as read from the PR description: the report's Goal line.
 - **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
   isn't shown: it is checked against the pull request's risk box, and a box that claims too little
   is a finding. `N files not reviewed`, with why, appears only when some were not read.
-- **Later reviews:** after the open issues, collapsed `N resolved since last review` (each with the
-  commit that fixed it) and `N declined` (each with the user's reason, linked, not raised again,
-  for the user to resolve). What changed counts only the changes since the last review's
-  head. ` · New` ends a finding's line only when new and carried ones are mixed.
+- **Later reviews:** after the open issues, collapsed `N resolved since last review` and
+  `N declined`, laid out as below. A declined finding quotes the user's reply in full, or says
+  `resolved without a reply`, and isn't raised again. What changed counts only the changes since
+  the last review's head. ` · New` ends a finding's line only when new and carried ones are mixed.
   No round numbers.
-- **Model:** the reviewer's, as its tool reports it. Leave out any part the tool doesn't report,
+- **Model:** the reviewer's, from its tool's output (a startup header, for one), not the model's
+  own answer, which can be vaguer or wrong. Leave out any part the tool doesn't report,
   effort included; never write "not reported". A footer link to the run log
   is added only when an automated run posts the review.
 
@@ -120,3 +146,16 @@ fence one backtick longer than the longest run of backticks in the replacement.
   `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the
   marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for its comments
   and the replies to them.
+- Resolved threads: each thread's first comment `databaseId` is the `id` of the review comment it
+  started from.
+
+  ```bash
+  gh api graphql -F owner='{owner}' -F repo='{repo}' -F number={number} -f query='
+    query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
+        reviewThreads(first: 100) { nodes {
+          isResolved resolvedBy { login } comments(first: 1) { nodes { databaseId } }
+        } }
+      } }
+    }'
+  ```
