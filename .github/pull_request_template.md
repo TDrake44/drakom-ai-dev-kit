@@ -17,7 +17,8 @@ Levels; the highest wins, and when unsure pick the higher:
     or the dependencies.
   🟢 Low: skim. None of the above, such as docs people read, comments and typos.
 With no label, write "No label". The second line, in <sub>, says who assessed it: the model family
-and tier, such as "GPT-6 Luna" or "Claude Haiku"; without a fresh "Assessed by the author, not blind." Every level still needs a person's approval.
+and tier, such as "GPT-6 Luna" or "Claude Haiku"; without a fresh context, "Assessed by the
+author, not blind." Every level still needs a person's approval.
 -->
 
 ## Risk
