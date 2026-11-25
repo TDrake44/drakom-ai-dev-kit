@@ -94,6 +94,7 @@ covers the full scaffold, ownership and worktree behavior.
 | `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
 | `drakom-dev` | Build one pull request's worth of work from a plan or a request, test first, then run the repo's checks, re-read the diff and report. Installed with `npx skills add` only, not by the CLI. |
 | `drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. Installed with `npx skills add` only, not by the CLI. |
+| `drakom-plan` | Turn a request into a plan file before any code: an interview on the open decisions, each with a recommended answer (`quick` skips it), and an offer to split it into smaller plans when the work outgrows one pull request. The interview is adapted from Matt Pocock's [`grilling`](https://github.com/mattpocock/skills) skill (MIT). Installed with `npx skills add` only, not by the CLI. |
 | `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
 | `drakom-review` | Review a branch or pull request with a blind risk check and a fresh reviewer, once or in up to three fix rounds (`fix`), and post the report to the pull request as one Copilot-style review (`post`, GitHub only). Installed with `npx skills add` only, not by the CLI. |
 
