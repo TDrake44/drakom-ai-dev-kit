@@ -24,10 +24,9 @@ Prefer invoking the standardized skills over ad-hoc prompting. Skills guarantee 
 | Skill | Purpose |
 | :--- | :--- |
 | `/plan` (or `$plan`) | Issue/ticket intake → structured specification at `.drakom-ai/plans/<feature>.md` |
-| `/dev` | Feature, bug, or refactor implementation (TDD loop) |
+| `/drakom-dev` | Build one pull request's worth of work from a plan, test first, then verify, re-read the diff and report. Installed at user level with `npx skills add` |
 | `/drakom-review` | Review the branch diff against repo rules before opening a PR; `fix` runs up to three review and fix rounds, and `post` posts the report to the pull request as one review. Installed at user level with `npx skills add` |
 | `/drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. Installed at user level with `npx skills add` |
-| `/document` | Audit and synchronize documentation with code |
 
 *Note: In Claude Code, Copilot, and Antigravity, invoke with `/`. In OpenAI Codex CLI, invoke with `$`.*
 
@@ -60,6 +59,8 @@ pnpm run test
 pnpm sync:check
 ```
 
+To run one test file, build first, since the tests import `dist/`: `pnpm build && node --test <file>`.
+
 ## 4. Architectural Conventions
 
 * **Plans**: Scratchpads live locally in `.drakom-ai/plans/` (gitignored). When collaboration across multiple engineers is required, elevate the plan to `.drakom-ai/specs/` (git-tracked).
@@ -71,7 +72,7 @@ pnpm sync:check
 * **Pull Requests**: Write the description from `.github/pull_request_template.md`, including when a tool does not load it for you, aim for the word budget its opening comment sets, and for a large change follow its exception, counting the words before opening. Detail belongs in commits or the plan. Give each pull request one purpose that a reviewer can follow and that can merge on its own, and decide the split while planning. Over about 1,000 changed lines, split it or say why not under "Reviewer focus". Before opening one, run the `drakom-review` skill on the branch, fix its important findings, and note the review under "Evidence".
 * **After Opening a Pull Request**: Stay on it until it is ready for the user or a limit below is reached. Fix CI failures and the important findings of the automatic review on GitHub, then push; one review, fix and push is a round. Stop and tell the user, without pushing again, when a third round still has important findings (say the approach may need rethinking and list them), when a fix would change the scope or a decision the user made, when you believe a finding is wrong (give the reason), when the risk level rises to High, or when the same CI failure happens twice. Do not fix bugs the change did not introduce; list them for the user. Never reply on the pull request, resolve its threads or merge it; the one exception is `drakom-review post` resolving its own and review bots' threads once it confirms the fix. When the checks are green and no important finding is open, tell the user it is ready.
 * **Runtime**: Use Node.js >= 24 (declared in `.nvmrc`) for development, releases, and the published CLI.
-* **Kit payload**: The `drakom-*` skills and their references are authored in `skills/`, where `npx skills add` finds them, and the templates and manifest in `payload/v1/`. The copies under `.agents/skills/drakom-*` are installed by `pnpm sync` and recorded in `.drakom-ai/state.json`; edit the source, then run `pnpm sync`. This repository's own skills (`plan`, `dev`, `document`) carry `metadata.internal: true` so `npx skills add` does not offer them. In this repo run the CLI as `pnpm sync` or, after `pnpm build`, `node dist/cli.js`. `pnpm drakom-ai` does not resolve here, and `npx` would fetch the published version instead of this checkout.
+* **Kit payload**: The `drakom-*` skills and their references are authored in `skills/`, where `npx skills add` finds them, and the templates and manifest in `payload/v1/`. The copies under `.agents/skills/drakom-*` are installed by `pnpm sync` and recorded in `.drakom-ai/state.json`; edit the source, then run `pnpm sync`. This repository's own skill (`plan`) carries `metadata.internal: true` so `npx skills add` does not offer it. In this repo run the CLI as `pnpm sync` or, after `pnpm build`, `node dist/cli.js`. `pnpm drakom-ai` does not resolve here, and `npx` would fetch the published version instead of this checkout.
 
 ## 5. Code Review Rules
 
