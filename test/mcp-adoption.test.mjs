@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -20,10 +20,15 @@ import { generateAntigravityServer, generateClaudeServer, generateCodexServerSni
 import { buildSyncPlan } from '../dist/operation-plan.js';
 import { loadPackagePayload } from '../dist/package-payload.js';
 import { loadState } from '../dist/state.js';
+
+/** One temp folder for this file. Every fixture is made inside it, and the hook removes it even when tests fail. */
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-test-mcp-adoption-'));
+test.after(() => rm(tempRoot, { recursive: true, force: true }));
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
 
-const createFixture = () => mkdtemp(path.join(os.tmpdir(), 'drakom-mcp-adoption-'));
+const createFixture = () => mkdtemp(path.join(tempRoot, 'drakom-mcp-adoption-'));
 
 /**
  * @param {string} root @param {'init' | 'sync'} command @param {string[]} [options]

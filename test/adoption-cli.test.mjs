@@ -16,6 +16,10 @@ import { renderPlan } from '../dist/render-plan.js';
 import { runCli } from '../dist/run-cli.js';
 import { compareVersions, loadState } from '../dist/state.js';
 
+/** One temp folder for this file. Every fixture is made inside it, and the hook removes it even when tests fail. */
+const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-test-adoption-cli-'));
+test.after(() => rm(tempRoot, { recursive: true, force: true }));
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliPath = path.join(repositoryRoot, 'dist', 'cli.js');
 const ruleAnatomyTarget = '.agents/skills/drakom-ai-setup/references/rule-anatomy.md';
@@ -52,7 +56,7 @@ test('exports DRAKOM_DIR constant representing the project-specific AI context d
 });
 
 test('inspectTarget treats a directory containing only .git/ as fresh', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-adoption-'));
   await mkdir(path.join(root, '.git'));
   await writeFile(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n', 'utf8');
 
@@ -61,7 +65,7 @@ test('inspectTarget treats a directory containing only .git/ as fresh', async ()
 });
 
 test('inspectTarget still reads skills whose names match build-output directories', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-adoption-'));
   await mkdir(path.join(root, '.agents', 'skills', 'build'), { recursive: true });
   await writeFile(path.join(root, '.agents', 'skills', 'build', 'SKILL.md'), '---\nname: build\n---\n', 'utf8');
 
@@ -71,7 +75,7 @@ test('inspectTarget still reads skills whose names match build-output directorie
 });
 
 test('inspectTarget lists heavy directories as a single entry without recursing into them', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  const root = await mkdtemp(path.join(tempRoot, 'drakom-adoption-'));
   await mkdir(path.join(root, 'node_modules', 'some-pkg'), { recursive: true });
   await writeFile(path.join(root, 'node_modules', 'some-pkg', 'index.js'), '', 'utf8');
   await mkdir(path.join(root, 'dist'));
@@ -89,7 +93,7 @@ test('inspectTarget lists heavy directories as a single entry without recursing 
 });
 
 async function createFixture() {
-  return mkdtemp(path.join(os.tmpdir(), 'drakom-adoption-'));
+  return mkdtemp(path.join(tempRoot, 'drakom-adoption-'));
 }
 
 /** @param {string} root */
@@ -233,7 +237,7 @@ test('--version prints without inspecting targets or prompting', async () => {
  * @returns {Promise<string>} path to the copied cli.js
  */
 async function createKitCopy(mutate) {
-  const kitRoot = await mkdtemp(path.join(os.tmpdir(), 'drakom-kit-copy-'));
+  const kitRoot = await mkdtemp(path.join(tempRoot, 'drakom-kit-copy-'));
   await cp(path.join(repositoryRoot, 'dist'), path.join(kitRoot, 'dist'), { recursive: true });
   await cp(path.join(repositoryRoot, 'payload'), path.join(kitRoot, 'payload'), { recursive: true });
   await cp(path.join(repositoryRoot, 'skills'), path.join(kitRoot, 'skills'), { recursive: true });
