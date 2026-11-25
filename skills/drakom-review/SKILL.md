@@ -31,12 +31,12 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    branches. Stop if the base or head does not resolve, or there is nothing to review, counting
    staged, unstaged and untracked changes. For `post` or a pull request by number, first check `gh`
    is signed in and the remote is GitHub; if not, say so, offer a local review and ask for the base.
-2. **Risk, from the diff alone.** Before reading the description, plan or commit messages,
-   classify the diff on the cheap tier the review rules name for the tool that runs it, by name,
-   never the tool's default (none named: Claude's `haiku`, else ask). Give it the labels, the diff
-   command and the untracked paths; it reads nothing else and uses only those labels. On a
-   re-review, classify only the changes since the last review. One `path:line` per label; when
-   unsure, the higher level.
+2. **Risk, from the diff alone.** Before reading the description, plan or commit messages (for a
+   pull request, take its base and head as `references/github-review.md` says), classify the diff on
+   the cheap tier the review rules name for the tool that runs it, by name, never the tool's default
+   (none named: Claude's `haiku`, else ask). Give it the labels, the diff command and the untracked
+   paths; it reads nothing else and uses only those labels. On a re-review, classify only the
+   changes since the last review. One `path:line` per label; when unsure, the higher level.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the

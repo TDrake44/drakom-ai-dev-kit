@@ -1,10 +1,11 @@
 # Posting the report to GitHub
 
-Read this only when the user passed `post`. It says how the report looks on a pull request, not
-what the review checks: the steps in `SKILL.md` decide that. Posting is for GitHub only, through
-`gh` signed in to an account that can review the pull request. Check both before reviewing
-(`gh auth status`, and a `github.com` remote); without them, or with no pull request as the target,
-say so, offer a local review and give its report in chat.
+Read this when the user passed `post`; for any pull request, read the first bullet of Before posting
+before the risk check. It says how the report looks on a pull request, not what the review checks:
+the steps in `SKILL.md` decide that. Posting is for GitHub only, through `gh` signed in to an
+account that can review the pull request. Check both before reviewing (`gh auth status`, and a
+`github.com` remote); without them, or with no pull request as the target, say so, offer a local
+review and give its report in chat.
 
 ## Before posting
 
