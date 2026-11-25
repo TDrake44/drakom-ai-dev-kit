@@ -23,7 +23,7 @@ author, not blind." Every level still needs a person's approval.
 
 ## Risk
 
-🟢 **Low: skim.** No label.
+🔴 **High: read closely.** …
 <sub>Assessed by … from the diff alone, in a fresh context. A starting point, not a verdict.</sub>
 
 ## Reviewer focus

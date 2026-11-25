@@ -45,9 +45,9 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
    skill, a test or CI, judge it against the base branch's version too. Run the verification
    commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
-   wrong behavior, lost files, a false claim, a broken build, a template's risk box below the risk
-   result, or something the plan or description asks for that is missing or partial, unless they or
-   the user's answers say why. At most three nits. No style. The reviewer never edits.
+   anything to fix before merging: wrong behavior, lost files, a false claim, a broken build, a risk
+   box below the risk result, or a gap against the plan or description, unless they or the user's
+   answers say why. Nits are fine to leave; at most three. No style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Changes recommended`, `Needs a closer look` (say what did not run, was not
      read or needs a person's check), `Approval recommended`, or `Rethink the approach` (round 3,
