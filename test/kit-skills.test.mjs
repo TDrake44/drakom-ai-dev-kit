@@ -10,7 +10,7 @@ import yaml from 'js-yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
-const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit', 'drakom-review'];
+const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-handoff', 'drakom-plan-audit', 'drakom-review'];
 
 /** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
 const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
@@ -234,4 +234,86 @@ test('the PR template keeps the Risk line to the level and the label names', asy
 
   assert.match(template, /The Risk line is a quick eye catch: the level and the label names, nothing more\./);
   assert.match(template, /Paths and reasons go in Reviewer focus\./);
+});
+
+const HANDOFF_DIR = 'skills/drakom-handoff';
+
+/** The handoff skill's SKILL.md, or an empty string when it is missing. */
+async function handoffSkill() {
+  const file = `${HANDOFF_DIR}/SKILL.md`;
+  if (!trackedFiles().includes(file)) return '';
+  return (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+}
+
+test('the handoff skill is one short file', async () => {
+  const files = trackedFiles().filter((file) => file.startsWith(`${HANDOFF_DIR}/`));
+
+  assert.deepEqual(files, [`${HANDOFF_DIR}/SKILL.md`]);
+  const lines = (await handoffSkill()).trimEnd().split('\n');
+  assert.ok(lines.length <= 30, `SKILL.md has ${lines.length} lines; keep it to 30`);
+});
+
+test('the handoff skill stands alone: it names no other skill file and only repo files it can do without', async () => {
+  const text = await handoffSkill();
+
+  assert.ok(text.length > 0, 'the handoff skill is missing');
+  assert.doesNotMatch(text, /skills\/(?!drakom-handoff\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual([...named].sort(), ['.drakom-ai/plans/', '.drakom-ai/rules/handoff.md']);
+});
+
+test('the handoff skill acts as if no earlier kit version existed', async () => {
+  const text = await handoffSkill();
+
+  assert.ok(text.length > 0, 'the handoff skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the handoff skill prints a prompt to copy, points to what is written down and never creates a plan', async () => {
+  const text = (await handoffSkill()).replace(/\s+/g, ' ');
+
+  for (const part of [
+    /one fenced block/,
+    /in the chat/,
+    /by path or URL/,
+    /skill the next session should run/,
+    /checked/,
+    /secrets/,
+    /status line/,
+    /[Nn]ever create/,
+    /fixed list/,
+  ]) {
+    assert.match(text, part);
+  }
+});
+
+/** Every kit skill the workflow plans, including those not yet shipped. Longest names first. */
+const KIT_SKILL_NAME = /\bdrakom-(?:plan-audit|ai-setup|handoff|review|plan|dev|pr)(?![\w-])/g;
+
+test('a kit skill offers another kit skill only when that one is installed', async () => {
+  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/.+\.md$/.test(tracked))) {
+    const own = file.split('/')[1];
+    const text = (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+    const sentences = text.split(/\n\s*\n|\n(?=\s*(?:[-*]|\d+\.)\s)|(?<=[.!?])\s+/);
+    for (const sentence of sentences) {
+      const others = [...sentence.matchAll(KIT_SKILL_NAME)].map(([name]) => name).filter((name) => name !== own);
+      if (others.length > 0) {
+        assert.match(sentence, /\binstalled\b/, `${file} names ${others.join(', ')} without "installed": ${sentence.trim()}`);
+      }
+    }
+  }
+});
+
+test('the review skill hands off to a fresh session through drakom-handoff when it has no subagents', async () => {
+  const skill = ((await reviewSkillFiles()).get('SKILL.md') ?? '').replace(/\s+/g, ' ');
+
+  assert.match(
+    skill,
+    /Without subagents, offer a fresh session, with `drakom-handoff` writing its prompt when installed; if declined, review it yourself and say so\./,
+  );
 });
