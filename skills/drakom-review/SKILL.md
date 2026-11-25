@@ -34,8 +34,8 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    pull request, take its base and head as `references/github-review.md` says), classify the diff on
    the cheap tier the review rules name for the tool that runs it, by name, never the tool's default
    (none named: Claude's `haiku`, else ask). Give it the labels, the diff command and the untracked
-   paths; it reads nothing else and uses only those labels. On a re-review, classify only the
-   changes since the last review. One `path:line` per label; when unsure, the higher level.
+   paths; it reads nothing else and uses only those labels. On a re-review too, classify the whole
+   change. One `path:line` per label; when unsure, the higher level.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the

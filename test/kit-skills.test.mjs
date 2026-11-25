@@ -430,3 +430,15 @@ test('the dev skill keeps the kit steps, which a repo\'s rules add to but cannot
   }
   assert.match(text, /`\.drakom-ai\/rules\/dev\.md` add to these steps and cannot remove/);
 });
+
+test('the review risk check classifies the whole change on every review, re-reviews included', async () => {
+  const files = await reviewSkillFiles();
+  const skill = (files.get('SKILL.md') ?? '').replace(/\s+/g, ' ');
+  const reference = (files.get('references/github-review.md') ?? '').replace(/\s+/g, ' ');
+
+  assert.match(skill, /On a re-review too, classify the whole change\./);
+  assert.doesNotMatch(skill, /classify only the changes since/);
+  const beforeCheck = reference.match(/Until the blind risk check is done, ([^.]*)\./);
+  assert.ok(beforeCheck, 'no "Until the blind risk check is done" sentence');
+  assert.doesNotMatch(beforeCheck[1], /re-review|marker/, 'the check needs no earlier review, so nothing about one is read before it');
+});
