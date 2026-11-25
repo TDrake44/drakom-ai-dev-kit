@@ -47,7 +47,9 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
    anything to fix before merging: wrong behavior, lost files, a false claim, a broken build, a risk
    box below the risk result, or a gap against the plan or description, unless they or the user's
-   answers say why. Nits are fine to leave; at most three. No style. The reviewer never edits.
+   answers say why. A wrong or missing claim in the pull request description is a description fix
+   instead, unless it is a risk box below the risk result. Nits are fine to leave; at most three. No
+   style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Changes recommended` if an important finding or nit is open, not counting
      pre-existing bugs or description fixes; else `Needs a closer look` if something did not run,

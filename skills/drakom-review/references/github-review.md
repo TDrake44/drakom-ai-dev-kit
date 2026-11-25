@@ -37,9 +37,9 @@ Only once the review's own findings are settled, so other reviewers don't steer 
   check its issue at the head by reading the code: fixed, still there, or not something you can
   judge.
 - A thread raising the same issue as one of your findings is that finding's thread.
-- A thread is the signed-in account's own when its first comment belongs to a marked review: the
-  REST comments list gives each comment's `pull_request_review_id`. A bot's first comment has an
-  author with `__typename` `Bot`.
+- A thread is the signed-in account's own when its first comment was posted by that account and
+  belongs to one of that account's marked reviews: the REST comments list gives each comment's
+  `user` and `pull_request_review_id`. A bot's first comment has an author with `__typename` `Bot`.
 - After the review is submitted, resolve each own or bot thread confirmed fixed. Own threads from
   marked reviews older than the last one go in `N resolved since last review` too. Never resolve a
   person's thread: list the ones that look fixed in a collapsed `N threads look fixed` section
