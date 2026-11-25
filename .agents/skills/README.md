@@ -1,6 +1,6 @@
 # Canonical Agent Skills
 
-The `plan`, `dev` and `document` folders are this repository's own hand-authored skills, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of the kit skills in the root `skills/` folder: edit those and run `pnpm sync`, because sync treats a direct edit here as a conflict. This repository's own skills carry `metadata.internal: true`, so `npx skills add` does not offer them.
+The `plan` folder is this repository's own hand-authored skill, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of the kit skills in the root `skills/` folder: edit those and run `pnpm sync`, because sync treats a direct edit here as a conflict. This repository's own skill carries `metadata.internal: true`, so `npx skills add` does not offer it.
 
 The included skills are defaults, not required framework components. A project
 may edit, replace, or delete them. After removing a skill, update `AGENTS.md`

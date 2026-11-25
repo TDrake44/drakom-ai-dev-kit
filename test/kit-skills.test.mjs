@@ -10,7 +10,7 @@ import yaml from 'js-yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
-const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-handoff', 'drakom-plan-audit', 'drakom-review'];
+const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan-audit', 'drakom-review'];
 
 /** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
 const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
@@ -120,12 +120,39 @@ test('the setup skill says where its references are for both kinds of install, a
   }
 });
 
-test('this repository hides its own workflow skills from npx skills add', async () => {
-  for (const name of ['dev', 'document', 'plan']) {
-    for (const folder of ['.agents/skills', '.claude/skills']) {
-      assert.equal(isInternal(await readFrontmatter(`${folder}/${name}/SKILL.md`)), true, `${folder}/${name} is not internal`);
+test('this repository hides its own workflow skill from npx skills add, and its retired ones are gone', async () => {
+  for (const folder of ['.agents/skills', '.claude/skills']) {
+    assert.equal(isInternal(await readFrontmatter(`${folder}/plan/SKILL.md`)), true, `${folder}/plan is not internal`);
+    for (const retired of ['dev', 'document']) {
+      assert.equal(
+        trackedFiles().some((file) => file.startsWith(`${folder}/${retired}/`)),
+        false,
+        `${folder}/${retired} retired with drakom-dev`,
+      );
     }
   }
+});
+
+test('every skill in the AGENTS.md skill table exists', async () => {
+  const agents = (await readFile(path.join(repositoryRoot, 'AGENTS.md'), 'utf8')).replaceAll('\r\n', '\n');
+  const section = agents.match(/## 2\. Skill Suite\n([\s\S]*?)(?=\n## )/);
+  assert.ok(section, 'no Skill Suite section');
+  const names = [...section[1].matchAll(/^\| `[/$]?([\w-]+)`/gm)].map(([, name]) => name);
+  assert.ok(names.length > 0, 'no skills in the table');
+  const tracked = trackedFiles();
+  for (const name of names) {
+    assert.ok(
+      tracked.includes(`skills/${name}/SKILL.md`) || tracked.includes(`.agents/skills/${name}/SKILL.md`),
+      `AGENTS.md lists ${name}, which is not a skill here`,
+    );
+  }
+});
+
+test('AGENTS.md says how to run one test file', async () => {
+  const agents = (await readFile(path.join(repositoryRoot, 'AGENTS.md'), 'utf8')).replaceAll('\r\n', '\n');
+  const section = agents.match(/## 3\. Key Verification Commands\n([\s\S]*?)(?=\n## )/);
+  assert.ok(section, 'no Key Verification Commands section');
+  assert.match(section[1], /`pnpm build && node --test <file>`/);
 });
 
 const REVIEW_DIR = 'skills/drakom-review';
@@ -316,4 +343,90 @@ test('the review skill hands off to a fresh session through drakom-handoff when 
     skill,
     /Without subagents, offer a fresh session, with `drakom-handoff` writing its prompt when installed; if declined, review it yourself and say so\./,
   );
+});
+
+const DEV_DIR = 'skills/drakom-dev';
+
+/** The dev skill's SKILL.md, or an empty string when it is missing. */
+async function devSkill() {
+  const file = `${DEV_DIR}/SKILL.md`;
+  if (!trackedFiles().includes(file)) return '';
+  return (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+}
+
+test('the dev skill is one short file', async () => {
+  const files = trackedFiles().filter((file) => file.startsWith(`${DEV_DIR}/`));
+
+  assert.deepEqual(files, [`${DEV_DIR}/SKILL.md`]);
+  const lines = (await devSkill()).trimEnd().split('\n');
+  assert.ok(lines.length <= 40, `SKILL.md has ${lines.length} lines; keep it to 40`);
+});
+
+test('the dev skill stands alone: it names no other skill file and only repo files it can do without', async () => {
+  const text = await devSkill();
+
+  assert.ok(text.length > 0, 'the dev skill is missing');
+  assert.doesNotMatch(text, /skills\/(?!drakom-dev\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual(
+    [...named].sort(),
+    [
+      '.drakom-ai/plans/',
+      '.drakom-ai/rules/README.md',
+      '.drakom-ai/rules/dev.md',
+      '.drakom-ai/rules/review.md',
+      '.drakom-ai/rules/verification.md',
+      'AGENTS.md',
+      'CLAUDE.md',
+    ],
+  );
+});
+
+test('the dev skill gives a default for each repo fact a repo may lack', async () => {
+  const skill = await devSkill();
+
+  const section = skill.match(/## Repo facts and defaults\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Repo facts and defaults" section');
+  const text = section[1].replace(/\s+/g, ' ');
+  for (const fact of [/verification commands/i, /one test/i, /review rules/i, /recent `git log`/]) {
+    assert.match(text, fact);
+  }
+  assert.match(text, /`\.drakom-ai\/rules\/verification\.md` when present/, 'verification.md must stay optional');
+});
+
+test('the dev skill acts as if no earlier kit version existed', async () => {
+  const text = await devSkill();
+
+  assert.ok(text.length > 0, 'the dev skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the dev skill keeps the kit steps, which a repo\'s rules add to but cannot remove', async () => {
+  const text = (await devSkill()).replace(/\s+/g, ' ');
+
+  for (const part of [
+    /one pull request/,
+    /propose a split/,
+    /see it fail/,
+    /least code/,
+    /verification commands/,
+    /[Nn]ever report a failing or skipped run as passing/,
+    /whole diff/,
+    /changed files, each check and its result, what is left, and the part most worth a person's look/,
+    /[Dd]on't commit or push unless/,
+    /status line/,
+    /[Nn]ever create a plan/,
+    /without a yes/,
+    /`drakom-review`/,
+    /`drakom-handoff`/,
+    /fresh session/,
+  ]) {
+    assert.match(text, part);
+  }
+  assert.match(text, /`\.drakom-ai\/rules\/dev\.md` add to these steps and cannot remove/);
 });
