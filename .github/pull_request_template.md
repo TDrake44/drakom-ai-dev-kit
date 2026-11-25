@@ -1,67 +1,51 @@
 <!--
-Write for a reader who has two minutes and has not opened the code. About 20 rendered lines.
-Plain words first: say what a user of the kit would see. Name files and functions only under
-"Where to look". Every sentence is a claim the reviewer will check; history, alternatives and
-step-by-step detail belong in commits or the plan. These comments do not render.
+About 200 words outside these comments; count them before opening. Count words, not lines, and
+keep each bullet to one short line. A large change may run longer: keep Reviewer focus short and
+put the extra in Summary. Say what a user of the kit would see. Every sentence is a claim the
+reviewer will check; history and step-by-step detail go in commits or the plan. These comments
+don't render.
 
-The risk box comes first. Name each label that applies:
+Risk labels; name each that applies:
   consumer files: writes, overwrites or deletes files in a consumer's repo
   what ships: `skills/**`, `payload/v1/**`, publish fields, release or CI workflows
   credentials: touches credential handling
   agent instructions: `AGENTS.md`, rules, skills
   weakens a check: changes or removes an existing test, lint rule or type check
-Then set the level and keep the marker that matches it; GitHub colours the box:
-  High, `[!CAUTION]`, red: consumer files, what ships or credentials
-  Medium, `[!WARNING]`, yellow: agent instructions, weakens a check, or any other change to
-    `src/` or the dependencies
-  Low, `[!NOTE]`, blue: none of the above, such as docs people read, comments and typos
-The highest level wins; when unsure, pick the higher. With no label, write "no label". The level
-is a claim the reviewer checks, and every level still needs a person's approval.
+Levels; the highest wins, and when unsure pick the higher:
+  🔴 High: read closely. Consumer files, what ships or credentials.
+  🟡 Medium: read the focus. Agent instructions, weakens a check, or any other change to `src/`
+    or the dependencies.
+  🟢 Low: skim. None of the above, such as docs people read, comments and typos.
+With no label, write "No label". The second line says who assessed it; without a fresh context,
+"Assessed by the author, not blind." Every level still needs a person's approval.
 -->
 
-> [!CAUTION]
-> **Risk: High** · labels · because …
+## Risk
 
-## What changes
+🟢 **Low: skim.** No label.
+Assessed by <model> from the diff alone, in a fresh context. A starting point, not a verdict.
 
-<!-- What the kit did before, what it does now, and why, in two or three sentences. For several
-separate changes, one line each. -->
+## Reviewer focus
 
-## Needs your decision
+<!-- Up to three judgment calls a person should check, one line each, with `path:line` and the
+choice this pull request makes. Then a "Not done:" line per requirement left out, with why, and
+how to undo it: "revert", or what a revert leaves behind (a published version, files already
+written into consumer repos). -->
 
-<!-- What only a person can settle: scope, a trade-off, a stopgap, a pattern later work will copy.
-One line each, ending with the choice this pull request makes. "Nothing" is an answer. -->
-
-1.
-
-## Where to look
-
-<!-- Up to three places where a mistake would cost the most: `path:line`, what the code there
-does, and what to check. "Nothing stands out" is an answer.
-Proved by a check: parts a named check already covers, such as synced copies under
-`.agents/skills/` (`pnpm sync:check`) or the lockfile. Leave the line out when there are none. -->
-
-1.
-
-Proved by a check: …
-
-## Undo and limits
-
-<!-- Undo: "revert this pull request", or what a revert leaves behind (a published version, files
-already written into consumer repos) and how that is put right.
-Not covered: what no test exercises and what was left out on purpose. "Nothing" is an answer. -->
-
+- …
 - Undo: …
-- Not covered: …
+
+## Summary
+
+<!-- Why, in one or two plain sentences. Then one line per change. -->
 
 ## Evidence
 
-<!-- Tested: what shows the change does what "What changes" says: the test or command and its
-result; for a fix, that the test failed before it. CI runs `pnpm lint`, `pnpm typecheck`,
-`pnpm test` and `pnpm sync:check` on every pull request, so list those only when one could not run.
-A review run locally leaves no trace on GitHub, so if one ran, add the tool, the commit it read,
-whether the bug review was fresh or by the author, and the findings still open.
-Changeset: "added", or "not needed" for docs, tests and internal configuration. -->
+<!-- What shows it works and its result; for a fix, that the test failed first. CI runs
+`pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm sync:check`, so name them only when one
+couldn't run. The review: tool, commit read, fresh or by the author, rounds run and important
+findings still open. "Not covered:" what no test exercises. Changeset: "added", or "not needed"
+for docs, tests and internal configuration. -->
 
-- Tested: …
+- Review: …
 - Changeset: …
