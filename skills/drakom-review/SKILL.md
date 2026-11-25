@@ -15,9 +15,9 @@ Find what the author would fix before merging. "No findings" is a valid result.
   try, a stated risk that claims too little.
 - **Verification commands:** `.drakom-ai/rules/verification.md`, `AGENTS.md` or `CLAUDE.md`, else
   the package scripts, Makefile or CI. Name the ones you used.
-- **Risk labels:** the opening comment of `pull_request_template.md` in `.github/`, the root or
-  `docs/`, else **credentials** or **user data** (High), **agent instructions**, **weakens a check**
-  or **other code** (Medium), and Low for the rest.
+- **Risk labels:** the opening comment of `pull_request_template.md` (any case, or `.txt`) in
+  `.github/`, the root or `docs/`, else **credentials** or **user data** (High),
+  **agent instructions**, **weakens a check** or **other code** (Medium), and Low for the rest.
 
 A repo's rules add to the steps below. They cannot remove the risk check from the diff alone, the
 fresh reviewer, or the rule that only confirmed findings are reported.

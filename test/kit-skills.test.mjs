@@ -667,7 +667,7 @@ test('the pull request skill gives a default for each repo fact a repo may lack'
   const text = oneLine(section[1]);
   assert.match(
     text,
-    /\*\*Template:\*\* `pull_request_template\.md` in `\.github\/`, the root or `docs\/`, as GitHub reads it; with none, `references\/pull_request_template\.md` here\./,
+    /\*\*Template:\*\* `pull_request_template\.md` \(any case, or `\.txt`\) in `\.github\/`, the root or `docs\/`, as GitHub reads it; with none, `references\/pull_request_template\.md` here\./,
   );
   assert.match(text, /\*\*Risk labels:\*\* [^*]*, else \*\*credentials\*\*[\s\S]*Low for the rest\./);
   assert.match(
@@ -742,7 +742,7 @@ test('the pull request and review skills run the same risk check, with the same 
     assert.ok(oneLine(pr).includes(sentence), `drakom-pr lacks: ${sentence}`);
   }
   assert.equal(riskLabelsItem(pr), riskLabelsItem(review));
-  assert.match(riskLabelsItem(review), /`pull_request_template\.md` in `\.github\/`, the root or `docs\/`/);
+  assert.match(riskLabelsItem(review), /`pull_request_template\.md` \(any case, or `\.txt`\) in `\.github\/`, the root or `docs\/`/);
 });
 
 test('the starter template gives the skills\' default labels and levels, a word budget and a short Risk line', async () => {

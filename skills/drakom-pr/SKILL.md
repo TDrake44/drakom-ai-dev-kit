@@ -9,11 +9,11 @@ Opening the pull request is the whole job. It needs GitHub and `gh`, signed in.
 
 ## Repo facts and defaults
 
-- **Template:** `pull_request_template.md` in `.github/`, the root or `docs/`, as GitHub reads it;
-  with none, `references/pull_request_template.md` here.
-- **Risk labels:** the opening comment of `pull_request_template.md` in `.github/`, the root or
-  `docs/`, else **credentials** or **user data** (High), **agent instructions**, **weakens a check**
-  or **other code** (Medium), and Low for the rest.
+- **Template:** `pull_request_template.md` (any case, or `.txt`) in `.github/`, the root or `docs/`,
+  as GitHub reads it; with none, `references/pull_request_template.md` here.
+- **Risk labels:** the opening comment of `pull_request_template.md` (any case, or `.txt`) in
+  `.github/`, the root or `docs/`, else **credentials** or **user data** (High),
+  **agent instructions**, **weakens a check** or **other code** (Medium), and Low for the rest.
 - **Branch, title and commit conventions,** and any review a pull request needs first:
   `.drakom-ai/rules/pr.md`, `AGENTS.md` or `CLAUDE.md`; else match the recent `git log`.
 - **Manual checks:** `.drakom-ai/rules/verification.md`, when present.
