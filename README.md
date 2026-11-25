@@ -92,6 +92,7 @@ covers the full scaffold, ownership and worktree behavior.
 | Skill | When to use it |
 | --- | --- |
 | `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
+| `drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. Installed with `npx skills add` only, not by the CLI. |
 | `drakom-plan-audit` | Review or clean up local plans when explicitly requested. |
 | `drakom-review` | Review a branch or pull request with a blind risk check and a fresh reviewer, once or in up to three fix rounds (`fix`), and post the report to the pull request as one Copilot-style review (`post`, GitHub only). Installed with `npx skills add` only, not by the CLI. |
 
