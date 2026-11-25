@@ -79,8 +79,8 @@ a review rule.
 
 ## What it may do
 
-By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting
-or editing the pull request. `post` adds one thing: the final report, posted to the pull request as
-one review, laid out as `references/github-review.md` says. A repo can change this in
-`.drakom-ai/rules/review.md`, and the tool's own permissions and hooks still apply. A
-recommendation is never an approval.
+By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting or
+editing the pull request. `post` adds two things: the final report, posted to the pull request as
+one review, laid out as `references/github-review.md` says, and resolving the threads it confirmed
+fixed, its own and bots', never a person's. A repo can change this in `.drakom-ai/rules/review.md`,
+and the tool's own permissions and hooks still apply. A recommendation is never an approval.

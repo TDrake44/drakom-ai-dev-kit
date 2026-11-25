@@ -19,13 +19,29 @@ signed in to an account that can review the pull request.
 - An earlier finding is resolved when a later commit fixes it, whatever its thread says. Otherwise
   the user's reply decides by what it means, not its words: agreeing leaves the finding open, even
   in a resolved thread, and refusing declines it. With no reply, a thread the user resolved is
-  declined. Anything else, an unclear reply included, stays open.
+  declined, unless a marked review listed that finding as resolved: `post` resolves the threads it
+  confirmed fixed, under the same account. Anything else, an unclear reply included, stays open.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
 - Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
   line (the description, a missing requirement, an untouched file) gets no comment. A finding
-  still open from the last review keeps its thread: link that comment and post no new one, so a
-  review can have no comments.
+  still open from the last review, or one an unresolved thread already raises (Other threads,
+  below), keeps that thread: link its comment and post no new one, so a review can have no
+  comments.
+
+## Other threads
+
+Only once the review's own findings are settled, so other reviewers don't steer it:
+
+- Read every unresolved review thread on the pull request, whoever started it (Commands), and
+  check its issue at the head by reading the code: fixed, still there, or not something you can
+  judge.
+- A thread raising the same issue as one of your findings is that finding's thread.
+- After the review is submitted, resolve each thread confirmed fixed that the signed-in account
+  started under a marked review, or that a bot started (its first comment's author has
+  `__typename` `Bot`). Never resolve a person's thread: list the ones that look fixed in a
+  collapsed `N threads look fixed` section after the declined ones, linked, for them to resolve.
+- Leave every other thread as it is.
 
 ## The review
 
@@ -148,8 +164,8 @@ fence one backtick longer than the longest run of backticks in the replacement.
   `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the
   marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for its comments
   and the replies to them.
-- Resolved threads: each thread's first comment `databaseId` is the `id` of the review comment it
-  started from.
+- Threads: each thread's first comment `databaseId` is the `id` of the review comment it started
+  from, and its `author` says who started it.
 
   ```bash
   gh api graphql --paginate -F owner='{owner}' -F repo='{repo}' -F number={number} -f query='
@@ -158,9 +174,14 @@ fence one backtick longer than the longest run of backticks in the replacement.
         reviewThreads(first: 100, after: $endCursor) {
           pageInfo { hasNextPage endCursor }
           nodes {
-            isResolved resolvedBy { login } comments(first: 1) { nodes { databaseId } }
+            id isResolved resolvedBy { login }
+            comments(first: 1) { nodes { databaseId author { __typename login } } }
           }
         }
       } }
     }'
   ```
+
+- Resolve: `gh api graphql -F threadId=<thread id> -f query='mutation($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) { thread { isResolved } } }'`, with the
+  thread's `id` from the query above.
