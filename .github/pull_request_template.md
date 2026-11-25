@@ -16,9 +16,9 @@ Levels; the highest wins, and when unsure pick the higher:
   🟡 Medium: read the focus. Agent instructions, weakens a check, or any other change to `src/`
     or the dependencies.
   🟢 Low: skim. None of the above, such as docs people read, comments and typos.
-With no label, write "No label". The second line, in <sub>, says who assessed it: the tool and
-the model identifier as the tool reports it; without a fresh context, "Assessed by the author,
-not blind." Every level still needs a person's approval.
+With no label, write "No label". The second line, in <sub>, says who assessed it: the AI provider
+and model family, such as "OpenAI GPT-6", and the exact model when you can; without a fresh
+context, "Assessed by the author, not blind." Every level still needs a person's approval.
 -->
 
 ## Risk
