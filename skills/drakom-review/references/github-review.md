@@ -37,10 +37,13 @@ Only once the review's own findings are settled, so other reviewers don't steer 
   check its issue at the head by reading the code: fixed, still there, or not something you can
   judge.
 - A thread raising the same issue as one of your findings is that finding's thread.
-- After the review is submitted, resolve each thread confirmed fixed that the signed-in account
-  started under a marked review, or that a bot started (its first comment's author has
-  `__typename` `Bot`). Never resolve a person's thread: list the ones that look fixed in a
-  collapsed `N threads look fixed` section after the declined ones, linked, for them to resolve.
+- A thread is the signed-in account's own when its first comment belongs to a marked review: the
+  REST comments list gives each comment's `pull_request_review_id`. A bot's first comment has an
+  author with `__typename` `Bot`.
+- After the review is submitted, resolve each own or bot thread confirmed fixed. Own threads from
+  marked reviews older than the last one go in `N resolved since last review` too. Never resolve a
+  person's thread: list the ones that look fixed in a collapsed `N threads look fixed` section
+  after the declined ones, linked, for them to resolve.
 - Leave every other thread as it is.
 
 ## The review
@@ -102,11 +105,30 @@ The later-review sections, after the open issues:
 - <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line` · [“the user's reply, in full”](link to the reply)
 
 </details>
+
+<details>
+<summary><b>1 thread looks fixed</b></summary>
+
+- [The thread's first line, shortened](link to the thread) · started by @login · fixed in [`<short sha>`](<commit link>)
+
+</details>
+```
+
+A description fix, after the open issues in any review:
+
+```markdown
+<details>
+<summary><b>1 description fix</b></summary>
+
+- <sub><sub>![Description](https://img.shields.io/badge/Description-grey?style=flat)</sub></sub> **What the description gets wrong** · its section · Replace with: the corrected text
+
+</details>
 ```
 
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look or 🟢 Approval recommended, from the
   report's recommendation. As on Copilot's reviews, any open finding, a nit included, means Changes
-  recommended, and Approval recommended comes only with `No open issues 🎉`. After a third round
+  recommended, and Approval recommended comes only with `No open issues 🎉`; pre-existing bugs and
+  description fixes don't count. After a third round
   with important findings open, the sentence on why says the approach may need rethinking.
 - **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
   text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
@@ -115,6 +137,12 @@ The later-review sections, after the open issues:
   the section. A finding with no line in the diff ends its list, with where it applies and no link.
 - **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
   section after the open issues, not in its count, since they don't hold up this pull request.
+- **Description fixes:** a wrong or missing claim in the pull request's description gets a grey
+  `Description` chip in its own collapsed `N description fixes` section, with the corrected text,
+  and no comment. It doesn't count as open: editing the description fixes it, with no re-review.
+  The next review that runs for new commits checks the description again and lists the ones fixed
+  under `N resolved since last review`. One exception: a risk box that claims too little stays an
+  important finding, since the risk level decides how closely a person reads.
 - **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
   isn't shown: it is checked against the pull request's risk box, and a box that claims too little
   is a finding. `N files not reviewed`, with why, appears only when some were not read.
