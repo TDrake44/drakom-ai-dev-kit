@@ -11,10 +11,10 @@ Risk labels; name each that applies:
   credentials: touches credential handling
   agent instructions: `AGENTS.md`, rules, skills
   weakens a check: changes or removes an existing test, lint rule or type check
+  other code: any other change to `src/` or the dependencies
 Levels; the highest wins, and when unsure pick the higher:
   🔴 High: read closely. Consumer files, what ships or credentials.
-  🟡 Medium: read the focus. Agent instructions, weakens a check, or any other change to `src/`
-    or the dependencies.
+  🟡 Medium: read the focus. Agent instructions, weakens a check or other code.
   🟢 Low: skim. None of the above, such as docs people read, comments and typos.
 The Risk line is a quick eye catch: the level and the label names, nothing more. Paths and reasons
 go in Reviewer focus. With no label, write "No label". The second line, in <sub>, says who assessed

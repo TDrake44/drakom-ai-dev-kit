@@ -15,6 +15,7 @@ Load only the rule files relevant to the active task, not all of them at session
 | Implementing features, fixing bugs, refactoring code | [`.drakom-ai/rules/coding.md`](.drakom-ai/rules/coding.md) + [`.drakom-ai/rules/testing.md`](.drakom-ai/rules/testing.md) |
 | Documentation, READMEs, API specifications | [`.drakom-ai/rules/documentation.md`](.drakom-ai/rules/documentation.md) |
 | Reviewing a branch or pull request | [`.drakom-ai/rules/review.md`](.drakom-ai/rules/review.md) |
+| Opening a pull request | [`.drakom-ai/rules/pr.md`](.drakom-ai/rules/pr.md) |
 
 
 ## 2. Skill Suite
@@ -26,6 +27,7 @@ Prefer invoking the standardized skills over ad-hoc prompting. Skills guarantee 
 | `/drakom-plan` | Interview on the open decisions, with a recommended answer for each, then write a plan file in `.drakom-ai/plans/` and stop for approval before any code; `quick` skips the interview. Installed at user level with `npx skills add` |
 | `/drakom-dev` | Build one pull request's worth of work from a plan, test first, then verify, re-read the diff and report. Installed at user level with `npx skills add` |
 | `/drakom-review` | Review the branch diff against repo rules before opening a PR; `fix` runs up to three review and fix rounds, and `post` posts the report to the pull request as one review. Installed at user level with `npx skills add` |
+| `/drakom-pr` | Open the pull request: a blind risk check, a description from the template within its word budget, and the link in the plan; never merges or replies. Installed at user level with `npx skills add` |
 | `/drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. Installed at user level with `npx skills add` |
 
 *Note: In Claude Code, Copilot, and Antigravity, invoke with `/`. In OpenAI Codex CLI, invoke with `$`.*

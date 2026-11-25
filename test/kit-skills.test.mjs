@@ -11,7 +11,7 @@ import yaml from 'js-yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
-const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan', 'drakom-plan-audit', 'drakom-review'];
+const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan', 'drakom-plan-audit', 'drakom-pr', 'drakom-review'];
 
 /** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
 const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
@@ -188,7 +188,7 @@ test('the review skill stands alone: it names no file in another skill or a repo
     '.drakom-ai/rules/README.md',
     '.drakom-ai/rules/review.md',
     '.drakom-ai/rules/verification.md',
-    '.github/pull_request_template.md',
+    '.github/',
     'AGENTS.md',
     'CLAUDE.md',
   ]);
@@ -223,7 +223,7 @@ test('the review skill offers the kit\'s default risk labels', async () => {
   const item = skill.match(/^- \*\*Risk labels:\*\*([\s\S]*?)(?=\n- |\n\n)/m);
   assert.ok(item, 'no "Risk labels" item');
   const labels = [...item[1].matchAll(/\*\*([^*]+)\*\*/g)].map(([, label]) => label);
-  assert.deepEqual(labels, ['credentials', 'user data', 'agent instructions', 'weakens a check']);
+  assert.deepEqual(labels, ['credentials', 'user data', 'agent instructions', 'weakens a check', 'other code']);
 });
 
 test('the review report gives what a posted review needs', async () => {
@@ -257,11 +257,13 @@ test('the review skill names the cheap tier by rule, not by model, apart from Cl
   }
 });
 
-test('the PR template keeps the Risk line to the level and the label names', async () => {
-  const template = (await readFile(path.join(repositoryRoot, '.github/pull_request_template.md'), 'utf8')).replace(/\s+/g, ' ');
+test('the PR templates keep the Risk line to the level and the label names', async () => {
+  for (const file of ['.github/pull_request_template.md', 'skills/drakom-pr/references/pull_request_template.md']) {
+    const template = (await readFile(path.join(repositoryRoot, file), 'utf8')).replace(/\s+/g, ' ');
 
-  assert.match(template, /The Risk line is a quick eye catch: the level and the label names, nothing more\./);
-  assert.match(template, /Paths and reasons go in Reviewer focus\./);
+    assert.match(template, /The Risk line is a quick eye catch: the level and the label names, nothing more\./, file);
+    assert.match(template, /Paths and reasons go in Reviewer focus\./, file);
+  }
 });
 
 const HANDOFF_DIR = 'skills/drakom-handoff';
@@ -569,6 +571,231 @@ test('the plan skill writes the header plan-audit reads', async () => {
   }
 });
 
+const PR_DIR = 'skills/drakom-pr';
+
+/**
+ * Every file of the pull request skill, keyed by its path inside the skill folder, with LF endings.
+ * @returns {Promise<Map<string, string>>}
+ */
+async function prSkillFiles() {
+  const files = new Map();
+  for (const file of trackedFiles().filter((tracked) => tracked.startsWith(`${PR_DIR}/`))) {
+    files.set(file.slice(PR_DIR.length + 1), (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n'));
+  }
+  return files;
+}
+
+/** @param {string} text */
+const oneLine = (text) => text.replace(/\s+/g, ' ');
+
+/**
+ * The "Risk labels" item of a skill's "Repo facts and defaults", on one line.
+ * @param {string} skill
+ */
+function riskLabelsItem(skill) {
+  const item = skill.replaceAll('\r\n', '\n').match(/^- \*\*Risk labels:\*\*([\s\S]*?)(?=\n- |\n\n)/m);
+  assert.ok(item, 'no "Risk labels" item');
+  return oneLine(item[1]);
+}
+
+/**
+ * The default labels a "Risk labels" item gives, each with its level, in order.
+ * @param {string} skill
+ */
+function defaultRiskLevels(skill) {
+  /** @type {[string, string][]} */
+  const levels = [];
+  for (const [, group, level] of riskLabelsItem(skill).matchAll(/((?:\*\*[^*]+\*\*(?:, | or )?)+) \((High|Medium)\)/g)) {
+    for (const [, label] of group.matchAll(/\*\*([^*]+)\*\*/g)) levels.push([label, level]);
+  }
+  return levels;
+}
+
+/** The starter template's labels, each with the level its Levels list gives it, in label order. */
+async function starterRiskLevels() {
+  const starter = (await prSkillFiles()).get('references/pull_request_template.md') ?? '';
+  const labels = starter.match(/^Risk labels[^\n]*\n((?: {2}[^\n]+\n)+)/m);
+  assert.ok(labels, 'the starter has no "Risk labels" list');
+  const names = [...labels[1].matchAll(/^ {2}([\w ]+): /gm)].map(([, name]) => name);
+  /** @type {Map<string, string>} */
+  const byLabel = new Map();
+  for (const [, level, text] of starter.matchAll(/^ {2}\S+ (High|Medium|Low): [^.]+\. ([^\n]*(?:\n {4}[^\n]*)*)/gm)) {
+    for (const name of names) {
+      if (new RegExp(`\\b${name}\\b`, 'i').test(text)) byLabel.set(name, level);
+    }
+  }
+  return names.map((name) => [name, byLabel.get(name) ?? 'none']);
+}
+
+test('the pull request skill is one short file, with only the starter template beside it', async () => {
+  const files = await prSkillFiles();
+
+  assert.deepEqual([...files.keys()].sort(), ['SKILL.md', 'references/pull_request_template.md']);
+  const lines = (files.get('SKILL.md') ?? '').trimEnd().split('\n');
+  assert.ok(lines.length <= 75, `SKILL.md has ${lines.length} lines; keep it to 75`);
+});
+
+test('the pull request skill stands alone: it names no other skill file and only repo files it can do without', async () => {
+  const text = [...(await prSkillFiles()).values()].join('\n');
+
+  assert.ok(text.length > 0, 'the pull request skill is missing');
+  assert.doesNotMatch(text, /skills\/(?!drakom-pr\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual(
+    [...named].sort(),
+    [
+      '.drakom-ai/',
+      '.drakom-ai/.gitignore',
+      '.drakom-ai/plans/',
+      '.drakom-ai/rules/pr.md',
+      '.drakom-ai/rules/verification.md',
+      '.github/',
+      'AGENTS.md',
+      'CLAUDE.md',
+    ],
+  );
+});
+
+test('the pull request skill gives a default for each repo fact a repo may lack', async () => {
+  const skill = (await prSkillFiles()).get('SKILL.md') ?? '';
+
+  const section = skill.match(/## Repo facts and defaults\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Repo facts and defaults" section');
+  const text = oneLine(section[1]);
+  assert.match(
+    text,
+    /\*\*Template:\*\* `pull_request_template\.md` in `\.github\/`, the root or `docs\/`, as GitHub reads it; with none, `references\/pull_request_template\.md` here\./,
+  );
+  assert.match(text, /\*\*Risk labels:\*\* [^*]*, else \*\*credentials\*\*[\s\S]*Low for the rest\./);
+  assert.match(
+    text,
+    /commit conventions,\*\* and any review a pull request needs first: `\.drakom-ai\/rules\/pr\.md`, `AGENTS\.md` or `CLAUDE\.md`; else match the recent `git log`\./,
+  );
+  assert.match(text, /`\.drakom-ai\/rules\/verification\.md`, when present/, 'verification.md must stay optional');
+});
+
+test('the pull request skill acts as if no earlier kit version existed', async () => {
+  const text = [...(await prSkillFiles()).values()].join('\n');
+
+  assert.ok(text.length > 0, 'the pull request skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the pull request skill keeps the kit steps, which a repo\'s rules add to but cannot remove', async () => {
+  const text = oneLine((await prSkillFiles()).get('SKILL.md') ?? '');
+
+  for (const part of [
+    /`gh auth status`/,
+    /GitHub remote/,
+    /[Ii]f a pull request is open for this branch, give its link and stop/,
+    /[Oo]n the default branch or with uncommitted changes, say what is needed/,
+    /do it on a yes/,
+    /no visible heading or box for the risk/,
+    /offer once to add the starter, or only its risk section/,
+    /record the answer in one line of `\.drakom-ai\/rules\/pr\.md`/,
+    /commit what you wrote, on its own, before the risk check/,
+    /[Ww]ith no template and a no, the description still follows the starter/,
+    /risk result for the current head, use it and the model that ran it/,
+    /[Ww]ithout subagents, classify it yourself first and say it was not blind/,
+    /\*\*Before pushing,\*\* ask/,
+    /the repo needs a review and none is known for the current head/,
+    /an acceptance criterion of the plan or request is not met and nothing records why/,
+    /about 1,000 changed lines with no reason given/,
+    /`Not done: …, because …`/,
+    /[Cc]ount its words outside comments against the budget its opening comment sets, else about 200, and cut to fit/,
+    /[Aa] large change may run over, with Reviewer focus kept short/,
+    /`gh pr create`, ready for review unless `\.drakom-ai\/rules\/pr\.md` asks for a draft/,
+    /`\*\*Pull request:\*\* <url>` as its own paragraph after the header/,
+    /update the status line/,
+    /[Nn]ever merge, reply on the pull request, resolve its threads, comment on it or edit it once open/,
+    /[Gg]ive the link/,
+    /[Ss]tart nothing without a yes/,
+  ]) {
+    assert.match(text, part);
+  }
+  assert.match(
+    text,
+    /`\.drakom-ai\/rules\/pr\.md` add to these steps and cannot remove the risk check from the diff alone, the word count, the questions before pushing or the hands-off rule/,
+  );
+  assert.doesNotMatch(text, /drakom-review/, 'it names no review skill, so it works without one');
+});
+
+/** The sentences of the blind risk check that `drakom-pr` and `drakom-review` share word for word. */
+const SHARED_RISK_SENTENCES = [
+  "classify the diff on the cheap tier the repo's rules name for the tool that runs it, by name, never the tool's default (none named: Claude's `haiku`, else ask). Give it the labels, the diff command and the untracked paths; it reads nothing else and uses only those labels.",
+  'One `path:line` per label; when unsure, the higher level.',
+];
+
+test('the pull request and review skills run the same risk check, with the same default labels', async () => {
+  const review = (await reviewSkillFiles()).get('SKILL.md') ?? '';
+  const pr = (await prSkillFiles()).get('SKILL.md') ?? '';
+
+  for (const sentence of SHARED_RISK_SENTENCES) {
+    assert.ok(oneLine(review).includes(sentence), `drakom-review lacks: ${sentence}`);
+    assert.ok(oneLine(pr).includes(sentence), `drakom-pr lacks: ${sentence}`);
+  }
+  assert.equal(riskLabelsItem(pr), riskLabelsItem(review));
+  assert.match(riskLabelsItem(review), /`pull_request_template\.md` in `\.github\/`, the root or `docs\/`/);
+});
+
+test('the starter template gives the skills\' default labels and levels, a word budget and a short Risk line', async () => {
+  const starter = (await prSkillFiles()).get('references/pull_request_template.md') ?? '';
+  const review = (await reviewSkillFiles()).get('SKILL.md') ?? '';
+  const pr = (await prSkillFiles()).get('SKILL.md') ?? '';
+  const expected = [
+    ['credentials', 'High'],
+    ['user data', 'High'],
+    ['agent instructions', 'Medium'],
+    ['weakens a check', 'Medium'],
+    ['other code', 'Medium'],
+  ];
+
+  assert.deepEqual(await starterRiskLevels(), expected);
+  assert.deepEqual(defaultRiskLevels(review), expected);
+  assert.deepEqual(defaultRiskLevels(pr), expected);
+  assert.match(starter, /^ {2}other code: any other change to code, its dependencies or its build$/m);
+  assert.match(oneLine(starter), /About 200 words outside these comments/);
+  for (const rule of [/With no label, write "No label"\./, /Every level still needs a person's approval\./, /`path:line`/, /what a revert leaves behind/, /"Not covered:"/]) {
+    assert.match(oneLine(starter), rule);
+  }
+
+  const risk = starter.match(/^## Risk\n\n([^\n]+)\n/m);
+  assert.ok(risk, 'the starter has no visible "## Risk" heading with a Risk line under it');
+  const line = risk[1].match(/^(?:🔴|🟡|🟢) \*\*(?:High|Medium|Low): [^*]+\*\* (.+)\.$/);
+  assert.ok(line, `the Risk line is not a level: ${risk[1]}`);
+  const names = expected.map(([name]) => name.toLowerCase());
+  for (const label of line[1].split(/, /)) {
+    assert.ok(label === 'No label' || names.includes(label.toLowerCase()), `the Risk line holds more than label names: ${label}`);
+  }
+});
+
+/** How every loop skill offers its next step, word for word. */
+const HERE_OR_FRESH = 'here or in a fresh session started from a `drakom-handoff` prompt, each when installed, and recommend one in a few words';
+
+test('every loop skill offers its next step here or in a fresh session in the same words', async () => {
+  for (const name of ['drakom-dev', 'drakom-plan', 'drakom-review', 'drakom-pr']) {
+    const skill = await readFile(path.join(repositoryRoot, `skills/${name}/SKILL.md`), 'utf8').catch(() => '');
+    assert.ok(oneLine(skill).includes(HERE_OR_FRESH), `${name} does not offer its next step in the shared words`);
+  }
+});
+
+test('the review skill ends every run by offering what has not run, drakom-pr among them', async () => {
+  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+
+  assert.match(
+    skill,
+    /At the end of every run, offer what fits and has not run: fix rounds for important findings, posting for a pull request, or `drakom-pr` when nothing important is open and there is no pull request yet, here or in a fresh session/,
+  );
+  assert.doesNotMatch(skill, /When neither `fix` nor `post` was passed/, 'the offer covers fix runs too');
+  assert.doesNotMatch(skill, /permissions and hooks/);
+  assert.match(skill, /Start nothing without a yes\./);
+});
+
 const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;
 
 test('every kit skill that names .drakom-ai/.gitignore carries the same setup step', async () => {
@@ -582,6 +809,7 @@ test('every kit skill that names .drakom-ai/.gitignore carries the same setup st
   }
 
   assert.ok(copies.has(`${PLAN_DIR}/SKILL.md`), 'the plan skill has no "Setting up `.drakom-ai/`" section');
+  assert.ok(copies.has(`${PR_DIR}/SKILL.md`), 'the pull request skill has no "Setting up `.drakom-ai/`" section');
   const [first, ...rest] = [...copies.entries()];
   for (const [file, step] of rest) {
     assert.equal(step, first[1], `${file}'s setup step differs from ${first[0]}'s`);
