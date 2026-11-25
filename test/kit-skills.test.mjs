@@ -762,7 +762,7 @@ test('the starter template gives the skills\' default labels and levels, a word 
   assert.deepEqual(defaultRiskLevels(pr), expected);
   assert.match(starter, /^ {2}other code: any other change to code, its dependencies or its build$/m);
   assert.match(oneLine(starter), /About 200 words outside these comments/);
-  for (const rule of [/With no label, write "No label"\./, /Every level still needs a person's approval\./, /`path:line`/, /what a revert leaves behind/, /"Not covered:"/]) {
+  for (const rule of [/Say what a user would see\./, /Name the checks CI runs only when one couldn't run/, /With no label, write "No label"\./, /Every level still needs a person's approval\./, /`path:line`/, /what a revert leaves behind/, /"Not covered:"/]) {
     assert.match(oneLine(starter), rule);
   }
 
@@ -770,6 +770,7 @@ test('the starter template gives the skills\' default labels and levels, a word 
   assert.ok(risk, 'the starter has no visible "## Risk" heading with a Risk line under it');
   const line = risk[1].match(/^(?:🔴|🟡|🟢) \*\*(?:High|Medium|Low): [^*]+\*\* (.+)\.$/);
   assert.ok(line, `the Risk line is not a level: ${risk[1]}`);
+  assert.match(risk[1], /^🔴 \*\*High: read closely\.\*\* /, 'like this repo\'s template, the Risk line starts at High');
   const names = expected.map(([name]) => name.toLowerCase());
   for (const label of line[1].split(/, /)) {
     assert.ok(label === 'No label' || names.includes(label.toLowerCase()), `the Risk line holds more than label names: ${label}`);

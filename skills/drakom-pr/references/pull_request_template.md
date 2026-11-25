@@ -1,8 +1,8 @@
 <!--
 About 200 words outside these comments; count them before opening. Count words, not lines, and
 keep each bullet to one short line. A large change may run longer: keep Reviewer focus short and
-put the extra in Summary. Every sentence is a claim the reviewer will check; history and
-step-by-step detail go in commits or the plan. These comments don't render.
+put the extra in Summary. Say what a user would see. Every sentence is a claim the reviewer will
+check; history and step-by-step detail go in commits or the plan. These comments don't render.
 
 Risk labels (a repo replaces these with its own); name each that applies:
   credentials: touches secrets, tokens or how credentials are handled
@@ -22,7 +22,7 @@ it: the model family and tier, such as "GPT-6 Luna" or "Claude Haiku"; without a
 
 ## Risk
 
-🟢 **Low: skim.** No label.
+🔴 **High: read closely.** Credentials, user data.
 <sub>Assessed by … from the diff alone, in a fresh context. A starting point, not a verdict.</sub>
 
 ## Reviewer focus
@@ -41,8 +41,9 @@ already migrated) and how to put that right. -->
 
 ## Evidence
 
-<!-- What shows it works and its result; for a fix, that the test failed first. A manual check
-when one was needed. The review: tool, commit read, fresh or by the author, rounds run and
-important findings still open. "Not covered:" what no test exercises. -->
+<!-- What shows it works and its result; for a fix, that the test failed first. Name the checks
+CI runs only when one couldn't run, and a manual check when one was needed. The review: tool,
+commit read, fresh or by the author, rounds run and important findings still open. "Not covered:"
+what no test exercises. -->
 
 - Review: …
