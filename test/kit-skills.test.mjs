@@ -212,8 +212,19 @@ test('the review report gives what a posted review needs', async () => {
     ['Recommendation', 'Goal', 'Reviewed', 'Risk', 'Review', 'Reviewer', 'Findings', 'Verification'],
   );
   assert.match(items.get('Reviewed') ?? '', /not read/);
-  assert.match(items.get('Reviewer') ?? '', /tool, model and effort/);
+  assert.match(items.get('Reviewer') ?? '', /family and tier/);
+  assert.doesNotMatch(items.get('Reviewer') ?? '', /effort/);
   for (const part of [/short title/, /line range/, /exact replacement lines/, /every input/]) {
     assert.match(items.get('Findings') ?? '', part);
+  }
+});
+
+test('the review skill names the cheap tier by rule, not by model, apart from Claude\'s haiku default', async () => {
+  const text = [...(await reviewSkillFiles()).values()].join('\n');
+
+  assert.match(text, /cheap tier/);
+  assert.match(text, /never the tool's default/);
+  for (const model of [/\bgpt-/i, /\bgemini-/i, /\bclaude-/i, /\bluna\b/i, /\bhydrogen\b/i, /\bterra\b/i, /\bsonnet\b/i, /\bopus\b/i]) {
+    assert.doesNotMatch(text, model);
   }
 });

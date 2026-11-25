@@ -14,6 +14,7 @@ Load only the rule files relevant to the active task, not all of them at session
 | :--- | :--- |
 | Implementing features, fixing bugs, refactoring code | [`.drakom-ai/rules/coding.md`](.drakom-ai/rules/coding.md) + [`.drakom-ai/rules/testing.md`](.drakom-ai/rules/testing.md) |
 | Documentation, READMEs, API specifications | [`.drakom-ai/rules/documentation.md`](.drakom-ai/rules/documentation.md) |
+| Reviewing a branch or pull request | [`.drakom-ai/rules/review.md`](.drakom-ai/rules/review.md) |
 
 
 ## 2. Skill Suite
@@ -80,7 +81,7 @@ For any agent reviewing a diff here, and worth reading before writing one. Past 
 3. A skill step that cannot run after a fresh `init`. Every file, section, command and convention a shipped skill names must exist at that point.
 4. A vendor-specific field, path or credential check without a primary source, or a check that reads fewer aliases than the renderer merges.
 5. A list that did not follow the change: the test glob, `files`, dependencies, the CI matrix, `payload.json`.
-6. A risk label that applies and that the pull request's risk box does not claim. The labels are defined in `.github/pull_request_template.md`. If you read the risk box before judging the diff, you may raise its level, but your agreement does not confirm it.
+6. A risk label that applies and that the pull request's `## Risk` section does not claim. The labels are defined in `.github/pull_request_template.md`. If you read that section before judging the diff, you may raise its level, but your agreement does not confirm it.
 
 Report only defects you have confirmed by reading the surrounding code or running it, each with file, line and the scenario that breaks. When a defect is one of a kind, name the kind and list every instance you found, so one fix covers them all. Tag a bug the diff did not introduce as pre-existing. Leave style to Biome. "No findings" is a valid review.
 
