@@ -551,6 +551,13 @@ test('the plan skill keeps the kit steps, which a repo\'s rules add to but canno
   );
 });
 
+test('the plan skill\'s description offers a split rather than promising one', async () => {
+  const description = String((await readFrontmatter(`${PLAN_DIR}/SKILL.md`)).description);
+
+  assert.match(description, /offers to split/);
+  assert.doesNotMatch(description, /and split into/);
+});
+
 test('the plan skill writes the header plan-audit reads', async () => {
   const plan = (await planSkill()).replace(/\s+/g, ' ');
   const audit = (await readFile(path.join(repositoryRoot, 'skills/drakom-plan-audit/SKILL.md'), 'utf8')).replace(/\s+/g, ' ');
@@ -581,6 +588,8 @@ test('every kit skill that names .drakom-ai/.gitignore carries the same setup st
   }
   const step = first[1].replace(/\s+/g, ' ');
   assert.match(step, /create only what is missing and change nothing that exists/);
+  assert.match(step, /under `\.drakom-ai\/` at the repository root/, 'the step must say where .drakom-ai/ goes');
+  assert.match(step, /run from the repository root/, 'the check gives a false failure from a subdirectory');
   assert.match(step, /stop and tell the user, and edit no ignore file/);
 });
 

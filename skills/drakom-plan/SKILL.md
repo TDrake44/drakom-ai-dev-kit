@@ -1,6 +1,6 @@
 ---
 name: drakom-plan
-description: Turn a request, ticket or issue into a plan file before any code is written. By default it interviews the user on the open decisions, each with a recommended answer; `quick` skips the interview. Sized to the change, with acceptance criteria and tests, and split into smaller plans in merge order when it outgrows one pull request. Use to plan a feature, a fix or a refactor.
+description: Turn a request, ticket or issue into a plan file before any code is written. By default it interviews the user on the open decisions, each with a recommended answer; `quick` skips the interview. Sized to the change, with acceptance criteria and tests, and offers to split it into smaller plans in merge order when the work outgrows one pull request. Use to plan a feature, a fix or a refactor.
 ---
 
 # Plan
@@ -42,10 +42,11 @@ paragraph; the word is Active, Next, Later or Done. A new plan is Next, waiting 
 
 ## Setting up `.drakom-ai/`
 
-Before writing under `.drakom-ai/`, create only what is missing and change nothing that exists:
-`.drakom-ai/.gitignore` holding the two lines `plans/` and `assets/`, and the folder the file goes
-in. In a Git repository, `git check-ignore -q --no-index .drakom-ai/plans/` must then succeed; if
-it fails, stop and tell the user, and edit no ignore file.
+Before writing under `.drakom-ai/` at the repository root, create only what is missing and change
+nothing that exists: `.drakom-ai/.gitignore` holding the two lines `plans/` and `assets/`, and the
+folder the file goes in. In a Git repository, `git check-ignore -q --no-index .drakom-ai/plans/`
+must then succeed, run from the repository root; if it fails, stop and tell the user, and edit no
+ignore file.
 
 ## Next step
 
