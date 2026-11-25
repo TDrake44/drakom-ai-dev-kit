@@ -30,7 +30,7 @@ Assessed by <model> from the diff alone, in a fresh context. A starting point, n
 <!-- Up to three judgment calls a person should check, one line each, with `path:line` and the
 choice this pull request makes. Then a "Not done:" line per requirement left out, with why, and
 how to undo it: "revert", or what a revert leaves behind (a published version, files already
-written into consumer repos). -->
+written into consumer repos) and how to put that right. -->
 
 - …
 - Undo: …
