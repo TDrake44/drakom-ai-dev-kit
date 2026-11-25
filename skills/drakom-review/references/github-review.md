@@ -7,18 +7,44 @@ signed in to an account that can review the pull request.
 
 ## Before posting
 
-- Review the pull request's base and head as GitHub has them (`gh pr view --json
-  baseRefOid,headRefOid`), not a local remote's.
+- Review the pull request's base and head as GitHub has them (`gh api
+  repos/{owner}/{repo}/pulls/{number} --jq '.base.sha, .head.sha'`), not a local remote's.
 - Post once per run: the final report, after any fix rounds.
 - The last review is the latest one the signed-in account posted with the `drakom-review` marker,
   if its `head` is an ancestor of the pull request's head; ignore marked reviews from anyone else.
   The changes since that `head` are the changes since the last review, and its findings are the
-  earlier findings for step 3. Only the signed-in account's replies in their threads count as the
-  user's answers; other people's replies are discussion. With no such review, review it all.
+  earlier findings for step 3, nits included. The user's answers are the signed-in account's
+  replies in their threads and the threads it resolved; other people's are discussion. With no
+  such review, review it all.
+- An earlier finding is resolved when a later commit fixes it, whatever its thread says. Otherwise
+  the user's reply decides by what it means, not its words: agreeing leaves the finding open, even
+  in a resolved thread, and refusing declines it. With no reply, a thread the user resolved is
+  declined, unless a marked review listed that finding as resolved: `post` resolves the threads it
+  confirmed fixed, under the same account. Anything else, an unclear reply included, stays open.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
 - Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
-  line (the description, a missing requirement, an untouched file) gets no comment.
+  line (the description, a missing requirement, an untouched file) gets no comment. A finding
+  still open from the last review, or one an unresolved thread already raises (Other threads,
+  below), keeps that thread: link its comment and post no new one, so a review can have no
+  comments.
+
+## Other threads
+
+Only once the review's own findings are settled, so other reviewers don't steer it:
+
+- Read every unresolved review thread on the pull request, whoever started it (Commands), and
+  check its issue at the head by reading the code: fixed, still there, or not something you can
+  judge.
+- A thread raising the same issue as one of your findings is that finding's thread.
+- A thread is the signed-in account's own when its first comment was posted by that account and
+  belongs to one of that account's marked reviews: the REST comments list gives each comment's
+  `user` and `pull_request_review_id`. A bot's first comment has an author with `__typename` `Bot`.
+- After the review is submitted, resolve each own or bot thread confirmed fixed. Own threads from
+  marked reviews older than the last one go in `N resolved since last review` too. Never resolve a
+  person's thread: list the ones that look fixed in a collapsed `N threads look fixed` section
+  after the declined ones, linked, for them to resolve.
+- Leave every other thread as it is.
 
 ## The review
 
@@ -63,8 +89,47 @@ Goal, as read from the PR description: the report's Goal line.
 <!-- drakom-review head=<full head sha> -->
 ```
 
-- **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
-  the approach, from the report's recommendation.
+The later-review sections, after the open issues:
+
+```markdown
+<details>
+<summary><b>1 resolved since last review</b></summary>
+
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · fixed in [`<short sha>`](<commit link>)
+
+</details>
+
+<details>
+<summary><b>1 declined</b></summary>
+
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line` · [“the user's reply, in full”](link to the reply)
+
+</details>
+
+<details>
+<summary><b>1 thread looks fixed</b></summary>
+
+- [The thread's first line, shortened](link to the thread) · started by @login · fixed in [`<short sha>`](<commit link>)
+
+</details>
+```
+
+A description fix, after the open issues in any review:
+
+```markdown
+<details>
+<summary><b>1 description fix</b></summary>
+
+- <sub><sub>![Description](https://img.shields.io/badge/Description-grey?style=flat)</sub></sub> **What the description gets wrong** · its section · Replace with: the corrected text
+
+</details>
+```
+
+- **Status:** 🟡 Changes recommended, 🔵 Needs a closer look or 🟢 Approval recommended, from the
+  report's recommendation. As on Copilot's reviews, any open finding, a nit included, means Changes
+  recommended, and Approval recommended comes only with `No open issues 🎉`; pre-existing bugs and
+  description fixes don't count. After a third round
+  with important findings open, the sentence on why says the approach may need rethinking.
 - **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
   text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
   `Pre--existing` in the badge's address). Important findings and nits go in the open section; the
@@ -72,15 +137,22 @@ Goal, as read from the PR description: the report's Goal line.
   the section. A finding with no line in the diff ends its list, with where it applies and no link.
 - **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
   section after the open issues, not in its count, since they don't hold up this pull request.
+- **Description fixes:** a wrong or missing claim in the pull request's description gets a grey
+  `Description` chip in its own collapsed `N description fixes` section, with the corrected text,
+  and no comment. It doesn't count as open: editing the description fixes it, with no re-review.
+  The next review that runs for new commits checks the description again and lists the ones fixed
+  under `N resolved since last review`. One exception: a risk box that claims too little stays an
+  important finding, since the risk level decides how closely a person reads.
 - **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
   isn't shown: it is checked against the pull request's risk box, and a box that claims too little
   is a finding. `N files not reviewed`, with why, appears only when some were not read.
-- **Later reviews:** after the open issues, collapsed `N resolved since last review` (each with the
-  commit that fixed it) and `N declined` (each with the user's reason, linked, not raised again,
-  for the user to resolve). What changed counts only the changes since the last review's
-  head. ` · New` ends a finding's line only when new and carried ones are mixed.
+- **Later reviews:** after the open issues, collapsed `N resolved since last review` and
+  `N declined`, laid out as below. A declined finding quotes the user's reply in full, or says
+  `resolved without a reply`, and isn't raised again. What changed counts only the changes since
+  the last review's head. ` · New` ends a finding's line only when new and carried ones are mixed.
   No round numbers.
-- **Model:** the reviewer's, as its tool reports it. Leave out any part the tool doesn't report,
+- **Model:** the reviewer's, from its tool's output (a startup header, for one), not the model's
+  own answer, which can be vaguer or wrong. Leave out any part the tool doesn't report,
   effort included; never write "not reported". A footer link to the run log
   is added only when an automated run posts the review.
 
@@ -120,3 +192,24 @@ fence one backtick longer than the longest run of backticks in the replacement.
   `gh api --paginate repos/{owner}/{repo}/pulls/{number}/reviews`, taking its latest with the
   marker, and `gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments` for its comments
   and the replies to them.
+- Threads: each thread's first comment `databaseId` is the `id` of the review comment it started
+  from, and its `author` says who started it.
+
+  ```bash
+  gh api graphql --paginate -F owner='{owner}' -F repo='{repo}' -F number={number} -f query='
+    query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
+      repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
+        reviewThreads(first: 100, after: $endCursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id isResolved resolvedBy { login }
+            comments(first: 1) { nodes { databaseId author { __typename login } } }
+          }
+        }
+      } }
+    }'
+  ```
+
+- Resolve: `gh api graphql -F threadId=<thread id> -f query='mutation($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) { thread { isResolved } } }'`, with the
+  thread's `id` from the query above.

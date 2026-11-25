@@ -31,32 +31,34 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    staged, unstaged and untracked changes.
 2. **Risk, from the diff alone.** Before reading the description, plan or commit messages,
    classify the diff: on a cheaper subagent, if the tool has one, given the labels, the command
-   that prints the diff and the untracked paths, and told to read nothing else. On a re-review,
-   classify only the changes since the last review. One `path:line` per label; when unsure, the
-   higher level.
+   that prints the diff and the untracked paths, and told to read nothing else and use only those
+   labels. On a re-review, classify only the changes since the last review. One `path:line` per
+   label; when unsure, the higher level.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the
    rules are, the risk result and, on a re-review, the round number, the changes since the last
-   review, the user's answers so far and the last report's important findings, copied as they were
+   review, the user's answers so far and every finding of the last report, copied as they were
    with no notes. Nothing else. Without subagents, review it yourself and say so.
 4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
    each change; on a re-review, only the changes since the last review, the behavior they affect and
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
    skill, a test or CI, judge it against the base branch's version too. Run the verification
    commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
-   wrong behavior, lost files, a false claim, a broken build, a template's risk box below the risk
-   result, or something the plan or description asks for that is missing or partial, unless they or
-   the user's answers say why. At most three nits. No style. The reviewer never edits.
+   anything to fix before merging: wrong behavior, lost files, a false claim, a broken build, a risk
+   box below the risk result, or a gap against the plan or description, unless they or the user's
+   answers say why. A wrong or missing claim in the pull request description is a description fix
+   instead, unless it is a risk box below the risk result. Nits are fine to leave; at most three. No
+   style. The reviewer never edits.
 5. **Report:**
-   - Recommendation: `Changes recommended`, `Needs a closer look` (say what did not run, was not
-     read or needs a person's check), `Approval recommended`, or `Rethink the approach` (round 3,
-     important findings open)
+   - Recommendation: `Changes recommended` if an important finding or nit is open, not counting
+     pre-existing bugs or description fixes; else `Needs a closer look` if something did not run,
+     was not read or needs a person (say what); else `Approval recommended`
    - Goal: what the change is for, in one sentence from the description or plan
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box
    - Review: fresh, or by the author
-   - Reviewer: the tool, model and effort, as the tool reports them; omit any it does not report
+   - Reviewer: tool, model and effort from the tool's output, not the model's word; omit any missing
    - Findings: a short title, file and line range, what breaks and the fix, as exact replacement
      lines for a small edit, checked against every input the code must still accept
    - Verification: each command and whether it passed, failed or did not run
@@ -67,19 +69,20 @@ yes: fix rounds when important findings are open, posting when the target is a p
 ## Fix rounds
 
 With `fix`, run up to three rounds. Each round runs steps 2 to 5 with a new fresh reviewer. Stop
-when no important finding is open, and after round 3's report; otherwise the author fixes the
-important findings and runs the verification commands. The changes since the last review are the
-commits since its head and every file the fixes touched, committed or not; when they cannot be
-told apart, review the whole change and say so. Nits and bugs the change did not introduce are
-listed, not fixed. Report the highest risk any round found. Ask the user before building something
-the change left out, when a fix would change the scope or a decision they made, when you believe a
-finding is wrong, or when the risk rises. When a kind of finding comes back, say where to stop it
-at its source: a test, a lint rule or a review rule.
+when no important finding is open, and after round 3's report, saying the approach may need
+rethinking if important ones remain; otherwise the author fixes the important findings and runs the
+verification commands. The changes since the last review are the commits since its head and every
+file the fixes touched, committed or not; when they cannot be told apart, review the whole change
+and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the highest
+risk any round found. Ask the user before building something the change left out, when a fix would
+change the scope or a decision they made, when you believe a finding is wrong, or when the risk
+rises. When a kind of finding comes back, say where to stop it at its source: a test, a lint rule or
+a review rule.
 
 ## What it may do
 
-By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting
-or editing the pull request. `post` adds one thing: the final report, posted to the pull request as
-one review, laid out as `references/github-review.md` says. A repo can change this in
-`.drakom-ai/rules/review.md`, and the tool's own permissions and hooks still apply. A
-recommendation is never an approval.
+By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting or
+editing the pull request. `post` adds two things: the final report, posted to the pull request as
+one review, laid out as `references/github-review.md` says, and resolving the threads it confirmed
+fixed, its own and bots', never a person's. A repo can change this in `.drakom-ai/rules/review.md`,
+and the tool's own permissions and hooks still apply. A recommendation is never an approval.
