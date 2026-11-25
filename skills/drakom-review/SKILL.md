@@ -49,8 +49,9 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    box below the risk result, or a gap against the plan or description, unless they or the user's
    answers say why. Nits are fine to leave; at most three. No style. The reviewer never edits.
 5. **Report:**
-   - Recommendation: `Changes recommended` if any finding is open; else `Needs a closer look` if
-     something did not run, was not read or needs a person (say what); else `Approval recommended`
+   - Recommendation: `Changes recommended` if an important finding or nit is open, not counting
+     bugs the change did not introduce; else `Needs a closer look` if something did not run, was
+     not read or needs a person (say what); else `Approval recommended`
    - Goal: what the change is for, in one sentence from the description or plan
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box

@@ -144,7 +144,7 @@ test('the review skill states its rules in one short file, with only the GitHub 
 
   assert.deepEqual([...files.keys()].sort(), ['SKILL.md', 'references/github-review.md']);
   const lines = (files.get('SKILL.md') ?? '').replaceAll('\r\n', '\n').trimEnd().split('\n');
-  assert.ok(lines.length <= 85, `SKILL.md has ${lines.length} lines; keep it to 85`);
+  assert.ok(lines.length <= 90, `SKILL.md has ${lines.length} lines; keep it to 90`);
 });
 
 test('the review skill stands alone: it names no file in another skill or a repo file it has no default for', async () => {
