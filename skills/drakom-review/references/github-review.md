@@ -88,8 +88,10 @@ The later-review sections, after the open issues:
 </details>
 ```
 
-- **Status:** 🟡 Changes recommended, 🔵 Needs a closer look, 🟢 Approval recommended or 🔴 Rethink
-  the approach, from the report's recommendation.
+- **Status:** 🟡 Changes recommended, 🔵 Needs a closer look or 🟢 Approval recommended, from the
+  report's recommendation. As on Copilot's reviews, any open finding, a nit included, means Changes
+  recommended, and Approval recommended comes only with `No open issues 🎉`. After a third round
+  with important findings open, the sentence on why says the approach may need rethinking.
 - **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
   text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
   `Pre--existing` in the badge's address). Important findings and nits go in the open section; the

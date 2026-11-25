@@ -49,9 +49,8 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    box below the risk result, or a gap against the plan or description, unless they or the user's
    answers say why. Nits are fine to leave; at most three. No style. The reviewer never edits.
 5. **Report:**
-   - Recommendation: `Changes recommended`, `Needs a closer look` (say what did not run, was not
-     read or needs a person's check), `Approval recommended`, or `Rethink the approach` (round 3,
-     important findings open)
+   - Recommendation: `Changes recommended` if any finding is open, a nit included; else `Needs a
+     closer look` (say what did not run, was not read or needs a person) or `Approval recommended`
    - Goal: what the change is for, in one sentence from the description or plan
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk box
@@ -67,14 +66,15 @@ yes: fix rounds when important findings are open, posting when the target is a p
 ## Fix rounds
 
 With `fix`, run up to three rounds. Each round runs steps 2 to 5 with a new fresh reviewer. Stop
-when no important finding is open, and after round 3's report; otherwise the author fixes the
-important findings and runs the verification commands. The changes since the last review are the
-commits since its head and every file the fixes touched, committed or not; when they cannot be
-told apart, review the whole change and say so. Nits and bugs the change did not introduce are
-listed, not fixed. Report the highest risk any round found. Ask the user before building something
-the change left out, when a fix would change the scope or a decision they made, when you believe a
-finding is wrong, or when the risk rises. When a kind of finding comes back, say where to stop it
-at its source: a test, a lint rule or a review rule.
+when no important finding is open, and after round 3's report, saying the approach may need
+rethinking if important ones remain; otherwise the author fixes the important findings and runs the
+verification commands. The changes since the last review are the commits since its head and every
+file the fixes touched, committed or not; when they cannot be told apart, review the whole change
+and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the highest
+risk any round found. Ask the user before building something the change left out, when a fix would
+change the scope or a decision they made, when you believe a finding is wrong, or when the risk
+rises. When a kind of finding comes back, say where to stop it at its source: a test, a lint rule or
+a review rule.
 
 ## What it may do
 
