@@ -696,7 +696,7 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
     /[Ii]f a pull request is open for this branch, give its link and stop/,
     /[Oo]n the default branch or with uncommitted changes, say what is needed/,
     /do it on a yes/,
-    /[Ww]ith no template, offer once to add the starter as `pull_request_template\.md` in `\.github\/`; with a template that has no visible heading or box for the risk, offer once to add only the starter's risk section to that file: its comment from "Risk labels" on, at the top of the file's opening comment or as a new opening comment, and the `## Risk` block\./,
+    /[Ww]ith no template, offer once to add the starter as `pull_request_template\.md` in `\.github\/`; with a template that has no visible heading or box for the risk, offer once to add only the starter's risk section to that file: its comment from "Risk labels" on, at the top of the file's opening comment or as a new opening comment, unless that comment already lists labels, and the `## Risk` block\./,
     /record the answer in one line of `\.drakom-ai\/rules\/pr\.md`/,
     /commit what you wrote, on its own, before the risk check/,
     /[Ww]ith no template and a no, the description still follows the starter/,
