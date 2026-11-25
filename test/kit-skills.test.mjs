@@ -701,6 +701,8 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
     /commit what you wrote, on its own, before the risk check/,
     /[Ww]ith no template and a no, the description still follows the starter/,
     /risk result for the current head, use it and the model that ran it/,
+    /[Oo]therwise, once step 2's commit is made and before writing anything else, classify/,
+    /[Tt]he diff is the whole change from the base to the head, step 2's commit included\./,
     /[Ww]ithout subagents, classify it yourself first and say it was not blind/,
     /\*\*Before pushing,\*\* ask/,
     /the repo needs a review and none is known for the current head/,

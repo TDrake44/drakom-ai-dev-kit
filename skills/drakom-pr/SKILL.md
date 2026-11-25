@@ -34,12 +34,13 @@ alone, the word count, the questions before pushing or the hands-off rule.
    `.drakom-ai/rules/pr.md`, and commit what you wrote, on its own, before the risk check. With no
    template and a no, the description still follows the starter.
 3. **Risk, from the diff alone.** When this conversation, or the prompt that started it, holds a
-   risk result for the current head, use it and the model that ran it. Otherwise, before writing
-   anything else, classify the diff on the cheap tier the repo's rules name for the tool that runs
-   it, by name, never the tool's default (none named: Claude's `haiku`, else ask). Give it the
-   labels, the diff command and the untracked paths; it reads nothing else and uses only those
-   labels. One `path:line` per label; when unsure, the higher level. Without subagents, classify it
-   yourself first and say it was not blind.
+   risk result for the current head, use it and the model that ran it. Otherwise, once step 2's
+   commit is made and before writing anything else, classify the diff on the cheap tier the repo's
+   rules name for the tool that runs it, by name, never the tool's default (none named: Claude's
+   `haiku`, else ask). Give it the labels, the diff command and the untracked paths; it reads
+   nothing else and uses only those labels. The diff is the whole change from the base to the head,
+   step 2's commit included. One `path:line` per label; when unsure, the higher level. Without
+   subagents, classify it yourself first and say it was not blind.
 4. **Before pushing,** ask when the repo needs a review and none is known for the current head;
    when an acceptance criterion of the plan or request is not met and nothing records why; and when
    the diff passes about 1,000 changed lines with no reason given for not splitting it.
