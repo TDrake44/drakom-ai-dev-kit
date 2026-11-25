@@ -24,7 +24,7 @@ it: the model family and tier, such as "GPT-6 Luna" or "Claude Haiku"; without a
 
 ## Risk
 
-🔴 **High: read closely.** Label names only, such as what ships, agent instructions.
+🔴 **High: read closely.** What ships, agent instructions.
 <sub>Assessed by … from the diff alone, in a fresh context. A starting point, not a verdict.</sub>
 
 ## Reviewer focus
