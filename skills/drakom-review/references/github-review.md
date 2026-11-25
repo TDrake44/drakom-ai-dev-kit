@@ -150,12 +150,15 @@ fence one backtick longer than the longest run of backticks in the replacement.
   started from.
 
   ```bash
-  gh api graphql -F owner='{owner}' -F repo='{repo}' -F number={number} -f query='
-    query($owner: String!, $repo: String!, $number: Int!) {
+  gh api graphql --paginate -F owner='{owner}' -F repo='{repo}' -F number={number} -f query='
+    query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
       repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
-        reviewThreads(first: 100) { nodes {
-          isResolved resolvedBy { login } comments(first: 1) { nodes { databaseId } }
-        } }
+        reviewThreads(first: 100, after: $endCursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            isResolved resolvedBy { login } comments(first: 1) { nodes { databaseId } }
+          }
+        }
       } }
     }'
   ```
