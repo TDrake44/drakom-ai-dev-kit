@@ -30,11 +30,11 @@ alone, the word count, the questions before pushing or the hands-off rule.
    branch or a commit named by the conventions, and do it on a yes.
 2. **Template.** Unless `.drakom-ai/rules/pr.md` already records an answer: with no template, offer
    once to add the starter as `pull_request_template.md` in `.github/`; with a template that has no
-   visible heading or box for the risk, offer once to add only the starter's risk section (its
-   label comment as the opening comment, and the `## Risk` block) to that file. On a yes, write it;
-   either way record the answer in one line of `.drakom-ai/rules/pr.md`, and commit what you wrote,
-   on its own, before the risk check. With no template and a no, the description still follows the
-   starter.
+   visible heading or box for the risk, offer once to add only the starter's risk section to that
+   file: its comment from "Risk labels" on, at the top of the file's opening comment or as a new
+   opening comment, and the `## Risk` block. On a yes, write it; either way record the answer in one
+   line of `.drakom-ai/rules/pr.md`, and commit what you wrote, on its own, before the risk check.
+   With no template and a no, the description still follows the starter.
 3. **Risk, from the diff alone.** When this conversation, or the prompt that started it, holds a
    risk result for the current head, use it and the model that ran it. Otherwise, once step 2's
    commit is made and before writing anything else, classify the diff on the cheap tier the repo's
