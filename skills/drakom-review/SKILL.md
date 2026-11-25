@@ -34,8 +34,8 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    pull request, take its base and head as `references/github-review.md` says), classify the diff on
    the cheap tier the review rules name for the tool that runs it, by name, never the tool's default
    (none named: Claude's `haiku`, else ask). Give it the labels, the diff command and the untracked
-   paths; it reads nothing else and uses only those labels. On a re-review, classify only the
-   changes since the last review. One `path:line` per label; when unsure, the higher level.
+   paths; it reads nothing else and uses only those labels. On a re-review too, classify the whole
+   change. One `path:line` per label; when unsure, the higher level.
 3. **Fresh reviewer.** If you wrote or fixed any of the change, hand steps 4 and 5 to a subagent on
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the
@@ -76,8 +76,8 @@ when no important finding is open, and after round 3's report, saying the approa
 rethinking if important ones remain; otherwise the author fixes the important findings and runs the
 verification commands. The changes since the last review are the commits since its head and every
 file the fixes touched, committed or not; when they cannot be told apart, review the whole change
-and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the highest
-risk any round found. Ask the user before building what the change left out, when a fix would change
+and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the last
+round's risk. Ask the user before building what the change left out, when a fix would change
 the scope or a decision they made, when you believe a finding is wrong, or when the risk rises. When
 a kind of finding comes back, say where to stop it: a test, a lint rule or a review rule.
 
