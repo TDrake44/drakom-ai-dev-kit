@@ -33,9 +33,6 @@
     ".claude/skills/drakom-ai-setup/SKILL.md": {
       "fingerprint": "sha256:f11bb2fcb9333448b5c572414700904e94cd63dbda04c50998bb804332f7e854"
     },
-    ".claude/skills/plan/SKILL.md": {
-      "fingerprint": "sha256:54b8622500a5c0ff3df94ea4a37079cf3270b5d4bc21a23d4c4bcafff602a56a"
-    },
     ".claude/skills/drakom-plan-audit/SKILL.md": {
       "fingerprint": "sha256:635420999c078dd740ec4e486aa33915a565227f64787a0c5f4d4bc43ca8dd28"
     }

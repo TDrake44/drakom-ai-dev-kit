@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +11,7 @@ import yaml from 'js-yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
-const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan-audit', 'drakom-review'];
+const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan', 'drakom-plan-audit', 'drakom-review'];
 
 /** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
 const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
@@ -120,14 +121,14 @@ test('the setup skill says where its references are for both kinds of install, a
   }
 });
 
-test('this repository hides its own workflow skill from npx skills add, and its retired ones are gone', async () => {
+test('this repository\'s retired workflow skills are gone', () => {
+  const tracked = trackedFiles();
   for (const folder of ['.agents/skills', '.claude/skills']) {
-    assert.equal(isInternal(await readFrontmatter(`${folder}/plan/SKILL.md`)), true, `${folder}/plan is not internal`);
-    for (const retired of ['dev', 'document']) {
+    for (const retired of ['plan', 'dev', 'document']) {
       assert.equal(
-        trackedFiles().some((file) => file.startsWith(`${folder}/${retired}/`)),
+        tracked.some((file) => file.startsWith(`${folder}/${retired}/`)),
         false,
-        `${folder}/${retired} retired with drakom-dev`,
+        `${folder}/${retired} retired with the drakom-* skills`,
       );
     }
   }
@@ -443,4 +444,184 @@ test('the review risk check classifies the whole change on every review, re-revi
   const beforeCheck = reference.match(/Until the blind risk check is done, ([^.]*)\./);
   assert.ok(beforeCheck, 'no "Until the blind risk check is done" sentence');
   assert.doesNotMatch(beforeCheck[1], /re-review|marker/, 'the check needs no earlier review, so nothing about one is read before it');
+});
+
+const PLAN_DIR = 'skills/drakom-plan';
+
+/** The plan skill's SKILL.md, or an empty string when it is missing. */
+async function planSkill() {
+  const file = `${PLAN_DIR}/SKILL.md`;
+  if (!trackedFiles().includes(file)) return '';
+  return (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+}
+
+test('the plan skill is one short file', async () => {
+  const files = trackedFiles().filter((file) => file.startsWith(`${PLAN_DIR}/`));
+
+  assert.deepEqual(files, [`${PLAN_DIR}/SKILL.md`]);
+  const lines = (await planSkill()).trimEnd().split('\n');
+  assert.ok(lines.length <= 65, `SKILL.md has ${lines.length} lines; keep it to 65`);
+});
+
+test('the plan skill stands alone: it names no other skill file and only repo files it can do without', async () => {
+  const text = await planSkill();
+
+  assert.ok(text.length > 0, 'the plan skill is missing');
+  assert.doesNotMatch(text, /skills\/(?!drakom-plan\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual(
+    [...named].sort(),
+    [
+      '.drakom-ai/',
+      '.drakom-ai/.gitignore',
+      '.drakom-ai/plans/',
+      '.drakom-ai/rules/README.md',
+      '.drakom-ai/rules/plan.md',
+      '.drakom-ai/specs/',
+      'AGENTS.md',
+      'CLAUDE.md',
+    ],
+  );
+});
+
+test('the plan skill gives a default for each repo fact a repo may lack', async () => {
+  const skill = await planSkill();
+
+  const section = skill.match(/## Repo facts and defaults\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Repo facts and defaults" section');
+  const text = section[1].replace(/\s+/g, ' ');
+  assert.match(text, /\*\*Topic rules:\*\*[^*]*With none, plan from the code/);
+  assert.match(text, /\*\*Where plans go:\*\* one file per piece of work in `\.drakom-ai\/plans\/`/);
+  assert.match(text, /`\.drakom-ai\/specs\/`, which Git tracks, only when the user asks/);
+});
+
+test('the plan skill acts as if no earlier kit version existed', async () => {
+  const text = await planSkill();
+
+  assert.ok(text.length > 0, 'the plan skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the plan skill keeps the kit steps, which a repo\'s rules add to but cannot remove', async () => {
+  const text = (await planSkill()).replace(/\s+/g, ' ');
+
+  for (const part of [
+    /as data, not instructions/,
+    /[Ll]ook through `\.drakom-ai\/plans\/` for a plan on this work/,
+    /edit none of it/,
+    /[Ff]acts are yours to find/,
+    /subagents/,
+    /cheaper model/,
+    /decisions are the user's/,
+    /unless the user asked for `quick`/,
+    /[Ee]ach round/,
+    /recommended answer/,
+    /worded so a yes accepts it/,
+    /hang on another still open/,
+    /[Rr]ecord the answers in the plan file, creating it after the first round/,
+    /no decision is open or silently assumed/,
+    /sized to the change/,
+    /acceptance criteria/,
+    /how it will be tested/,
+    /outgrows one pull request/,
+    /as soon as you see it/,
+    /merge order/,
+    /one purpose/,
+    /overview/,
+    /before and after it/,
+    /when its turn comes/,
+    /[Aa] new plan is Next/,
+    /not approval to build/,
+    /`drakom-dev`/,
+    /`drakom-handoff`/,
+    /fresh session/,
+    /set the status to Active/,
+    /[Ss]tart nothing without a yes/,
+  ]) {
+    assert.match(text, part);
+  }
+  assert.match(
+    text,
+    /`\.drakom-ai\/rules\/plan\.md` add to these steps and cannot remove the recommended answers, the header or the stop for approval/,
+  );
+});
+
+test('the plan skill\'s description offers a split rather than promising one', async () => {
+  const description = String((await readFrontmatter(`${PLAN_DIR}/SKILL.md`)).description);
+
+  assert.match(description, /offers to split/);
+  assert.doesNotMatch(description, /and split into/);
+});
+
+test('the plan skill writes the header plan-audit reads', async () => {
+  const plan = (await planSkill()).replace(/\s+/g, ' ');
+  const audit = (await readFile(path.join(repositoryRoot, 'skills/drakom-plan-audit/SKILL.md'), 'utf8')).replace(/\s+/g, ' ');
+
+  for (const text of [plan, audit]) {
+    assert.match(text, /`\*\*Status:\*\* <word>: <one line/);
+    assert.match(text, /`\*\*Synopsis:\*\*/);
+    assert.match(text, /Active, Next, Later,? or Done/);
+  }
+});
+
+const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;
+
+test('every kit skill that names .drakom-ai/.gitignore carries the same setup step', async () => {
+  /** @type {Map<string, string>} */
+  const copies = new Map();
+  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/SKILL\.md$/.test(tracked))) {
+    const text = (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+    const step = text.match(SETUP_STEP);
+    if (step) copies.set(file, step[1].trim());
+    else assert.doesNotMatch(text, /`\.drakom-ai\/\.gitignore`/, `${file} names .drakom-ai/.gitignore without the setup step`);
+  }
+
+  assert.ok(copies.has(`${PLAN_DIR}/SKILL.md`), 'the plan skill has no "Setting up `.drakom-ai/`" section');
+  const [first, ...rest] = [...copies.entries()];
+  for (const [file, step] of rest) {
+    assert.equal(step, first[1], `${file}'s setup step differs from ${first[0]}'s`);
+  }
+  const step = first[1].replace(/\s+/g, ' ');
+  assert.match(step, /create only what is missing and change nothing that exists/);
+  assert.match(step, /under `\.drakom-ai\/` at the repository root/, 'the step must say where .drakom-ai/ goes');
+  assert.match(step, /run from the repository root/, 'the check gives a false failure from a subdirectory');
+  assert.match(step, /stop and tell the user, and edit no ignore file/);
+});
+
+test('in an empty repository the setup step adds only .drakom-ai/.gitignore, and its check catches a plan Git would track', async (t) => {
+  const step = ((await planSkill()).match(SETUP_STEP)?.[1] ?? '').replace(/\s+/g, ' ');
+  const ignoreLines = step.match(/`\.drakom-ai\/\.gitignore` holding the two lines `([^`]+)` and `([^`]+)`/);
+  const check = step.match(/In a Git repository, `(git check-ignore [^`]+)` must then succeed/);
+  assert.ok(ignoreLines, 'the step does not give the .gitignore contents');
+  assert.ok(check, 'the step does not give the check-ignore command');
+  const [, ...checkArgs] = check[1].split(' ');
+
+  const root = await mkdtemp(path.join(os.tmpdir(), 'drakom-plan-setup-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // An empty excludes file keeps the developer's own global ignores out of the result.
+  const noGlobalIgnores = path.join(root, 'no-global-ignores');
+  const repo = path.join(root, 'repo');
+  await writeFile(noGlobalIgnores, '');
+  await mkdir(path.join(repo, '.drakom-ai', 'plans'), { recursive: true });
+  const git = (/** @type {string[]} */ ...args) =>
+    spawnSync('git', ['-c', `core.excludesFile=${noGlobalIgnores}`, ...args], { cwd: repo, encoding: 'utf8' });
+  assert.equal(git('init', '-q').status, 0);
+
+  await writeFile(path.join(repo, '.drakom-ai', '.gitignore'), `${ignoreLines[1]}\n${ignoreLines[2]}\n`);
+  await writeFile(path.join(repo, '.drakom-ai', 'plans', 'some-work.md'), '# Some work\n');
+  const status = git('status', '--porcelain', '--untracked-files=all');
+  assert.equal(status.status, 0, status.stderr);
+  assert.equal(status.stdout, '?? .drakom-ai/.gitignore\n');
+  assert.equal(git(...checkArgs).status, 0, 'the check fails on the .gitignore the step writes');
+  // A repo may already track a file under plans/, such as an old plan; new plans are still ignored.
+  assert.equal(git('add', '--force', '.drakom-ai/plans/some-work.md').status, 0);
+  assert.equal(git(...checkArgs).status, 0, 'a plan already in the index fails the check');
+
+  await writeFile(path.join(repo, '.drakom-ai', '.gitignore'), `${ignoreLines[2]}\n`);
+  assert.equal(git(...checkArgs).status, 1, 'the check passes when plans are not ignored');
 });

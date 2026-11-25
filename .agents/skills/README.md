@@ -1,6 +1,6 @@
 # Canonical Agent Skills
 
-The `plan` folder is this repository's own hand-authored skill, in the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of the kit skills in the root `skills/` folder: edit those and run `pnpm sync`, because sync treats a direct edit here as a conflict. This repository's own skill carries `metadata.internal: true`, so `npx skills add` does not offer it.
+Skills here use the open [agent-skills](https://agentskills.io) `SKILL.md` format. The `drakom-*` folders are installed copies of the kit skills in the root `skills/` folder: edit those and run `pnpm sync`, because sync treats a direct edit here as a conflict. A skill written here for this repository alone needs `metadata.internal: true` in its frontmatter, or `npx skills add` offers it.
 
 The included skills are defaults, not required framework components. A project
 may edit, replace, or delete them. After removing a skill, update `AGENTS.md`
@@ -31,6 +31,6 @@ other files in that Claude skill directory remain in place.
 
 ## Authoring Standards
 
-1. **Folder & Name Matching**: The YAML frontmatter `name` must match the directory name exactly (e.g. `plan/SKILL.md` has `name: plan`).
-2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.drakom-ai/rules/coding.md`, `.agents/skills/plan/workflow.md`). The kit skills in `skills/` are the exception: they name their own references as `references/<file>`, because an `npx skills` install puts them outside the repository, and say once where that folder is for each install. In a CLI-set-up project it is the repository-root path `.agents/skills/<skill>/references/`, because the Claude mirror holds only `SKILL.md`.
+1. **Folder & Name Matching**: The YAML frontmatter `name` must match the directory name exactly (e.g. `drakom-plan-audit/SKILL.md` has `name: drakom-plan-audit`).
+2. **Path References**: Rule and workflow files referenced in the reading list must use repository-root relative paths (e.g. `.drakom-ai/rules/coding.md`). The kit skills in `skills/` are the exception: they name their own references as `references/<file>`, because an `npx skills` install puts them outside the repository, and say once where that folder is for each install. In a CLI-set-up project it is the repository-root path `.agents/skills/<skill>/references/`, because the Claude mirror holds only `SKILL.md`.
 3. **Single-Copy Workflows**: A skill with a procedural recipe co-locates `workflow.md` next to `SKILL.md`. Supporting files are not mirrored to `.claude/skills/`; only `SKILL.md` is mirrored, and it points back to the single canonical `workflow.md`.
