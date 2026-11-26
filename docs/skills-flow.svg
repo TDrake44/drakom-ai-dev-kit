@@ -35,8 +35,8 @@
 
   <!-- Header -->
   <text x="28" y="42" class="h1" fill="#eef2ff">How the skills flow together</text>
-  <text x="28" y="66" class="lead" fill="#94a3b8">Seven composable skills for Claude Code, Codex, Antigravity and GitHub Copilot. Each step in the delivery loop</text>
-  <text x="28" y="85" class="lead" fill="#94a3b8">offers the next — in the same session or a fresh one via drakom-handoff — and waits for your yes.</text>
+  <text x="28" y="66" class="lead" fill="#94a3b8">Seven composable skills for Claude Code, Codex, Antigravity and GitHub Copilot. Plan, dev and review each</text>
+  <text x="28" y="85" class="lead" fill="#94a3b8">offer the next — in the same session or a fresh one via drakom-handoff — and wait for your yes.</text>
 
   <!-- Legend -->
   <g transform="translate(28, 108)">
@@ -137,9 +137,9 @@
 <text x="898.0" y="369.0" text-anchor="middle" class="edge-label" fill="#94a3b8">answers</text>
   <!-- Row 2: Build -->
 <rect x="148" y="421" width="326" height="64" rx="8" fill="#0f3d3e" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="311.0" y="440.5" text-anchor="middle" class="mono-title" fill="#e6fffb">drakom-handoff</text>
-  <text x="311.0" y="457.5" text-anchor="middle" class="box-sub" fill="#99f6e4">copyable prompt for a fresh session</text>
-  <text x="311.0" y="472.5" text-anchor="middle" class="box-sub" fill="#99f6e4">offered after Plan, Dev, Review or PR</text>
+  <text x="311.0" y="440.5" text-anchor="middle" class="box-title" fill="#e6fffb">Fresh session</text>
+  <text x="311.0" y="457.5" text-anchor="middle" class="box-sub" fill="#99f6e4">starts from a drakom-handoff prompt</text>
+  <text x="311.0" y="472.5" text-anchor="middle" class="box-sub" fill="#99f6e4">offered after Plan, Dev, Review; PR if rules say</text>
 <rect x="566" y="421" width="296" height="64" rx="8" fill="#252b63" stroke="#818cf8" stroke-width="1.5"/>
   <text x="714.0" y="440.5" text-anchor="middle" class="mono-title" fill="#eef2ff">drakom-dev</text>
   <text x="714.0" y="457.5" text-anchor="middle" class="box-sub" fill="#c7d2fe">builds one PR · failing test first</text>
