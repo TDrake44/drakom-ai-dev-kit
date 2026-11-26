@@ -763,7 +763,7 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
   for (const part of [
     /`gh auth status`/,
     /GitHub remote/,
-    /[Ii]f a pull request is open for this branch, give its link and stop/,
+    /[Ii]f a pull request is open for this branch, give its link in your reply and stop/,
     /[Oo]n the default branch or with uncommitted changes, say what is needed/,
     /do it on a yes/,
     /record the answer in `\.drakom-ai\/rules\/pr\.md` as one line/,
@@ -785,7 +785,7 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
     /`\*\*Pull request:\*\* <url>` as its own paragraph after the header/,
     /update the status line/,
     /[Nn]ever merge, reply on the pull request, resolve its threads, comment on it or edit it once open/,
-    /[Gg]ive the link/,
+    /[Gg]ive the link in your reply, not only in tool output\./,
     /[Ss]tart nothing without a yes/,
   ]) {
     assert.match(text, part);
@@ -867,6 +867,20 @@ test('the review skill ends every run by offering what has not run, drakom-pr am
   assert.doesNotMatch(skill, /When neither `fix` nor `post` was passed/, 'the offer covers fix runs too');
   assert.doesNotMatch(skill, /permissions and hooks/);
   assert.match(skill, /Start nothing without a yes\./);
+});
+
+test('the review skill asks about open nits before offering a pull request, and keeps what the cut lines carried', async () => {
+  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+
+  for (const part of [
+    'Before offering to open a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as important, even after round 3.',
+    '"No findings" is a valid result',
+    'Nits and bugs the change did not introduce are listed, not fixed',
+    'A repo can change this in `.drakom-ai/rules/review.md`',
+    'not push, post, comment or edit the pull request',
+  ]) {
+    assert.ok(skill.includes(part), `drakom-review does not say: ${part}`);
+  }
 });
 
 const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;

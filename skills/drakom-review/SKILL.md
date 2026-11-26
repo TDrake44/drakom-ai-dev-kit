@@ -5,8 +5,6 @@ description: Review a pull request or local branch before it opens or merges, wi
 
 # Review
 
-Find what the author would fix before merging. "No findings" is a valid result.
-
 ## Repo facts and defaults
 
 - **Review rules:** `.drakom-ai/rules/review.md`, then the `## Code Review Rules` section of
@@ -47,11 +45,12 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    each change; on a re-review, only the changes since the last review, the behavior they affect and
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
    skill, a test or CI, judge it against the base branch's version too. Run the verification
-   commands. Keep only findings you confirmed by reading the code or reproducing them. Important:
-   anything to fix before merging: wrong behavior, lost files, a false claim, a broken build, a
-   stated risk below the risk result, or a gap against the plan or description, unless they or the
-   user's answers say why. Any other wrong or missing claim in the description, or a broken template
-   rule, is a description fix. Nits may stay; at most three. No style. The reviewer never edits.
+   commands. Keep only findings you confirmed by reading the code or reproducing them; "No findings"
+   is a valid result. Important: anything to fix before merging: wrong behavior, lost files, a false
+   claim, a broken build, a stated risk below the risk result, or a gap against the plan or
+   description, unless they or the user's answers say why. Any other wrong or missing claim in the
+   description, or a broken template rule, is a description fix. Nits may stay; at most three. No
+   style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Changes recommended` if an important finding or nit is open, not counting
      pre-existing bugs or description fixes; else `Needs a closer look` if something did not run,
@@ -83,8 +82,9 @@ a kind of finding comes back, say where to stop it: a test, a lint rule or a rev
 Fix rounds may commit their fixes, but not push, post, comment or edit the pull request. `post` adds
 posting the final report as one review, laid out as `references/github-review.md` says, and
 resolving the threads it confirmed fixed, its own and bots', never a person's. A repo can change
-this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. At the end of every
-run, offer what fits and has not run: fix rounds for important findings, posting for a pull request,
-or `drakom-pr` when nothing important is open and there is no pull request yet, here or in a fresh
-session started from a `drakom-handoff` prompt, each when installed, and recommend one in a few
-words. Start nothing without a yes.
+this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. Before offering to open
+a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as
+important, even after round 3. At the end of every run, offer what fits and has not run: fix rounds
+for important findings, posting for a pull request, or `drakom-pr` when nothing important is open
+and there is no pull request yet, here or in a fresh session started from a `drakom-handoff` prompt,
+each when installed, and recommend one in a few words. Start nothing without a yes.

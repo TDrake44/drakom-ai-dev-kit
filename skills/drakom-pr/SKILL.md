@@ -26,8 +26,8 @@ alone, the word count, the questions before pushing or the hands-off rule.
 
 1. **Target.** Check `gh auth status` and a GitHub remote; without them, say so and stop. The base
    is the default branch unless the user names one. If a pull request is open for this branch, give
-   its link and stop. On the default branch or with uncommitted changes, say what is needed, a
-   branch or a commit named by the conventions, and do it on a yes.
+   its link in your reply and stop. On the default branch or with uncommitted changes, say what is
+   needed, a branch or a commit named by the conventions, and do it on a yes.
 2. **Template.** Unless `.drakom-ai/rules/pr.md` already records an answer: with no template, offer
    once to add the starter as `pull_request_template.md` in `.github/`; with a template that has no
    visible heading or box for the risk, offer once to add only the starter's risk section to that
@@ -62,9 +62,9 @@ alone, the word count, the questions before pushing or the hands-off rule.
 ## Hands off
 
 Never merge, reply on the pull request, resolve its threads, comment on it or edit it once open.
-Give the link. When the repo's rules say what follows an opened pull request, offer it, here or in
-a fresh session started from a `drakom-handoff` prompt, each when installed, and recommend one in a
-few words. Start nothing without a yes.
+Give the link in your reply, not only in tool output. When the repo's rules say what follows an
+opened pull request, offer it, here or in a fresh session started from a `drakom-handoff` prompt,
+each when installed, and recommend one in a few words. Start nothing without a yes.
 
 ## Setting up `.drakom-ai/`
 
