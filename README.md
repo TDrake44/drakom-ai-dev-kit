@@ -49,6 +49,17 @@ cleanup in the [0.7.0 changelog entry](CHANGELOG.md#070).
 | `drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. |
 | `drakom-plan-audit` | Review or clean up local plans when explicitly requested, such as after pull requests merge. |
 
+## How the skills flow together
+
+![Swimlane flowchart of the seven Drakom AI Dev Kit skills across fresh contexts, the main session, your approvals and GitHub](docs/skills-flow.svg)
+
+`drakom-plan`, `drakom-dev` and `drakom-review` each finish by offering the next
+step — in the same session or in a fresh one through `drakom-handoff` — and
+wait for your yes; `drakom-pr` does so when the repo's rules say what follows
+an opened pull request. Every skill also runs on its own (for example,
+`drakom-dev` straight from a request without a plan, or `drakom-review` on an
+existing branch or pull request).
+
 ## Project layout
 
 ```text
