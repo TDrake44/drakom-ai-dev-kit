@@ -7,11 +7,11 @@ don't render.
 
 Risk labels; name each that applies:
   consumer files: writes, overwrites or deletes files in a consumer's repo
-  what ships: `skills/**`, `payload/v1/**`, publish fields, release or CI workflows
+  what ships: `skills/**` or CI workflows
   credentials: touches credential handling
   agent instructions: `AGENTS.md`, rules, skills
   weakens a check: changes or removes an existing test, lint rule or type check
-  other code: any other change to `src/` or the dependencies
+  other code: any other change to `test/` or the dependencies
 Levels; the highest wins, and when unsure pick the higher:
   🔴 High: read closely. Consumer files, what ships or credentials.
   🟡 Medium: read the focus. Agent instructions, weakens a check or other code.
@@ -31,7 +31,7 @@ it: the model family and tier, such as "GPT-6 Luna" or "Claude Haiku"; without a
 
 <!-- Up to three judgment calls a person should check, one line each, with `path:line` and the
 choice this pull request makes. Then a "Not done:" line per requirement left out, with why, and
-how to undo it: "revert", or what a revert leaves behind (a published version, files already
+how to undo it: "revert", or what a revert leaves behind (a tagged release, files already
 written into consumer repos) and how to put that right. -->
 
 - …
@@ -44,10 +44,8 @@ written into consumer repos) and how to put that right. -->
 ## Evidence
 
 <!-- What shows it works and its result; for a fix, that the test failed first. CI runs
-`pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm sync:check`, so name them only when one
-couldn't run. The review: tool, commit read, fresh or by the author, rounds run and important
-findings still open. "Not covered:" what no test exercises. Changeset: "added", or "not needed"
-for docs, tests and internal configuration. -->
+`pnpm lint`, `pnpm typecheck` and `pnpm test`, so name them only when one couldn't run. The
+review: tool, commit read, fresh or by the author, rounds run and important findings still open.
+"Not covered:" what no test exercises. -->
 
 - Review: …
-- Changeset: …
