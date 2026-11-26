@@ -89,36 +89,27 @@ test('every kit skill under skills/ is named after its folder', async () => {
   }
 });
 
-test('the payload manifest lists every file of the CLI-installed skills, and no other skill', async () => {
+/** Setup references that install with `npx skills add` only; the CLI's payload predates them. */
+const NPX_ONLY_FILES = ['pull_request_template.md', 'rules-README.md', 'rules-audit.md', 'specs-README.md'].map(
+  (file) => `skills/drakom-ai-setup/references/${file}`,
+);
+
+test('the payload manifest lists every file of the CLI-installed skills but the npx-only references, and no other skill', async () => {
   const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'payload', 'v1', 'payload.json'), 'utf8'));
   const manifestSkillFiles = Object.values(manifest.files)
     .filter((source) => source.startsWith('skills/'))
     .sort();
   const payloadSkillFiles = trackedFiles()
-    .filter((file) => PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)))
+    .filter((file) => PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)) && !NPX_ONLY_FILES.includes(file))
     .sort();
 
   assert.deepEqual(manifestSkillFiles, payloadSkillFiles);
+  for (const file of NPX_ONLY_FILES) assert.ok(trackedFiles().includes(file), `${file} is not shipped`);
   assert.equal(
     trackedFiles().some((file) => file.startsWith('payload/v1/skills/')),
     false,
     'kit skills must live in skills/, not payload/v1/skills/',
   );
-});
-
-test('the setup skill says where its references are for both kinds of install, and each one exists', async () => {
-  const skill = await readFile(path.join(repositoryRoot, 'skills/drakom-ai-setup/SKILL.md'), 'utf8');
-
-  // An `npx skills` install keeps references/ beside SKILL.md; the CLI's Claude mirror holds only
-  // SKILL.md, so a CLI-set-up project needs the repo-root path.
-  assert.match(skill, /`references\/` folder beside this SKILL\.md when the skill was installed with `npx skills`/);
-  assert.match(skill, /set up with the kit CLI they are at the repository-root path `\.agents\/skills\/drakom-ai-setup\/references\/`/);
-  const named = [...skill.matchAll(/`references\/([^`<]+)`/g)].map(([, file]) => file);
-  assert.ok(named.length > 0);
-  const tracked = trackedFiles();
-  for (const file of named) {
-    assert.ok(tracked.includes(`skills/drakom-ai-setup/references/${file}`), `${file} is not shipped`);
-  }
 });
 
 test('this repository\'s retired workflow skills are gone', () => {
@@ -325,8 +316,11 @@ test('the handoff skill prints a prompt to copy, points to what is written down 
 /** Every kit skill the workflow plans, including those not yet shipped. Longest names first. */
 const KIT_SKILL_NAME = /\bdrakom-(?:plan-audit|ai-setup|handoff|review|plan|dev|pr)(?![\w-])/g;
 
+/** Consumer docs that setup copies into a repo. They describe the kit skills; they offer none. */
+const CONSUMER_DOCS = ['skills/drakom-ai-setup/references/rules-README.md', 'skills/drakom-ai-setup/references/specs-README.md'];
+
 test('a kit skill offers another kit skill only when that one is installed', async () => {
-  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/.+\.md$/.test(tracked))) {
+  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/.+\.md$/.test(tracked) && !CONSUMER_DOCS.includes(tracked))) {
     const own = file.split('/')[1];
     const text = (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
     const sentences = text.split(/\n\s*\n|\n(?=\s*(?:[-*]|\d+\.)\s)|(?<=[.!?])\s+/);
@@ -696,8 +690,8 @@ test('the pull request skill keeps the kit steps, which a repo\'s rules add to b
     /[Ii]f a pull request is open for this branch, give its link and stop/,
     /[Oo]n the default branch or with uncommitted changes, say what is needed/,
     /do it on a yes/,
-    /[Ww]ith no template, offer once to add the starter as `pull_request_template\.md` in `\.github\/`; with a template that has no visible heading or box for the risk, offer once to add only the starter's risk section to that file: its comment from "Risk labels" on, at the top of the file's opening comment or as a new opening comment, unless that comment already lists labels, and the `## Risk` block\./,
-    /record the answer in one line of `\.drakom-ai\/rules\/pr\.md`/,
+    /record the answer in `\.drakom-ai\/rules\/pr\.md` as one line/,
+    /[Tt]he risk result, at the top, after any opening comment, when the template has no place for it/,
     /commit what you wrote, on its own, before the risk check/,
     /[Ww]ith no template and a no, the description still follows the starter/,
     /risk result for the current head, use it and the model that ran it/,
@@ -813,6 +807,7 @@ test('every kit skill that names .drakom-ai/.gitignore carries the same setup st
 
   assert.ok(copies.has(`${PLAN_DIR}/SKILL.md`), 'the plan skill has no "Setting up `.drakom-ai/`" section');
   assert.ok(copies.has(`${PR_DIR}/SKILL.md`), 'the pull request skill has no "Setting up `.drakom-ai/`" section');
+  assert.ok(copies.has('skills/drakom-ai-setup/SKILL.md'), 'the setup skill has no "Setting up `.drakom-ai/`" section');
   const [first, ...rest] = [...copies.entries()];
   for (const [file, step] of rest) {
     assert.equal(step, first[1], `${file}'s setup step differs from ${first[0]}'s`);
@@ -855,4 +850,332 @@ test('in an empty repository the setup step adds only .drakom-ai/.gitignore, and
 
   await writeFile(path.join(repo, '.drakom-ai', '.gitignore'), `${ignoreLines[2]}\n`);
   assert.equal(git(...checkArgs).status, 1, 'the check passes when plans are not ignored');
+});
+
+const SETUP_DIR = 'skills/drakom-ai-setup';
+
+/**
+ * Every file of the setup skill, keyed by its path inside the skill folder, with LF endings.
+ * @returns {Promise<Map<string, string>>}
+ */
+async function setupSkillFiles() {
+  const files = new Map();
+  for (const file of trackedFiles().filter((tracked) => tracked.startsWith(`${SETUP_DIR}/`))) {
+    files.set(file.slice(SETUP_DIR.length + 1), (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n'));
+  }
+  return files;
+}
+
+/**
+ * One numbered step of a skill's "Steps", on one line, found by its bold name.
+ * @param {string} skill
+ * @param {string} name
+ */
+function step(skill, name) {
+  const match = skill.match(new RegExp(`^\\d+\\. \\*\\*${name}[.,]?\\*\\*[\\s\\S]*?(?=\\n\\d+\\. |\\n## |(?![\\s\\S]))`, 'm'));
+  assert.ok(match, `no "${name}" step`);
+  return oneLine(match[0]);
+}
+
+test('the setup skill is one short file, with its references beside it', async () => {
+  const files = await setupSkillFiles();
+
+  assert.deepEqual([...files.keys()].sort(), [
+    'SKILL.md',
+    'references/assessment-plan-template.md',
+    'references/pull_request_template.md',
+    'references/rule-anatomy.md',
+    'references/rules-README.md',
+    'references/rules-audit.md',
+    'references/specs-README.md',
+  ]);
+  const lines = (files.get('SKILL.md') ?? '').trimEnd().split('\n');
+  assert.ok(lines.length <= 90, `SKILL.md has ${lines.length} lines; keep it to 90`);
+});
+
+test('the setup skill stands alone: it names only its own references and the repo files it reads or offers', async () => {
+  const files = await setupSkillFiles();
+  const skill = files.get('SKILL.md') ?? '';
+  const text = [...files.values()].join('\n');
+
+  assert.doesNotMatch(text, /skills\/(?!drakom-ai-setup\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\/drakom-/, 'names an installed kit skill');
+  const references = new Set([...skill.matchAll(/`references\/([^`<]+)`/g)].map(([, file]) => `references/${file}`));
+  assert.deepEqual(
+    [...references].sort(),
+    [...files.keys()].filter((file) => file.startsWith('references/')).sort(),
+    'SKILL.md names each reference it ships, and only those',
+  );
+  const named = new Set(
+    [...skill.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual(
+    [...named].sort(),
+    [
+      '.agents/skills/',
+      '.claude/skills/',
+      '.drakom-ai/',
+      '.drakom-ai/.gitignore',
+      '.drakom-ai/assets/*',
+      '.drakom-ai/plans/',
+      '.drakom-ai/plans/*',
+      '.drakom-ai/rules/',
+      '.drakom-ai/rules/README.md',
+      '.drakom-ai/rules/pr.md',
+      '.drakom-ai/specs/',
+      '.drakom-ai/specs/README.md',
+      '.github/',
+      'AGENTS.md',
+      'CLAUDE.md',
+      'CONTRIBUTING.md',
+    ],
+  );
+});
+
+test('the setup skill reads repo facts in the kit\'s order, with a default for each', async () => {
+  const skill = (await setupSkillFiles()).get('SKILL.md') ?? '';
+
+  const section = skill.match(/## Repo facts and defaults\n([\s\S]*?)(?=\n## |$)/);
+  assert.ok(section, 'no "Repo facts and defaults" section');
+  const text = oneLine(section[1]);
+  assert.match(text, /`\.drakom-ai\/rules\/`, then `AGENTS\.md` and `CLAUDE\.md` at the root and nearest each part of the code, then package scripts, Makefile or CI/);
+  assert.match(text, /never user-level settings without a yes/);
+  assert.match(text, /[Ll]ist `\.drakom-ai\/plans\/` and `\.drakom-ai\/specs\/` by folder, since search tools skip ignored files/);
+  assert.match(text, /\*\*Topic rules:\*\* those that `\.drakom-ai\/rules\/README\.md`, `AGENTS\.md` or `CLAUDE\.md` route to/);
+  assert.match(text, /[Ww]ith none, there are none/);
+});
+
+test('the setup skill acts as if no earlier kit version existed', async () => {
+  const text = [...(await setupSkillFiles()).values()].join('\n');
+
+  assert.ok(text.length > 0, 'the setup skill is missing');
+  for (const pattern of [
+    /\bCLI\b/,
+    /state\.json/,
+    /\bsync\b/,
+    /\bMCP\b/i,
+    /\b0\.6\.0\b/,
+    /payload/i,
+    /managed block/i,
+    /drakom-ai:(start|end)/,
+    /kit-managed/,
+    /drakom-ai (init|sync)/,
+    /skill-author/,
+    /legacy/i,
+  ]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('the setup skill creates only the folders, then offers everything else and writes it only on a yes', async () => {
+  const skill = (await setupSkillFiles()).get('SKILL.md') ?? '';
+
+  const folders = step(skill, 'Folders');
+  assert.match(folders, /[Dd]o "Setting up `\.drakom-ai\/`" below/);
+  assert.match(folders, /`\.drakom-ai\/rules\/README\.md` from `references\/rules-README\.md`/);
+  assert.match(folders, /`\.drakom-ai\/specs\/README\.md` from `references\/specs-README\.md`/);
+  assert.match(folders, /each only when missing/);
+  assert.match(folders, /[Ww]rite nothing in `plans\/` or `assets\/`/);
+
+  const offers = step(skill, 'Offers');
+  for (const part of [
+    /in one round in chat/,
+    /[Ww]rite each only on a yes; leave every file outside `\.drakom-ai\/` unchanged without one\. Never commit\./,
+    /`AGENTS\.md`, when missing, holding only facts found here, and for Claude users `@AGENTS\.md` in `CLAUDE\.md`/,
+    /[Ww]ith only a `CLAUDE\.md`, offer the pointer line there and move nothing/,
+    /``Project rules for agents: `\.drakom-ai\/rules\/README\.md`\.``/,
+    /never an `@` import/,
+    /`\.worktreeinclude` at the root with `\.drakom-ai\/plans\/\*` and `\.drakom-ai\/assets\/\*`, for Claude Code to copy the ignored plans and assets into new worktrees/,
+    /add only the missing lines/,
+    /offer to move or point to the verification commands and review rules/,
+    /[Pp]ropose lines for `\.drakom-ai\/rules\/pr\.md` only for a draft habit, or pull request and commit conventions outside `AGENTS\.md` and `CLAUDE\.md`/,
+    /[Aa] route for each topic rule in `\.drakom-ai\/rules\/` that has none, never an extension file/,
+    /[Aa]n existing README without the "Topic rules" or "Extension files" section: offer it from `references\/rules-README\.md`, in the same offer as any route that needs it/,
+    /keep both, rename theirs or remove theirs/,
+    /[Cc]hange none/,
+  ]) {
+    assert.match(offers, part);
+  }
+});
+
+test('the setup skill recommends, stops for approval, then applies and verifies only what was approved', async () => {
+  const skill = (await setupSkillFiles()).get('SKILL.md') ?? '';
+  const text = oneLine(skill);
+
+  const recommend = step(skill, 'Recommend');
+  for (const category of ['Keep', 'Refine', 'Add', 'Omit']) assert.match(recommend, new RegExp(`\\*\\*${category}:\\*\\*`));
+  for (const part of [
+    /`references\/rule-anatomy\.md`/,
+    /suggested skill, its name and a one-line purpose, never written/,
+    /Omit never means delete/,
+    /never install a fixed set/,
+    /ownership \(project-owned, kit skill or unknown\)/,
+    /dependencies \(routes, scripts, companion files\)/,
+    /[Ww]ith Add or Refine items, draft the plan in `\.drakom-ai\/plans\/` from `references\/assessment-plan-template\.md`/,
+    /[Ii]n every mode, name a secret found in the repo by its path or variable, never its value, in files, reports and logs/,
+  ]) {
+    assert.match(recommend, part);
+  }
+  assert.match(step(skill, 'Approval'), /[Ss]top and ask before creating or changing any rule or instruction file/);
+  const apply = step(skill, 'Apply and verify');
+  assert.match(apply, /route it where the repo already routes rules, else in the README's "Topic rules" list/);
+  assert.match(apply, /[Nn]ever move a route unasked/);
+  assert.match(apply, /every path exists, every command runs with the repo's tooling and every route and link resolves/);
+  assert.doesNotMatch(text, /Standards Index/, 'a new rule is routed where the repo routes rules, not in a fixed section');
+  assert.match(
+    text,
+    /[Ww]rite nothing through a symlink: check each destination and its parents below the repository root without following links, and report any write you skip/,
+  );
+});
+
+test('the setup skill names its audit reference only for the audit, which writes nothing without a yes', async () => {
+  const files = await setupSkillFiles();
+  const skill = files.get('SKILL.md') ?? '';
+  const audit = oneLine(files.get('references/rules-audit.md') ?? '');
+
+  const sentences = skill.split(/\n\s*\n|\n(?=\s*(?:[-*]|\d+\.)\s)/).filter((part) => part.includes('references/rules-audit.md'));
+  assert.equal(sentences.length, 1);
+  assert.match(oneLine(sentences[0]), /^7\. \*\*Rules audit\.\*\*/);
+  assert.match(step(skill, 'Rules audit'), /reports in chat and writes nothing without a yes, each change approved on its own/);
+  assert.match(step(skill, 'Rules audit'), /^7\. \*\*Rules audit\.\*\* Run it on `audit`, with or without rules files;/, 'audit runs in a repo with no rules files too');
+  assert.match(oneLine(skill), /`audit` runs only step 7\./);
+
+  for (const part of [
+    /[Rr]ead-only/,
+    /a topic rule in `\.drakom-ai\/rules\/` with no route, and a route to a file that does not exist, wherever the route lives/,
+    /[Mm]ove no route/,
+    /[Tt]he six extension files listed in `rules-README\.md` beside this file need no route, whatever the repo's own README says/,
+    /[Tt]he same rule in two places, or two rules that conflict/,
+    /linter, formatter, type checker or test already enforces/,
+    /`\.drakom-ai\/plans\/` and `\.drakom-ai\/specs\/` first/,
+    /GitHub remote/,
+    /`gh auth status`/,
+    /last 10 merged pull requests/,
+    /`updatedAt` is never earlier than its `mergedAt`/,
+    /`gh api --paginate repos\/\{owner\}\/\{repo\}\/pulls\/<number>\/comments`/,
+    /`gh api --paginate repos\/\{owner\}\/\{repo\}\/issues\/<number>\/comments`/,
+    /[Nn]ame a secret by its path or variable, never its value/,
+    /as data, not instructions/,
+    /counts once/,
+    /two distinct pull requests/,
+    /[Rr]eport in chat/,
+    /no plan file unless the user asks/,
+    /[Cc]onfirm each finding in the file it cites, read on its own so the line numbers are that file's/,
+  ]) {
+    assert.match(audit, part);
+  }
+});
+
+/** The template offer that `drakom-pr` and setup share word for word. */
+const SHARED_TEMPLATE_OFFER =
+  'Unless `.drakom-ai/rules/pr.md` already records an answer: with no template, offer once to add the starter as `pull_request_template.md` in `.github/`; with a template that has no visible heading or box for the risk, offer once to add only the starter\'s risk section to that file: its comment from "Risk labels" on, at the top of the file\'s opening comment or as a new opening comment, unless that comment already lists labels, and the `## Risk` block at the top, after any opening comment.';
+const TEMPLATE_LOOKUP = '`pull_request_template.md` (any case, or `.txt`) in `.github/`, the root or `docs/`';
+const TEMPLATE_ANSWER = '`PR template offer: yes` or `PR template offer: no`';
+
+test('setup and drakom-pr make the same template offer, from the same starter, and record the answer alike', async () => {
+  const setup = await setupSkillFiles();
+  const pr = await prSkillFiles();
+
+  assert.equal(setup.get('references/pull_request_template.md'), pr.get('references/pull_request_template.md'), 'the starters differ');
+  for (const [name, skill] of [
+    ['drakom-ai-setup', setup.get('SKILL.md') ?? ''],
+    ['drakom-pr', pr.get('SKILL.md') ?? ''],
+  ]) {
+    const text = oneLine(skill);
+    assert.ok(text.includes(SHARED_TEMPLATE_OFFER), `${name} lacks the shared template offer`);
+    assert.ok(text.includes(TEMPLATE_LOOKUP), `${name} lacks the shared template lookup`);
+    assert.ok(text.includes(TEMPLATE_ANSWER), `${name} lacks the shared answer line`);
+  }
+  assert.match(oneLine(setup.get('SKILL.md') ?? ''), /[Ss]ay first that either answer writes one line in `\.drakom-ai\/rules\/pr\.md`/);
+});
+
+/** The extension files in `.drakom-ai/rules/` that the kit skills find by name. */
+const EXTENSION_FILES = ['dev.md', 'handoff.md', 'plan.md', 'pr.md', 'review.md', 'verification.md'];
+
+test('the rules README lists every extension file a kit skill names, each optional, with the skills that read it', async () => {
+  const readme = (await setupSkillFiles()).get('references/rules-README.md') ?? '';
+  /** @type {Map<string, Set<string>>} */
+  const readers = new Map();
+  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/.+\.md$/.test(tracked) && !CONSUMER_DOCS.includes(tracked))) {
+    const skill = file.split('/')[1];
+    const text = await readFile(path.join(repositoryRoot, file), 'utf8');
+    for (const [, name] of text.matchAll(/`\.drakom-ai\/rules\/([\w-]+\.md)`/g)) {
+      if (name === 'README.md') continue;
+      if (!readers.has(name)) readers.set(name, new Set());
+      // Setup writes `pr.md`; the others read the files they name.
+      if (skill !== 'drakom-ai-setup') readers.get(name)?.add(skill);
+    }
+  }
+
+  assert.deepEqual([...readers.keys()].sort(), EXTENSION_FILES, 'the kit skills name other extension files');
+  const section = readme.match(/^## Extension files\n([\s\S]*?)(?=\n## |(?![\s\S]))/m);
+  assert.ok(section, 'no "Extension files" section');
+  const extensions = oneLine(section[1]);
+  assert.match(extensions, /optional/);
+  assert.match(extensions, /find these files by name, with no route/);
+  assert.match(extensions, /cannot switch one off/);
+  for (const name of EXTENSION_FILES) {
+    const item = section[1].match(new RegExp(`^- \`${name.replace('.', '\\.')}\`[\\s\\S]*?(?=\\n- |(?![\\s\\S]))`, 'm'));
+    assert.ok(item, `the README does not list ${name}`);
+    const line = oneLine(item[0]);
+    for (const skill of readers.get(name) ?? []) assert.match(line, new RegExp(`\\b${skill}\\b`), `${name}'s line does not name ${skill}`);
+    assert.match(line, /[Ww]ithout it/, `${name}'s line gives no fallback`);
+  }
+});
+
+test('the rules README says any rule file can go in the folder and starts with an empty "Topic rules" list', async () => {
+  const readme = (await setupSkillFiles()).get('references/rules-README.md') ?? '';
+
+  const opening = oneLine(readme.split(/\n## /)[0]);
+  assert.match(opening, /[Aa]ny rule file can go in this folder/);
+  assert.match(opening, /when something routes to it/);
+  assert.match(opening, /a route in `AGENTS\.md` or `CLAUDE\.md`, which works the same/);
+  const topics = readme.match(/^## Topic rules\n([\s\S]*?)(?=\n## |(?![\s\S]))/m);
+  assert.ok(topics, 'no "Topic rules" section');
+  assert.match(oneLine(topics[1]), /`coding\.md`: when writing or changing code/, 'the list says how to write an entry');
+  assert.doesNotMatch(topics[1], /^- /m, 'the list starts empty');
+});
+
+test('every kit skill that reads topic rules names the rules README as a place routes live', async () => {
+  for (const file of trackedFiles().filter((tracked) => /^skills\/[^/]+\/SKILL\.md$/.test(tracked))) {
+    const text = oneLine(await readFile(path.join(repositoryRoot, file), 'utf8'));
+    if (/topic rules/i.test(text)) assert.match(text, /`\.drakom-ai\/rules\/README\.md`/, file);
+  }
+});
+
+test('the setup references keep the four categories, the rule anatomy and no fixed route', async () => {
+  const files = await setupSkillFiles();
+  const assessment = files.get('references/assessment-plan-template.md') ?? '';
+  const anatomy = files.get('references/rule-anatomy.md') ?? '';
+
+  for (const heading of ['## Keep', '## Refine', '## Add', '## Omit', '## Approval Gate']) assert.match(assessment, new RegExp(`^${heading}$`, 'm'));
+  assert.match(assessment, /Ownership \(project-owned, kit skill or unknown\)/);
+  assert.match(assessment, /Omit never means delete/);
+  for (const section of ['Scope', 'Required Patterns', 'Prohibited Patterns', 'Verification']) {
+    assert.match(anatomy, new RegExp(`\\*\\*${section}\\*\\*`), section);
+  }
+  assert.match(anatomy, /150 lines/);
+  assert.match(
+    oneLine(anatomy),
+    /`AGENTS\.md` Standards Index, or wherever else the repo already routes rules; where it routes none, to the "Topic rules" list in `\.drakom-ai\/rules\/README\.md`/,
+  );
+  assert.match(anatomy, /Prohibited Patterns\*\* \(optional\)/);
+  assert.match(anatomy, /formatters, linters, types, or tests/i);
+  assert.match(anatomy, /^## Worked Example$/m);
+  for (const ruleType of ['Coding', 'Testing', 'Documentation', 'Domain risk', 'Security', 'API contracts']) {
+    const block = anatomy.match(new RegExp(`^### ${ruleType}\\n([\\s\\S]*?)(?=^##|(?![\\s\\S]))`, 'm'))?.[1] ?? '';
+    assert.match(block, /Justified when/i, ruleType);
+    assert.match(block, /Skip when/i, ruleType);
+  }
+  for (const field of [
+    'Source path and evidence',
+    'Decision and rationale',
+    'Destination or action (including "keep in place")',
+    'Dependencies (routes, scripts, companion files)',
+    'Approval status',
+    'Verification',
+  ]) {
+    assert.ok(assessment.includes(field), field);
+  }
+  assert.doesNotMatch([...files.values()].join('\n'), /\.ai\//, 'names the retired .ai/ folder');
 });

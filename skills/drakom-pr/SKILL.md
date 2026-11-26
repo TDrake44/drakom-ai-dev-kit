@@ -32,10 +32,11 @@ alone, the word count, the questions before pushing or the hands-off rule.
    once to add the starter as `pull_request_template.md` in `.github/`; with a template that has no
    visible heading or box for the risk, offer once to add only the starter's risk section to that
    file: its comment from "Risk labels" on, at the top of the file's opening comment or as a new
-   opening comment, unless that comment already lists labels, and the `## Risk` block. On a yes,
-   write it; either way record the answer in one line of `.drakom-ai/rules/pr.md`, and commit what
-   you wrote, on its own, before the risk check. With no template and a no, the description still
-   follows the starter.
+   opening comment, unless that comment already lists labels, and the `## Risk` block at the top,
+   after any opening comment. On a yes, write it; either way record the answer in
+   `.drakom-ai/rules/pr.md` as one line, `PR template offer: yes` or `PR template offer: no`, and
+   commit what you wrote, on its own, before the risk check. With no template and a no, the
+   description still follows the starter.
 3. **Risk, from the diff alone.** When this conversation, or the prompt that started it, holds a
    risk result for the current head, use it and the model that ran it. Otherwise, once step 2's
    commit is made and before writing anything else, classify the diff on the cheap tier the repo's
@@ -47,10 +48,11 @@ alone, the word count, the questions before pushing or the hands-off rule.
 4. **Before pushing,** ask when the repo needs a review and none is known for the current head;
    when an acceptance criterion of the plan or request is not met and nothing records why; and when
    the diff passes about 1,000 changed lines with no reason given for not splitting it.
-5. **Description.** Follow the template, with the risk result, a `Not done: …, because …` line in
-   Reviewer focus for each criterion left out, and the manual checks. Count its words outside
-   comments against the budget its opening comment sets, else about 200, and cut to fit; a large
-   change may run over, with Reviewer focus kept short. The title follows the commit conventions.
+5. **Description.** Follow the template, with the risk result, at the top, after any opening
+   comment, when the template has no place for it; a `Not done: …, because …` line in Reviewer
+   focus for each criterion left out; and the manual checks. Count its words outside comments
+   against the budget its opening comment sets, else about 200, and cut to fit; a large change may
+   run over, with Reviewer focus kept short. The title follows the commit conventions.
 6. **Open.** Push the branch and run `gh pr create`, ready for review unless
    `.drakom-ai/rules/pr.md` asks for a draft.
 7. **Plan.** If there is a plan in `.drakom-ai/plans/` for this work, add `**Pull request:** <url>`

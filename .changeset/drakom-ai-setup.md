@@ -1,0 +1,9 @@
+---
+"@drakom/ai-dev-kit": minor
+---
+
+Reworks the `drakom-ai-setup` skill for installs with `npx skills add TDrake44/drakom-ai-dev-kit`, with no CLI. It starts by creating the missing scaffold in `.drakom-ai/`, which consists of `.gitignore`, `rules/README.md` and `specs/README.md`. It skips and reports writes through symlinks. The rules README says any rule file can go in `.drakom-ai/rules/`, keeps an empty "Topic rules" list for routing them, and describes the six optional extension files the skills find by name (`verification.md`, `review.md`, `plan.md`, `dev.md`, `pr.md` and `handoff.md`).
+
+Setup asks before applying its offers and never commits. It offers an `AGENTS.md`, a pointer line to the rules, `.worktreeinclude` so Claude Code copies the ignored plans and assets into new worktrees, the starter pull request template or its risk section, a route for each unrouted topic rule, the README's sections when an existing README lacks them, and changes based on facts it finds kept elsewhere. It records either template answer in `.drakom-ai/rules/pr.md` as `PR template offer: yes` or `PR template offer: no`. When it recommends adding or refining rules, it drafts an assessment plan in `.drakom-ai/plans/` before asking for approval. Setup names the repo's own skills that overlap a kit skill for you to settle. It names a secret by its path or variable, never its value.
+
+`drakom-ai-setup audit` gives a read-only report in chat on broken routes, duplicate or conflicting rules, rules tooling already enforces, and kinds of finding reviews repeated, from plans and specs and, on your yes, the last 10 merged pull requests. Setup offers it on later runs. `drakom-pr` now puts an added `## Risk` block, or the risk result when the template has no place for it, at the top after any opening comment, and records the template answer in the same format. Until 0.7.0, the copy of setup the CLI installs lacks the files the new skill reads.

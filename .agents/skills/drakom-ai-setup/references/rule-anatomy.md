@@ -51,7 +51,7 @@ These are common examples, not a required set. A project may need none of them, 
 
 ### API contracts
 
-- Justified when: the project publishes interfaces with compatibility promises, such as a public package, HTTP API, schema, or CLI surface.
+- Justified when: the project publishes interfaces with compatibility promises, such as a public package, HTTP API, schema, or command-line interface.
 - Skip when: every consumer lives in the same repository and changes atomically with the interface.
 
 ## Worked Example
@@ -77,4 +77,4 @@ Run:
     npm test
 ```
 
-After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index (creating the section outside the `drakom-ai:start`/`drakom-ai:end` managed block if it is missing, with approval) and verify every referenced path and command.
+After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index, or wherever else the repo already routes rules; where it routes none, to the "Topic rules" list in `.drakom-ai/rules/README.md` (with approval), and verify every referenced path and command.

@@ -67,8 +67,14 @@ npx skills update -g    # later, to update
 For one project (project level), run it in that project without `-g`. The CLI
 then keeps its copies and a `skills-lock.json` in the project.
 
-Until 0.7.0, `drakom-ai-setup` still expects the CLI above for `init`, `sync`
-and MCP, so use the Quick start for a full setup.
+`drakom-ai-setup` sets up `.drakom-ai/` itself, with no CLI. Install it with
+`npx skills add`: until 0.7.0, the copy the CLI installs lacks files it reads.
+
+Any rule file can go in `.drakom-ai/rules/`; the skills load it when `AGENTS.md`,
+`CLAUDE.md` or `.drakom-ai/rules/README.md` routes to it. Six names there are
+optional extension files the skills find on their own: `verification.md`,
+`review.md`, `plan.md`, `dev.md`, `pr.md` and `handoff.md`. The `rules/README.md`
+that setup writes says what each holds.
 
 ## Project layout
 
@@ -91,7 +97,7 @@ covers the full scaffold, ownership and worktree behavior.
 
 | Skill | When to use it |
 | --- | --- |
-| `drakom-ai-setup` | Assess a repository and propose project-specific rules and workflows for approval. |
+| `drakom-ai-setup` | Create the `.drakom-ai/` folders, offer an `AGENTS.md`, a pointer line, `.worktreeinclude` and a pull request template, each written only on a yes, and propose project-specific rules for approval. `audit` checks the existing rules and changes nothing unasked. |
 | `drakom-dev` | Build one pull request's worth of work from a plan or a request, test first, then run the repo's checks, re-read the diff and report. Installed with `npx skills add` only, not by the CLI. |
 | `drakom-handoff` | Write a prompt for a fresh session to pick up the next step, printed in the chat to copy. Installed with `npx skills add` only, not by the CLI. |
 | `drakom-plan` | Turn a request into a plan file before any code: an interview on the open decisions, each with a recommended answer (`quick` skips it), and an offer to split it into smaller plans when the work outgrows one pull request. The interview is adapted from Matt Pocock's [`grilling`](https://github.com/mattpocock/skills) skill (MIT). Installed with `npx skills add` only, not by the CLI. |
