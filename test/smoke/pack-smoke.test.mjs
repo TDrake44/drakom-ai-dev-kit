@@ -661,7 +661,7 @@ test('packed drakom-ai updates a prior-version fixture with genuinely older mana
     // Updated content matches the current payload, not old content.
     const newSkillContent = await readFile(path.join(consumer, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'), 'utf8');
     assert.notEqual(newSkillContent, oldSkillContent);
-    assert.match(newSkillContent, /languages, manifests, package managers/i);
+    assert.equal(newSkillContent, await readFile(path.join(repositoryRoot, 'skills', 'drakom-ai-setup', 'SKILL.md'), 'utf8'));
 
     // State updated to the current version with a new fingerprint.
     const updatedState = JSON.parse(await readFile(path.join(consumer, DRAKOM_DIR, 'state.json'), 'utf8'));

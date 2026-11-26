@@ -517,94 +517,20 @@ test('init --dry-run rejects missing targets without creating them', () => {
   assert.match(result.stderr, /Target path does not exist/);
 });
 
-test('packages a complete approval-gated setup workflow and assessment template', async () => {
+// What the setup skill and its references say is tested in test/kit-skills.test.mjs. These tests
+// check only that the CLI packages the files it installs, as they are in this checkout.
+test('packages the setup and plan-audit skills and the setup references the CLI installs', async () => {
   const payload = await loadPackagePayload();
-  const skill = payload.files.setupSkill;
-  const assessment = payload.files.assessmentTemplate;
   const sourceSetupSkill = await readCheckoutText(path.join(repositoryRoot, '.agents', 'skills', 'drakom-ai-setup', 'SKILL.md'));
   const sourcePlanAuditSkill = await readCheckoutText(path.join(repositoryRoot, '.agents', 'skills', 'drakom-plan-audit', 'SKILL.md'));
-
-  assert.equal(skill, sourceSetupSkill);
-  assert.equal(payload.files.planAuditSkill, sourcePlanAuditSkill);
-  assert.match(skill, /languages, manifests, package managers/i);
-  assert.match(skill, /keep.*refine.*add.*omit/is);
-  assert.match(skill, /stable policy.*rule/is);
-  assert.match(skill, /recurring multi-step workflow.*skill/is);
-  assert.match(skill, /explicit approval/i);
-  assert.match(skill, new RegExp(`${DRAKOM_DIR}/plans/`));
-  assert.match(skill, /drakom-ai sync/);
-  assert.match(skill, /verify.*path.*command.*reference/is);
-  assert.match(skill, /Do not assume.*custom rules.*skills/is);
-  assert.match(skill, new RegExp(`create.*${DRAKOM_DIR}/rules/`, 'is'));
-  assert.match(skill, /AGENTS\.md.*Standards Index/is);
-  assert.match(skill, /remove or revise.*stale.*route/is);
-  assert.match(skill, /not.*globally.*load/is);
-  assert.doesNotMatch(skill, /legacy|\.ai\//i);
-  assert.match(payload.manifest.files.planAuditSkill, /skills\/drakom-plan-audit\/SKILL\.md$/);
-  assert.match(assessment, /## Keep/);
-  assert.match(assessment, /## Refine/);
-  assert.match(assessment, /## Add/);
-  assert.match(assessment, /## Omit/);
-  assert.match(assessment, /## Approval Gate/);
-  assert.doesNotMatch(assessment, /legacy|\.ai\//i);
-});
-
-test('the setup skill and template require a per-source assessment matrix', async () => {
-  const payload = await loadPackagePayload();
-
-  for (const [name, text] of [
-    ['setupSkill', payload.files.setupSkill],
-    ['assessmentTemplate', payload.files.assessmentTemplate],
-  ]) {
-    assert.match(text, /source path and evidence/i, name);
-    assert.match(text, /kit-managed.*generated.*project-owned.*unmanaged.*unknown/is, name);
-    assert.match(text, /decision and rationale/i, name);
-    assert.match(text, /destination or action/i, name);
-    assert.match(text, /keep in place/i, name);
-    assert.match(text, /dependencies.*routes.*scripts.*companion files/is, name);
-    assert.match(text, /approval status/i, name);
-    assert.match(text, /verification/i, name);
-    assert.match(text, /Omit never means delete/i, name);
-    assert.doesNotMatch(text, /legacy|\.ai\//i, name);
-  }
-  assert.match(payload.files.setupSkill, new RegExp(`${DRAKOM_DIR}/plans/.*${DRAKOM_DIR}/specs/.*gitignore`, 'is'));
-});
-
-test('packages a rule anatomy reference that the setup skill routes to inside its own folder', async () => {
-  const payload = await loadPackagePayload();
-  const skill = payload.files.setupSkill;
-  const anatomy = payload.files.ruleAnatomy;
   const installedAnatomy = await readCheckoutText(path.join(repositoryRoot, ruleAnatomyTarget));
 
-  assert.equal(anatomy, installedAnatomy);
-  // The skill names its references as `references/<file>` and says where that folder is for each
-  // kind of install (see test/kit-skills.test.mjs).
-  const referencedPaths = [...skill.matchAll(/`(references\/[^`<]+)`/g)].map(([, rel]) => `skills/drakom-ai-setup/${rel}`);
-  assert.ok(referencedPaths.includes(ruleAnatomySource), 'setup skill must reference rule-anatomy.md');
-  for (const rel of referencedPaths) {
-    assert.ok(Object.values(payload.manifest.files).includes(rel), `${rel} is not packaged`);
-  }
-  assert.match(skill, /`\.agents\/skills\/drakom-ai-setup\/references\/`/);
-  const addSection = skill.slice(skill.indexOf('**Add:**'), skill.indexOf('**Omit:**'));
-  assert.match(addSection, /`references\/rule-anatomy\.md`/);
-  assert.match(skill, /Create each approved rule[^\n]*`references\/rule-anatomy\.md`/i);
-
-  for (const section of ['Scope', 'Required Patterns', 'Prohibited Patterns', 'Verification']) {
-    assert.match(anatomy, new RegExp(`\\*\\*${section}\\*\\*`), section);
-  }
-  assert.match(anatomy, /150 lines/);
-  assert.match(anatomy, /Prohibited Patterns\*\* \(optional\)/);
-  assert.match(anatomy, /real.*in this repository/i);
-  assert.match(anatomy, /reason/i);
-  assert.match(anatomy, /formatters, linters, types, or tests/i);
-  for (const ruleType of ['Coding', 'Testing', 'Documentation', 'Domain risk', 'Security', 'API contracts']) {
-    const heading = new RegExp(`^### ${ruleType}\\n([\\s\\S]*?)(?=^##|$(?![\\s\\S]))`, 'm');
-    const block = anatomy.match(heading)?.[1] ?? '';
-    assert.match(block, /Justified when/i, ruleType);
-    assert.match(block, /Skip when/i, ruleType);
-  }
-  assert.match(anatomy, /## Worked Example/);
-  assert.doesNotMatch(anatomy, /legacy|\.ai\//i);
+  assert.equal(payload.files.setupSkill, sourceSetupSkill);
+  assert.equal(payload.files.planAuditSkill, sourcePlanAuditSkill);
+  assert.equal(payload.files.ruleAnatomy, installedAnatomy);
+  assert.match(payload.manifest.files.planAuditSkill, /skills\/drakom-plan-audit\/SKILL\.md$/);
+  assert.match(payload.manifest.files.ruleAnatomy, new RegExp(`${ruleAnatomySource}$`));
+  assert.match(payload.files.assessmentTemplate, /## Approval Gate/);
 });
 
 test('fresh interactive init installs the rule anatomy reference and records it as managed', async () => {
@@ -644,18 +570,6 @@ test('a 0.3.0 install receives the rule anatomy reference through one sync', asy
   assert.equal(state.managedFiles[ruleAnatomyTarget].source, ruleAnatomySource);
   const cleanCheck = spawnSync(process.execPath, [cliPath, 'sync', root, '--check'], { encoding: 'utf8' });
   assert.equal(cleanCheck.status, 0, cleanCheck.stdout);
-});
-
-test('the setup skill suggests skills without writing them and never installs a fixed suite', async () => {
-  const skill = (await loadPackagePayload()).files.setupSkill;
-
-  const addSection = skill.slice(skill.indexOf('**Add:**'), skill.indexOf('**Omit:**'));
-  assert.match(addSection, /deserves a skill goes here as a suggestion only, with its name and a one-line purpose/i);
-  assert.match(addSection, /setup does not write skills/i);
-  assert.doesNotMatch(skill, /Create each approved skill/i);
-  assert.doesNotMatch(skill, /skill-author/i);
-  assert.match(skill, /never install a fixed skill suite/i);
-  assert.doesNotMatch(skill, /legacy|\.ai\//i);
 });
 
 test('the managed AGENTS.md block names the two kit skills and no removed one', () => {
