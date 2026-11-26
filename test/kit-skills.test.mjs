@@ -565,6 +565,82 @@ test('the plan skill writes the header plan-audit reads', async () => {
   }
 });
 
+const PLAN_AUDIT_DIR = 'skills/drakom-plan-audit';
+
+/** The plan-audit skill's SKILL.md, or an empty string when it is missing. */
+async function planAuditSkill() {
+  const file = `${PLAN_AUDIT_DIR}/SKILL.md`;
+  if (!trackedFiles().includes(file)) return '';
+  return (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+}
+
+test('the plan-audit skill is one short file', async () => {
+  const files = trackedFiles().filter((file) => file.startsWith(`${PLAN_AUDIT_DIR}/`));
+
+  assert.deepEqual(files, [`${PLAN_AUDIT_DIR}/SKILL.md`]);
+  const lines = (await planAuditSkill()).trimEnd().split('\n');
+  assert.ok(lines.length <= 40, `SKILL.md has ${lines.length} lines; keep it to 40`);
+});
+
+test('the plan-audit skill stands alone: it names no other skill file and only plan and spec folders', async () => {
+  const text = await planAuditSkill();
+
+  assert.ok(text.length > 0, 'the plan-audit skill is missing');
+  assert.doesNotMatch(text, /skills\/(?!drakom-plan-audit\b)[\w-]+\//, 'names a file in another skill folder');
+  assert.doesNotMatch(text, /\.(agents|claude)\/skills\//, 'names an installed skill folder');
+  const named = new Set(
+    [...text.matchAll(/`((?:\.[\w-]+\/)[^`\s]*|[A-Z]+\.md)`/g)].map(([, file]) => file).filter((file) => file !== 'SKILL.md'),
+  );
+  assert.deepEqual([...named].sort(), ['.drakom-ai/plans/', '.drakom-ai/specs/']);
+});
+
+test('the plan-audit skill acts as if no earlier kit version existed', async () => {
+  const text = await planAuditSkill();
+
+  assert.ok(text.length > 0, 'the plan-audit skill is missing');
+  for (const pattern of [/\bCLI\b/, /state\.json/, /drakom-ai sync/, /\b0\.6\.0\b/, /payload/i]) {
+    assert.doesNotMatch(text, pattern);
+  }
+});
+
+test('plan-audit reads the pull request line the pull request skill writes', async () => {
+  const audit = oneLine(await planAuditSkill());
+  const pr = oneLine((await prSkillFiles()).get('SKILL.md') ?? '');
+
+  for (const text of [audit, pr]) assert.ok(text.includes('`**Pull request:** <url>`'), text.slice(0, 80));
+});
+
+test('plan-audit checks a listed pull request with gh, and leaves a plan without the line as it was', async () => {
+  const text = oneLine(await planAuditSkill());
+
+  for (const part of [
+    /A plan without the line gets these checks unchanged and no `gh` call/,
+    /`gh pr view <url> --json state,mergedAt`/,
+    /[Oo]nly those lines count; ignore a pull request cited anywhere else/,
+    /propose Done, as `Done: merged in #<number> \(<date>\)`/,
+    /none is open/,
+    /Done plan with a listed pull request still open is a finding/,
+    /closed without merging, the plan is uncertain, so ask/,
+    /report that link as unchecked and finish the other checks; never infer its state from the plan's text/,
+  ]) {
+    assert.match(text, part);
+  }
+});
+
+test('plan-audit changes, deletes or moves a plan only on a yes', async () => {
+  const text = oneLine(await planAuditSkill());
+
+  for (const part of [
+    /report findings and proposed actions without deleting or editing/,
+    /On a yes to Done, change only the status line/,
+    /offer to delete each plan whose pull requests merged, or move it to `\.drakom-ai\/specs\/`; act only on a yes/,
+    /absence of an answer is not approval/,
+  ]) {
+    assert.match(text, part);
+  }
+  assert.doesNotMatch(text, /Do not promote plans into tracked specs/);
+});
+
 const PR_DIR = 'skills/drakom-pr';
 
 /**
