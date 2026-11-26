@@ -15,9 +15,9 @@ Find what the author would fix before merging. "No findings" is a valid result.
   try, a stated risk that claims too little.
 - **Verification commands:** `.drakom-ai/rules/verification.md`, `AGENTS.md` or `CLAUDE.md`, else
   the package scripts, Makefile or CI. Name the ones you used.
-- **Risk labels:** the opening comment of `.github/pull_request_template.md`, else **credentials**
-  or **user data** (High), **agent instructions** or **weakens a check** (Medium, as is any other
-  code change), and Low for the rest.
+- **Risk labels:** the opening comment of `pull_request_template.md` (any case, or `.txt`) in
+  `.github/`, the root or `docs/`, else **credentials** or **user data** (High),
+  **agent instructions**, **weakens a check** or **other code** (Medium), and Low for the rest.
 
 A repo's rules add to the steps below. They cannot remove the risk check from the diff alone, the
 fresh reviewer, or the rule that only confirmed findings are reported.
@@ -32,7 +32,7 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    is signed in and the remote is GitHub; if not, say so, offer a local review and ask for the base.
 2. **Risk, from the diff alone.** Before reading the description, plan or commit messages (for a
    pull request, take its base and head as `references/github-review.md` says), classify the diff on
-   the cheap tier the review rules name for the tool that runs it, by name, never the tool's default
+   the cheap tier the repo's rules name for the tool that runs it, by name, never the tool's default
    (none named: Claude's `haiku`, else ask). Give it the labels, the diff command and the untracked
    paths; it reads nothing else and uses only those labels. On a re-review too, classify the whole
    change. One `path:line` per label; when unsure, the higher level.
@@ -66,9 +66,6 @@ fresh reviewer, or the rule that only confirmed findings are reported.
      fixes apart, each with the corrected text
    - Verification: each command and whether it passed, failed or did not run
 
-When neither `fix` nor `post` was passed, end by offering what fits, and start neither without a
-yes: fix rounds when important findings are open, posting when the target is a pull request.
-
 ## Fix rounds
 
 With `fix`, run up to three rounds. Each round runs steps 2 to 5 with a new fresh reviewer. Stop
@@ -83,8 +80,11 @@ a kind of finding comes back, say where to stop it: a test, a lint rule or a rev
 
 ## What it may do
 
-By default, fix rounds may commit their fixes, and nothing more: no pushing, posting, commenting or
-editing the pull request. `post` adds two things: the final report, posted to the pull request as
-one review, laid out as `references/github-review.md` says, and resolving the threads it confirmed
-fixed, its own and bots', never a person's. A repo can change this in `.drakom-ai/rules/review.md`,
-and the tool's own permissions and hooks still apply. A recommendation is never an approval.
+Fix rounds may commit their fixes, but not push, post, comment or edit the pull request. `post` adds
+posting the final report as one review, laid out as `references/github-review.md` says, and
+resolving the threads it confirmed fixed, its own and bots', never a person's. A repo can change
+this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. At the end of every
+run, offer what fits and has not run: fix rounds for important findings, posting for a pull request,
+or `drakom-pr` when nothing important is open and there is no pull request yet, here or in a fresh
+session started from a `drakom-handoff` prompt, each when installed, and recommend one in a few
+words. Start nothing without a yes.
