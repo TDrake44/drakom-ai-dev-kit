@@ -7,7 +7,7 @@ don't render.
 
 Risk labels; name each that applies:
   consumer files: writes, overwrites or deletes files in a consumer's repo
-  what ships: `skills/**` or CI workflows
+  what ships: `skills/**`, release or CI workflows
   credentials: touches credential handling
   agent instructions: `AGENTS.md`, rules, skills
   weakens a check: changes or removes an existing test, lint rule or type check

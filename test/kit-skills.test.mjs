@@ -100,7 +100,7 @@ test('nothing of the retired CLI, payload or Changesets is tracked, nor in-repo 
 test('no kit skill file mentions an earlier kit version', async () => {
   for (const file of trackedFiles().filter((tracked) => tracked.startsWith('skills/'))) {
     const text = await readFile(path.join(repositoryRoot, file), 'utf8');
-    for (const pattern of [/\bCLI\b/, /\bsync\b/i, /state\.json/, /\b0\.6\.0\b/, /payload/i]) {
+    for (const pattern of [/\bCLI\b/, /\bsync\b/i, /\bdrakom-ai\s+init\b/i, /@drakom\/ai-dev-kit\b/, /state\.json/, /\b0\.6\.0\b/, /payload/i]) {
       assert.doesNotMatch(text, pattern, `${file} matches ${pattern}`);
     }
   }
