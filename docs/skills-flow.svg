@@ -198,7 +198,7 @@
 <rect x="148" y="734" width="326" height="60" rx="8" fill="#0f3d3e" stroke="#2dd4bf" stroke-width="1.5" stroke-dasharray="5 4"/>
   <text x="311.0" y="751.5" text-anchor="middle" class="box-title" fill="#e6fffb">Blind risk</text>
   <text x="311.0" y="768.5" text-anchor="middle" class="box-sub" fill="#99f6e4">cheap tier · reads diff only</text>
-  <text x="311.0" y="783.5" text-anchor="middle" class="box-sub" fill="#99f6e4">reused if review already ran on HEAD</text>
+  <text x="311.0" y="783.5" text-anchor="middle" class="box-sub" fill="#99f6e4">reused if this session holds a risk result for HEAD</text>
 <rect x="566" y="730" width="296" height="68" rx="8" fill="#252b63" stroke="#818cf8" stroke-width="1.5"/>
   <text x="714.0" y="751.5" text-anchor="middle" class="mono-title" fill="#eef2ff">drakom-pr</text>
   <text x="714.0" y="768.5" text-anchor="middle" class="box-sub" fill="#c7d2fe">checks criteria &amp; size · fills PR template</text>
