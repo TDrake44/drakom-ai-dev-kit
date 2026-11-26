@@ -13,7 +13,7 @@ Run this once in each repo that used `drakom-ai init` or `sync`. The kit wrote i
 1. The kit's skills, `drakom-ai-setup`, `drakom-plan-audit` and any `drakom-skill-author`, under `.agents/skills/` and `.claude/skills/`. Generated Claude copies of your own skills carry a `GENERATED MIRROR` comment and no longer update: delete them, or remove the comment and keep them by hand.
 2. The `<!-- drakom-ai:start -->` … `<!-- drakom-ai:end -->` block in `AGENTS.md`.
 3. `drakom-ai` and `npx @drakom/ai-dev-kit` commands in CI and `package.json` scripts, such as `drakom-ai sync --check`, and `@drakom/ai-dev-kit` in `devDependencies`.
-4. `.drakom-ai/mcp-servers.yaml` and the servers the kit wrote into `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json` and the `# BEGIN Drakom AI Development Context MCP servers` block in `.codex/config.toml`. Keep a whole Codex server table, including keys after the block's end marker, wherever it holds a setting of yours: TOML gives those keys to the table above them.
+4. `.drakom-ai/mcp-servers.yaml` and the servers the kit wrote into `.mcp.json`, `.vscode/mcp.json`, `.agents/mcp_config.json` and the `# BEGIN Drakom AI Development Context MCP servers` block in `.codex/config.toml`. Keep the complete definition of any Codex server that holds a setting of yours, its main table and every subtable: a key after the block's end marker still belongs to the table above it.
 5. `.drakom-ai/state.json`, last.
 
 Review `git diff` before you commit, then install the skills with `npx skills add TDrake44/drakom-ai-dev-kit -g`. Keep `.drakom-ai/rules/`, `.drakom-ai/plans/`, `.drakom-ai/specs/`, `.drakom-ai/assets/` and any `@AGENTS.md` line in `CLAUDE.md`, and run `/drakom-ai-setup` afterwards to add what the skills now expect.
