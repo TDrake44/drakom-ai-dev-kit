@@ -1,6 +1,6 @@
 ---
 name: drakom-review
-description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes, and `post` to post the report to the pull request as one review.
+description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes, more only for nits you choose to fix, and `post` to post the report to the pull request as one review.
 ---
 
 # Review

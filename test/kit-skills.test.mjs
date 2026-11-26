@@ -883,6 +883,26 @@ test('the review skill asks about open nits before offering a pull request, and 
   }
 });
 
+test('every summary of drakom-review fix that caps the rounds at three names the nit exception', async () => {
+  const read = async (/** @type {string} */ file) => (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
+  const summaries = new Map([
+    ['the skill frontmatter', String((await readFrontmatter('skills/drakom-review/SKILL.md')).description)],
+    ['README.md', (await read('README.md')).split('\n').find((line) => line.startsWith('| `drakom-review` |')) ?? ''],
+    ['AGENTS.md', (await read('AGENTS.md')).split('\n').find((line) => line.startsWith('| `/drakom-review` |')) ?? ''],
+    ['.changeset/drakom-review.md', await read('.changeset/drakom-review.md')],
+  ]);
+
+  for (const [where, text] of summaries) {
+    assert.match(text, /up to three/, `${where} no longer summarizes drakom-review fix`);
+    for (const [cap] of text.matchAll(/up to three[^,.]*/g)) {
+      assert.ok(
+        text.includes(`${cap}, more only for nits you choose to fix`),
+        `${where} says "${cap}" without the nit exception`,
+      );
+    }
+  }
+});
+
 const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;
 
 test('every kit skill that names .drakom-ai/.gitignore carries the same setup step', async () => {
