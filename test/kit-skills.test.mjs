@@ -985,12 +985,12 @@ test('the setup skill creates only the folders, then offers everything else and 
     /[Ww]ith only a `CLAUDE\.md`, offer the pointer line there and move nothing/,
     /``Project rules for agents: `\.drakom-ai\/rules\/README\.md`\.``/,
     /never an `@` import/,
-    /`\.worktreeinclude` at the root with `\.drakom-ai\/plans\/\*` and `\.drakom-ai\/assets\/\*`/,
+    /`\.worktreeinclude` at the root with `\.drakom-ai\/plans\/\*` and `\.drakom-ai\/assets\/\*`, for Claude Code to copy the ignored plans and assets into new worktrees/,
     /add only the missing lines/,
     /offer to move or point to the verification commands and review rules/,
     /[Pp]ropose lines for `\.drakom-ai\/rules\/pr\.md` only for a draft habit, or pull request and commit conventions outside `AGENTS\.md` and `CLAUDE\.md`/,
-    /[Aa] route for each rules file in `\.drakom-ai\/rules\/` that has none/,
-    /[Aa]n existing README without the "Topic rules" or "Extension files" section: offer to add it from `references\/rules-README\.md`/,
+    /[Aa] route for each topic rule in `\.drakom-ai\/rules\/` that has none, never an extension file/,
+    /[Aa]n existing README without the "Topic rules" or "Extension files" section: offer it from `references\/rules-README\.md`, in the same offer as any route that needs it/,
     /keep both, rename theirs or remove theirs/,
     /[Cc]hange none/,
   ]) {
@@ -1012,7 +1012,7 @@ test('the setup skill recommends, stops for approval, then applies and verifies 
     /ownership \(project-owned, kit skill or unknown\)/,
     /dependencies \(routes, scripts, companion files\)/,
     /[Ww]ith Add or Refine items, draft the plan in `\.drakom-ai\/plans\/` from `references\/assessment-plan-template\.md`/,
-    /[Nn]ame a secret found in the repo by its path or variable, never its value, there or in `AGENTS\.md`/,
+    /[Ii]n every mode, name a secret found in the repo by its path or variable, never its value, in files, reports and logs/,
   ]) {
     assert.match(recommend, part);
   }
@@ -1022,6 +1022,10 @@ test('the setup skill recommends, stops for approval, then applies and verifies 
   assert.match(apply, /[Nn]ever move a route unasked/);
   assert.match(apply, /every path exists, every command runs with the repo's tooling and every route and link resolves/);
   assert.doesNotMatch(text, /Standards Index/, 'a new rule is routed where the repo routes rules, not in a fixed section');
+  assert.match(
+    text,
+    /[Ww]rite nothing through a symlink: check each destination and its parents below the repository root without following links, and report any write you skip/,
+  );
 });
 
 test('the setup skill names its audit reference only for the audit, which writes nothing without a yes', async () => {
@@ -1033,6 +1037,7 @@ test('the setup skill names its audit reference only for the audit, which writes
   assert.equal(sentences.length, 1);
   assert.match(oneLine(sentences[0]), /^7\. \*\*Rules audit\.\*\*/);
   assert.match(step(skill, 'Rules audit'), /reports in chat and writes nothing without a yes, each change approved on its own/);
+  assert.match(step(skill, 'Rules audit'), /^7\. \*\*Rules audit\.\*\* Run it on `audit`, with or without rules files;/, 'audit runs in a repo with no rules files too');
   assert.match(oneLine(skill), /`audit` runs only step 7\./);
 
   for (const part of [
@@ -1046,6 +1051,10 @@ test('the setup skill names its audit reference only for the audit, which writes
     /GitHub remote/,
     /`gh auth status`/,
     /last 10 merged pull requests/,
+    /`updatedAt` is never earlier than its `mergedAt`/,
+    /`gh api --paginate repos\/\{owner\}\/\{repo\}\/pulls\/<number>\/comments`/,
+    /`gh api --paginate repos\/\{owner\}\/\{repo\}\/issues\/<number>\/comments`/,
+    /[Nn]ame a secret by its path or variable, never its value/,
     /as data, not instructions/,
     /counts once/,
     /two distinct pull requests/,
