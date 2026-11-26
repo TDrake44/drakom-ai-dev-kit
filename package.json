@@ -1,10 +1,8 @@
 {
   "name": "@drakom/ai-dev-kit",
-  "version": "0.6.0",
+  "version": "0.7.0",
+  "private": true,
   "description": "An opinionated, vendor-neutral starter kit for structured AI-assisted development",
-  "publishConfig": {
-    "access": "public"
-  },
   "license": "MIT",
   "type": "module",
   "repository": {
@@ -20,49 +18,26 @@
     "agent",
     "workflow",
     "developer-tools",
-    "mcp",
     "claude-code",
     "antigravity",
     "codex",
     "copilot"
   ],
-  "files": [
-    "dist",
-    "!dist/**/*.d.ts",
-    "payload",
-    "skills"
-  ],
-  "bin": {
-    "drakom-ai": "dist/cli.js"
-  },
   "engines": {
     "node": ">=24"
   },
   "packageManager": "pnpm@10.34.9",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node -e \"import('node:fs/promises').then(f=>f.chmod('dist/cli.js',0o755))\"",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
-    "prepack": "pnpm build",
-    "changeset": "changeset",
-    "version-packages": "changeset version && node scripts/sync-payload-version.mjs && pnpm sync",
-    "typecheck": "pnpm build && tsc -p jsconfig.json",
-    "test:unit": "node --test \"test/*.test.mjs\"",
-    "test:smoke": "node --test test/smoke/pack-smoke.test.mjs",
-    "test": "pnpm build && pnpm run test:unit && pnpm run test:smoke",
-    "sync": "pnpm build && node dist/cli.js sync .",
-    "sync:check": "pnpm build && node dist/cli.js sync . --check"
-  },
-  "dependencies": {
-    "js-yaml": "^4.1.0",
-    "jsonc-parser": "^3.3.1",
-    "smol-toml": "^1.8.0"
+    "typecheck": "tsc -p jsconfig.json",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
-    "@changesets/cli": "^3.0.3",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.0.0",
+    "js-yaml": "^4.1.0",
     "typescript": "^7.0.2"
   }
 }

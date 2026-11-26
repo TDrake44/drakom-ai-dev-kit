@@ -1,5 +1,4 @@
 node_modules/
-dist/
 
 # Local AI scratchpads and working assets
 .drakom-ai/plans/*

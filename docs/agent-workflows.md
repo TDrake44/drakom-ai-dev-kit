@@ -2,96 +2,80 @@
 
 [Back to README](../README.md)
 
-Paths below refer to the target project. Use the setup skill to review project-specific changes before applying them.
+Paths below refer to your project. The kit's skills are installed with
+`npx skills add TDrake44/drakom-ai-dev-kit`, at user level (`-g`) or project
+level, where the `skills` CLI keeps its copies and a `skills-lock.json` in your
+repository. The context below is yours to edit.
 
-## What `init` Creates
+## The `.drakom-ai/` layout
 
-For a fresh repository, `drakom-ai init .` creates:
+`/drakom-ai-setup` (`$drakom-ai-setup` in Codex) writes the missing
+`.drakom-ai/.gitignore`, `rules/README.md` and `specs/README.md`, then offers the
+rest, writing each of those only on your yes:
 
 ```text
 .drakom-ai/
-├── .gitignore
-├── mcp-servers.yaml              # omitted with --skip-mcp
-├── state.json
-├── assets/                       # ignored, initially empty
-├── plans/                        # ignored, initially empty
+├── .gitignore          # ignores plans/ and assets/
+├── assets/             # local, ignored; made when first used
+├── plans/              # local, ignored; made when first used
 ├── rules/
-│   └── README.md                 # explains project-specific rules
+│   └── README.md       # topic rules and the extension files
 └── specs/
-    └── README.md                 # explains tracked architecture specifications
+    └── README.md       # tracked specifications
 
-.agents/
-└── skills/
-    ├── drakom-ai-setup/
-    │   ├── SKILL.md
-    │   └── references/
-    │       ├── assessment-plan-template.md
-    │       └── rule-anatomy.md
-    └── drakom-plan-audit/
-        └── SKILL.md
-
-.claude/
-└── skills/                       # generated SKILL.md-only mirrors for Claude Code
-    ├── drakom-ai-setup/SKILL.md
-    └── drakom-plan-audit/SKILL.md
-
-AGENTS.md
-CLAUDE.md
-.worktreeinclude
+AGENTS.md               # offered when missing
+CLAUDE.md               # left as it is when it already links to AGENTS.md
+.worktreeinclude        # offered
 ```
 
-`init` refuses to replace a hand-authored `.claude/skills/` entry that shares a
-kit skill's name; it reports a conflict and makes no changes. `init` mirrors only
-the kit's skills. Run `drakom-ai sync .` to mirror skills your project already
-has in `.agents/skills/`.
-
-`init` does not create generic `coding.md`, `testing.md`, or other policy files. Those are project-owned decisions: `/drakom-ai-setup` recommends them only when repository evidence supports them and the project owner approves.
-
-### Core Structure & Workflow Roles
-
-| Directory / File | Tracking | Role in Workflow |
+| Path | Tracking | Role |
 | --- | --- | --- |
-| `.drakom-ai/plans/` | Local (gitignored) | Scratchpad planning for agent task breakdowns, checklists, and TDD loops before writing code. |
-| `.drakom-ai/specs/` | Tracked (git) | Architecture specifications and RFCs elevated for team review and multi-session continuity. |
-| `.drakom-ai/rules/` | Tracked (git) | Modular coding and testing standards loaded on-demand via `AGENTS.md` (preventing context bloat). |
-| `.drakom-ai/assets/` | Local (gitignored) | Screenshots, mockups, or error logs referenced by agents during tasks. |
-| `.agents/skills/` | Tracked (git) | Canonical, portable agent task procedures mirrored to `.claude/skills/` via `sync`. |
-| `AGENTS.md` / `CLAUDE.md` | Tracked (git) | Front-door context hub and task router across all supported AI assistants. |
-| `.worktreeinclude` | Tracked (git) | Preserves local gitignored AI context (`.drakom-ai/plans/*`, `.drakom-ai/assets/*`) across git worktrees. |
+| `.drakom-ai/plans/` | Local (gitignored) | Plans written by `drakom-plan` and worked from by `drakom-dev`, before and while code is written. |
+| `.drakom-ai/specs/` | Tracked | Specifications and decisions elevated for review by others or for continuity across sessions. |
+| `.drakom-ai/rules/` | Tracked | Project-owned rules, loaded only for the tasks they are routed to. |
+| `.drakom-ai/assets/` | Local (gitignored) | Screenshots, mockups or logs an agent reads during a task. |
+| `AGENTS.md` / `CLAUDE.md` | Tracked | The front door: routes each task to the rules it needs. |
+| `.worktreeinclude` | Tracked | Copies the ignored plans and assets into new worktrees. |
 
-## How Rules and Skills Evolve
+Setup does not create generic `coding.md` or `testing.md` rules. It proposes a
+rule only when repository evidence supports it, and writes it only after you
+approve.
 
-`AGENTS.md` is the front door. It should route a task to only the rules needed
-for that task; it is not a place to paste every project policy. `CLAUDE.md`
-imports that shared router so the two entry points stay aligned.
+## Rules and extension files
 
-When a project needs to add, revise, rename, or retire a rule, run the setup
-skill (`/drakom-ai-setup` or `$drakom-ai-setup`). After approval, it:
+`AGENTS.md` should route a task to only the rules that task needs, not hold every
+project policy. A rule file in `.drakom-ai/rules/` is loaded when `AGENTS.md`,
+`CLAUDE.md` or the "Topic rules" list in `.drakom-ai/rules/README.md` routes to
+it.
 
-1. Creates the rule under `.drakom-ai/rules/`, following the anatomy and size
-   budget in `.agents/skills/drakom-ai-setup/references/rule-anatomy.md`.
-2. Adds a task-based link to the `AGENTS.md` Standards Index.
-3. Revises stale routes when a rule is renamed or superseded.
-4. Verifies links, commands, and relevant project checks.
+Six names in `.drakom-ai/rules/` are optional extension files the skills find by
+name, with no route. Each adds to a skill's steps and cannot switch one off:
 
-Skills are procedures rather than policy. Author them in `.agents/skills/`; run
-`drakom-ai sync .` to generate their Claude Code mirrors. The setup skill may
-suggest a skill for a recurring workflow, with its name and a one-line purpose,
-but it does not write skills.
+| File | Read by | Holds |
+| --- | --- | --- |
+| `verification.md` | `drakom-dev`, `drakom-review`, `drakom-pr` | Commands to run before work counts as done, and manual checks. |
+| `review.md` | `drakom-review`, `drakom-dev`, `drakom-pr` | What a review checks, and the cheap model tier for the blind risk check. |
+| `plan.md` | `drakom-plan` | Steps a repo adds to planning. |
+| `dev.md` | `drakom-dev` | Steps a repo adds to building a change. |
+| `pr.md` | `drakom-pr` | Pull request habits, and the answer to the template offer. |
+| `handoff.md` | `drakom-handoff` | What a handoff prompt adds. |
 
-A project may add, replace, or remove its own rules and skills—the kit does not
-claim ownership of them. Kit-managed skills use the `drakom-` prefix
-(`drakom-ai-setup`, `drakom-plan-audit`); projects should not name their own skills with that prefix, to avoid colliding with skills the
-kit may add in the future.
+Without them, the skills use the commands and conventions in `AGENTS.md` or
+`CLAUDE.md`, then their own defaults. To add, revise or retire a rule, run
+`/drakom-ai-setup`; `/drakom-ai-setup audit` reports broken routes and duplicate
+or conflicting rules without changing anything.
 
-## Git Worktrees and Parallel Sessions (`.worktreeinclude`)
+Your own skills stay yours. Don't name them with the `drakom-` prefix, which the
+kit's skills use.
 
-When running parallel AI assistant sessions (e.g. `claude --worktree`, Codex-managed worktrees in the ChatGPT desktop app, or branch-isolated workspaces), Git only checks out tracked files. Because `.drakom-ai/plans/` and `.drakom-ai/assets/` are gitignored to keep scratchpad work local, fresh worktrees naturally start without that active context.
+## Worktrees and parallel sessions (`.worktreeinclude`)
 
-`drakom-ai init` scaffolds a project-owned `.worktreeinclude` file at the repository root:
+Git checks out only tracked files, so a fresh worktree starts without the
+ignored `.drakom-ai/plans/` and `.drakom-ai/assets/`. The `.worktreeinclude` that
+setup offers lists `.drakom-ai/plans/*` and `.drakom-ai/assets/*`:
 
-- **Native Tool Support**: Recognized natively by **Claude Code** and by Codex-managed worktrees in the **ChatGPT desktop app** (not worktrees you create yourself with Git on the command line) to automatically copy specified gitignored files into newly created worktree directories.
-- **Cross-Tool Standard**: Acts as the standard manifest for Git worktree helper utilities (like `git-worktreeinclude`), and custom checkout hooks.
-- **Customizable & Project-Owned**: Pre-seeded with `.drakom-ai/plans/*` and `.drakom-ai/assets/*`. You can freely add other untracked files (such as `.env` or local databases) without triggering Drakom AI Dev Kit drift warnings.
-
-See [synchronization and ownership](sync.md) for which files the kit manages.
+- **Claude Code** reads it for worktrees it creates (`claude --worktree`) and
+  copies the listed ignored files into them. So do Codex-managed worktrees in the
+  ChatGPT desktop app, but not worktrees you create yourself with `git worktree`.
+- Other worktree helpers, such as `git-worktreeinclude`, use the same file.
+- Add other ignored files you want in every worktree, such as `.env`.

@@ -2,8 +2,8 @@
 
 ## Supported Versions
 
-Security fixes are provided for the latest published version of
-`@drakom/ai-dev-kit`.
+Security fixes are provided for the latest release of this repository's
+skills, on its `main` branch.
 
 ## Reporting a Vulnerability
 

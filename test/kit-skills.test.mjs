@@ -13,9 +13,6 @@ const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url))
 /** The skills `npx skills add TDrake44/drakom-ai-dev-kit` should offer. */
 const OFFERED_SKILLS = ['drakom-ai-setup', 'drakom-dev', 'drakom-handoff', 'drakom-plan', 'drakom-plan-audit', 'drakom-pr', 'drakom-review'];
 
-/** The kit skills the 0.6.0 CLI installs from `payload.json`. The others install with `npx skills add` only. */
-const PAYLOAD_SKILLS = ['drakom-ai-setup', 'drakom-plan-audit'];
-
 /** Files Git tracks, which is what an install from GitHub sees. */
 function trackedFiles() {
   const result = spawnSync('git', ['ls-files', '-z'], { cwd: repositoryRoot, encoding: 'utf8' });
@@ -89,38 +86,22 @@ test('every kit skill under skills/ is named after its folder', async () => {
   }
 });
 
-/** Setup references that install with `npx skills add` only; the CLI's payload predates them. */
-const NPX_ONLY_FILES = ['pull_request_template.md', 'rules-README.md', 'rules-audit.md', 'specs-README.md'].map(
-  (file) => `skills/drakom-ai-setup/references/${file}`,
-);
-
-test('the payload manifest lists every file of the CLI-installed skills but the npx-only references, and no other skill', async () => {
-  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'payload', 'v1', 'payload.json'), 'utf8'));
-  const manifestSkillFiles = Object.values(manifest.files)
-    .filter((source) => source.startsWith('skills/'))
-    .sort();
-  const payloadSkillFiles = trackedFiles()
-    .filter((file) => PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)) && !NPX_ONLY_FILES.includes(file))
-    .sort();
-
-  assert.deepEqual(manifestSkillFiles, payloadSkillFiles);
-  for (const file of NPX_ONLY_FILES) assert.ok(trackedFiles().includes(file), `${file} is not shipped`);
-  assert.equal(
-    trackedFiles().some((file) => file.startsWith('payload/v1/skills/')),
-    false,
-    'kit skills must live in skills/, not payload/v1/skills/',
-  );
+test('nothing of the retired CLI, payload or Changesets is tracked, nor in-repo copies of the kit skills', () => {
+  const tracked = trackedFiles();
+  for (const folder of ['src/', 'payload/', '.changeset/', '.agents/skills/', '.claude/skills/']) {
+    assert.deepEqual(
+      tracked.filter((file) => file.startsWith(folder)),
+      [],
+      `${folder} retired with the CLI; the kit skills live in skills/ only`,
+    );
+  }
 });
 
-test('this repository\'s retired workflow skills are gone', () => {
-  const tracked = trackedFiles();
-  for (const folder of ['.agents/skills', '.claude/skills']) {
-    for (const retired of ['plan', 'dev', 'document']) {
-      assert.equal(
-        tracked.some((file) => file.startsWith(`${folder}/${retired}/`)),
-        false,
-        `${folder}/${retired} retired with the drakom-* skills`,
-      );
+test('no kit skill file mentions an earlier kit version', async () => {
+  for (const file of trackedFiles().filter((tracked) => tracked.startsWith('skills/'))) {
+    const text = await readFile(path.join(repositoryRoot, file), 'utf8');
+    for (const pattern of [/\bCLI\b/, /\bsync\b/i, /\bdrakom-ai\s+init\b/i, /@drakom\/ai-dev-kit\b/, /state\.json/, /\b0\.6\.0\b/, /payload/i]) {
+      assert.doesNotMatch(text, pattern, `${file} matches ${pattern}`);
     }
   }
 });
@@ -133,18 +114,17 @@ test('every skill in the AGENTS.md skill table exists', async () => {
   assert.ok(names.length > 0, 'no skills in the table');
   const tracked = trackedFiles();
   for (const name of names) {
-    assert.ok(
-      tracked.includes(`skills/${name}/SKILL.md`) || tracked.includes(`.agents/skills/${name}/SKILL.md`),
-      `AGENTS.md lists ${name}, which is not a skill here`,
-    );
+    assert.ok(tracked.includes(`skills/${name}/SKILL.md`), `AGENTS.md lists ${name}, which is not a skill here`);
   }
+  assert.deepEqual([...names].sort(), OFFERED_SKILLS, 'AGENTS.md lists every kit skill');
 });
 
 test('AGENTS.md says how to run one test file', async () => {
   const agents = (await readFile(path.join(repositoryRoot, 'AGENTS.md'), 'utf8')).replaceAll('\r\n', '\n');
   const section = agents.match(/## 3\. Key Verification Commands\n([\s\S]*?)(?=\n## )/);
   assert.ok(section, 'no Key Verification Commands section');
-  assert.match(section[1], /`pnpm build && node --test <file>`/);
+  assert.match(section[1], /`node --test <file>`/);
+  assert.doesNotMatch(section[1], /pnpm build/);
 });
 
 const REVIEW_DIR = 'skills/drakom-review';
@@ -883,7 +863,6 @@ test('the review skill asks about open nits before offering a pull request, and 
   }
 });
 
-// Pending changesets are left out: `changeset version` deletes them on release.
 test('every summary of drakom-review fix that caps the rounds at three names the nit exception', async () => {
   const read = async (/** @type {string} */ file) => (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
   const summaries = new Map([
