@@ -26,6 +26,7 @@ instructions.
 
 ## Report
 
+Confirm each finding in the file it cites, read on its own so the line numbers are that file's.
 Group the findings by check. Give each one the file and line, the evidence, and the change
 proposed: a route to add or fix, a duplicate to merge, a rule to drop because tooling enforces it,
 or a new rule drafted from `rule-anatomy.md` beside this file. Say which checks found nothing, and

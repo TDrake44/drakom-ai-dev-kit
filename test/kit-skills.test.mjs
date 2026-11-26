@@ -1046,6 +1046,7 @@ test('the setup skill names its audit reference only for the audit, which writes
     /two distinct pull requests/,
     /[Rr]eport in chat/,
     /no plan file unless the user asks/,
+    /[Cc]onfirm each finding in the file it cites, read on its own so the line numbers are that file's/,
   ]) {
     assert.match(audit, part);
   }
