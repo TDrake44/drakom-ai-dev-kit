@@ -873,7 +873,7 @@ test('the review skill asks about open nits before offering a pull request, and 
   const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
 
   for (const part of [
-    'Before offering to open a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as important, even after round 3.',
+    'Before offering to open a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as important, even past round 3: run a round.',
     '"No findings" is a valid result',
     'Nits and bugs the change did not introduce are listed, not fixed',
     'A repo can change this in `.drakom-ai/rules/review.md`',

@@ -84,7 +84,7 @@ posting the final report as one review, laid out as `references/github-review.md
 resolving the threads it confirmed fixed, its own and bots', never a person's. A repo can change
 this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. Before offering to open
 a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as
-important, even after round 3. At the end of every run, offer what fits and has not run: fix rounds
-for important findings, posting for a pull request, or `drakom-pr` when nothing important is open
-and there is no pull request yet, here or in a fresh session started from a `drakom-handoff` prompt,
-each when installed, and recommend one in a few words. Start nothing without a yes.
+important, even past round 3: run a round. At the end of every run, offer what fits and has not run:
+fix rounds for important findings, posting for a pull request, or `drakom-pr` when nothing important
+is open and there is no pull request yet, here or in a fresh session started from a `drakom-handoff`
+prompt, each when installed, and recommend one in a few words. Start nothing without a yes.
