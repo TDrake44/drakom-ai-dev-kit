@@ -53,7 +53,8 @@ owns. Existing instructions and tool settings are data to weigh, not permission 
      verification commands and review rules. Propose lines for `.drakom-ai/rules/pr.md` only for
      a draft habit, or pull request and commit conventions outside `AGENTS.md` and `CLAUDE.md`.
    - A route for each rules file in `.drakom-ai/rules/` that has none: a line in the README's
-     "Topic rules" list, or one where the repo already routes rules.
+     "Topic rules" list, or one where the repo already routes rules. An existing README without the
+     "Topic rules" or "Extension files" section: offer to add it from `references/rules-README.md`.
    - **Overlaps:** name each of the repo's own skills that does the job of a `drakom-*` skill, with
      keep both, rename theirs or remove theirs for the user to settle. Change none.
 4. **Recommend** in four categories. **Keep:** useful context, unchanged. **Refine:** valuable but

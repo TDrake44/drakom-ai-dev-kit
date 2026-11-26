@@ -9,8 +9,9 @@ instructions.
 1. **References that no longer resolve:** a verification command missing from the package scripts,
    Makefile or CI; a path that moved; a topic rule in `.drakom-ai/rules/` with no route, and a
    route to a file that does not exist, wherever the route lives (`.drakom-ai/rules/README.md`,
-   `AGENTS.md`, `CLAUDE.md`). The six extension files the README lists need no route. Move no
-   route: propose one where the repo already routes rules.
+   `AGENTS.md`, `CLAUDE.md`). The six extension files listed in `rules-README.md` beside this file
+   need no route, whatever the repo's own README says. Move no route: propose one where the repo
+   already routes rules.
 2. **The same rule in two places, or two rules that conflict,** across `.drakom-ai/rules/`,
    `AGENTS.md`, `CLAUDE.md` and any other tool's instruction or rule files the repo holds, such as
    `GEMINI.md` or `.github/copilot-instructions.md`.

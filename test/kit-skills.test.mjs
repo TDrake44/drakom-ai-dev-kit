@@ -89,22 +89,24 @@ test('every kit skill under skills/ is named after its folder', async () => {
   }
 });
 
-test('the payload manifest lists only files of the CLI-installed skills, each one tracked', async () => {
-  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'payload', 'v1', 'payload.json'), 'utf8'));
-  const manifestSkillFiles = Object.values(manifest.files).filter((source) => source.startsWith('skills/'));
-  const tracked = trackedFiles();
+/** Setup references that install with `npx skills add` only; the CLI's payload predates them. */
+const NPX_ONLY_FILES = ['pull_request_template.md', 'rules-README.md', 'rules-audit.md', 'specs-README.md'].map(
+  (file) => `skills/drakom-ai-setup/references/${file}`,
+);
 
-  // Until the CLI goes, it installs these files and no others; setup's newer references install
-  // with `npx skills add` only.
-  for (const file of manifestSkillFiles) {
-    assert.ok(tracked.includes(file), `${file} is in the manifest but not tracked`);
-    assert.ok(PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)), `${file} is not a CLI-installed skill`);
-  }
-  for (const name of PAYLOAD_SKILLS) {
-    assert.ok(manifestSkillFiles.includes(`skills/${name}/SKILL.md`), `the manifest lacks ${name}`);
-  }
+test('the payload manifest lists every file of the CLI-installed skills but the npx-only references, and no other skill', async () => {
+  const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'payload', 'v1', 'payload.json'), 'utf8'));
+  const manifestSkillFiles = Object.values(manifest.files)
+    .filter((source) => source.startsWith('skills/'))
+    .sort();
+  const payloadSkillFiles = trackedFiles()
+    .filter((file) => PAYLOAD_SKILLS.some((name) => file.startsWith(`skills/${name}/`)) && !NPX_ONLY_FILES.includes(file))
+    .sort();
+
+  assert.deepEqual(manifestSkillFiles, payloadSkillFiles);
+  for (const file of NPX_ONLY_FILES) assert.ok(trackedFiles().includes(file), `${file} is not shipped`);
   assert.equal(
-    tracked.some((file) => file.startsWith('payload/v1/skills/')),
+    trackedFiles().some((file) => file.startsWith('payload/v1/skills/')),
     false,
     'kit skills must live in skills/, not payload/v1/skills/',
   );
@@ -988,6 +990,7 @@ test('the setup skill creates only the folders, then offers everything else and 
     /offer to move or point to the verification commands and review rules/,
     /[Pp]ropose lines for `\.drakom-ai\/rules\/pr\.md` only for a draft habit, or pull request and commit conventions outside `AGENTS\.md` and `CLAUDE\.md`/,
     /[Aa] route for each rules file in `\.drakom-ai\/rules\/` that has none/,
+    /[Aa]n existing README without the "Topic rules" or "Extension files" section: offer to add it from `references\/rules-README\.md`/,
     /keep both, rename theirs or remove theirs/,
     /[Cc]hange none/,
   ]) {
@@ -1035,6 +1038,7 @@ test('the setup skill names its audit reference only for the audit, which writes
     /[Rr]ead-only/,
     /a topic rule in `\.drakom-ai\/rules\/` with no route, and a route to a file that does not exist, wherever the route lives/,
     /[Mm]ove no route/,
+    /[Tt]he six extension files listed in `rules-README\.md` beside this file need no route, whatever the repo's own README says/,
     /[Tt]he same rule in two places, or two rules that conflict/,
     /linter, formatter, type checker or test already enforces/,
     /`\.drakom-ai\/plans\/` and `\.drakom-ai\/specs\/` first/,
@@ -1142,4 +1146,23 @@ test('the setup references keep the four categories, the rule anatomy and no fix
   }
   assert.match(anatomy, /150 lines/);
   assert.match(oneLine(anatomy), /`AGENTS\.md` Standards Index, or wherever else the repo already routes rules/);
+  assert.match(anatomy, /Prohibited Patterns\*\* \(optional\)/);
+  assert.match(anatomy, /formatters, linters, types, or tests/i);
+  assert.match(anatomy, /^## Worked Example$/m);
+  for (const ruleType of ['Coding', 'Testing', 'Documentation', 'Domain risk', 'Security', 'API contracts']) {
+    const block = anatomy.match(new RegExp(`^### ${ruleType}\\n([\\s\\S]*?)(?=^##|(?![\\s\\S]))`, 'm'))?.[1] ?? '';
+    assert.match(block, /Justified when/i, ruleType);
+    assert.match(block, /Skip when/i, ruleType);
+  }
+  for (const field of [
+    'Source path and evidence',
+    'Decision and rationale',
+    'Destination or action (including "keep in place")',
+    'Dependencies (routes, scripts, companion files)',
+    'Approval status',
+    'Verification',
+  ]) {
+    assert.ok(assessment.includes(field), field);
+  }
+  assert.doesNotMatch([...files.values()].join('\n'), /\.ai\//, 'names the retired .ai/ folder');
 });
