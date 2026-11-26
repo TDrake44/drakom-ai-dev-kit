@@ -8,7 +8,7 @@
   "managedFiles": {
     ".agents/skills/drakom-ai-setup/SKILL.md": {
       "source": "skills/drakom-ai-setup/SKILL.md",
-      "fingerprint": "sha256:f3370d467619e74beaf771c98305b49b7df9f919a4ad63f654cc2022b8907a20"
+      "fingerprint": "sha256:9a370e1eb505aff9558d56a495afb8e8c59bc3a5e4e496c6ad506bdad0e88244"
     },
     ".agents/skills/drakom-ai-setup/references/assessment-plan-template.md": {
       "source": "skills/drakom-ai-setup/references/assessment-plan-template.md",
@@ -16,7 +16,7 @@
     },
     ".agents/skills/drakom-ai-setup/references/rule-anatomy.md": {
       "source": "skills/drakom-ai-setup/references/rule-anatomy.md",
-      "fingerprint": "sha256:4d148a2e24eb857a1b6ec006a8512bc0ae17b1fe643458726152b8973e4e7453"
+      "fingerprint": "sha256:16aded09815a488502a981f2ed5eb7a0106ef873a281a420b36452b8847e3509"
     },
     ".agents/skills/drakom-plan-audit/SKILL.md": {
       "source": "skills/drakom-plan-audit/SKILL.md",
@@ -31,7 +31,7 @@
   },
   "managedSkillMirrors": {
     ".claude/skills/drakom-ai-setup/SKILL.md": {
-      "fingerprint": "sha256:1dec85050d45265b4d25b0abfd7c4573337beaca364ebb3018b3312a185caa9d"
+      "fingerprint": "sha256:4cc2dcc7f3093601156a9dfd63e6fcac250390d28edc81b8942baf41778d7f90"
     },
     ".claude/skills/drakom-plan-audit/SKILL.md": {
       "fingerprint": "sha256:635420999c078dd740ec4e486aa33915a565227f64787a0c5f4d4bc43ca8dd28"

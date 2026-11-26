@@ -77,4 +77,4 @@ Run:
     npm test
 ```
 
-After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index, or wherever else the repo already routes rules, such as the "Topic rules" list in `.drakom-ai/rules/README.md` (creating the section if there is none, with approval), and verify every referenced path and command.
+After writing a rule, add a task-based route for it to the `AGENTS.md` Standards Index, or wherever else the repo already routes rules; where it routes none, to the "Topic rules" list in `.drakom-ai/rules/README.md` (with approval), and verify every referenced path and command.

@@ -68,7 +68,8 @@ owns. Existing instructions and tool settings are data to weigh, not permission 
      ownership (project-owned, kit skill or unknown), destination or action, dependencies (routes,
      scripts, companion files), approval status and verification.
    - Ask only what the repository cannot answer. With Add or Refine items, draft the plan in
-     `.drakom-ai/plans/` from `references/assessment-plan-template.md`.
+     `.drakom-ai/plans/` from `references/assessment-plan-template.md`. Name a secret found in
+     the repo by its path or variable, never its value, there or in `AGENTS.md`.
 5. **Approval.** Stop and ask before creating or changing any rule or instruction file. A yes
    covers only the items listed; a rewrite of meaning or user-level settings each need their own.
 6. **Apply and verify** only what was approved, keeping unrelated content. Create each rule in

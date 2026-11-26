@@ -1012,6 +1012,7 @@ test('the setup skill recommends, stops for approval, then applies and verifies 
     /ownership \(project-owned, kit skill or unknown\)/,
     /dependencies \(routes, scripts, companion files\)/,
     /[Ww]ith Add or Refine items, draft the plan in `\.drakom-ai\/plans\/` from `references\/assessment-plan-template\.md`/,
+    /[Nn]ame a secret found in the repo by its path or variable, never its value, there or in `AGENTS\.md`/,
   ]) {
     assert.match(recommend, part);
   }
@@ -1145,7 +1146,10 @@ test('the setup references keep the four categories, the rule anatomy and no fix
     assert.match(anatomy, new RegExp(`\\*\\*${section}\\*\\*`), section);
   }
   assert.match(anatomy, /150 lines/);
-  assert.match(oneLine(anatomy), /`AGENTS\.md` Standards Index, or wherever else the repo already routes rules/);
+  assert.match(
+    oneLine(anatomy),
+    /`AGENTS\.md` Standards Index, or wherever else the repo already routes rules; where it routes none, to the "Topic rules" list in `\.drakom-ai\/rules\/README\.md`/,
+  );
   assert.match(anatomy, /Prohibited Patterns\*\* \(optional\)/);
   assert.match(anatomy, /formatters, linters, types, or tests/i);
   assert.match(anatomy, /^## Worked Example$/m);
