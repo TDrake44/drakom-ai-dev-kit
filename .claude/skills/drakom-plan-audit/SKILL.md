@@ -28,9 +28,9 @@ URL, run `gh pr view <url> --json state,mergedAt`. If the last listed pull
 request merged, none is open, and the status is not Done, propose Done, as
 `Done: merged in #<number> (<date>)`. A Done plan with a listed pull request
 still open is a finding. If the last one closed without merging, the plan is
-uncertain, so ask. When `gh` is missing or not logged in, or the URL is not a
-GitHub pull request, report that link as unchecked and finish the other checks;
-never infer its state from the plan's text.
+uncertain, so ask. When `gh` is missing, not logged in or fails, or the URL is
+not a GitHub pull request, report that link as unchecked and finish the other
+checks; never infer its state from the plan's text.
 
 For an audit request, report findings and proposed actions without deleting or
 editing. On a yes to Done, change only the status line. For a cleanup request,

@@ -20,7 +20,7 @@
     },
     ".agents/skills/drakom-plan-audit/SKILL.md": {
       "source": "skills/drakom-plan-audit/SKILL.md",
-      "fingerprint": "sha256:6601a4a47af4e91b9846868b7003d0268782e945006d2f9cf9fe31ffddf62136"
+      "fingerprint": "sha256:9a6975c5eb69097a30a1066f1d4a1f0dbf9d443d141d7372b3ad0c298f430ebe"
     }
   },
   "managedMcpServers": {},
@@ -34,7 +34,7 @@
       "fingerprint": "sha256:ad426179770b1284807e42c18e714134dbffe15310783e397970ff94c6aeb2f6"
     },
     ".claude/skills/drakom-plan-audit/SKILL.md": {
-      "fingerprint": "sha256:821375da7763b952e4d6ea3d967b2df733ddf4a7369470bb8042a1c46bf46ac8"
+      "fingerprint": "sha256:f0efcf257adc01693cf54c84ff737ec62b49001b6888822d5bdf3581fc8b7cf3"
     }
   },
   "releasedFiles": [
