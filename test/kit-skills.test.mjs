@@ -883,13 +883,13 @@ test('the review skill asks about open nits before offering a pull request, and 
   }
 });
 
+// Pending changesets are left out: `changeset version` deletes them on release.
 test('every summary of drakom-review fix that caps the rounds at three names the nit exception', async () => {
   const read = async (/** @type {string} */ file) => (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
   const summaries = new Map([
     ['the skill frontmatter', String((await readFrontmatter('skills/drakom-review/SKILL.md')).description)],
     ['README.md', (await read('README.md')).split('\n').find((line) => line.startsWith('| `drakom-review` |')) ?? ''],
     ['AGENTS.md', (await read('AGENTS.md')).split('\n').find((line) => line.startsWith('| `/drakom-review` |')) ?? ''],
-    ['.changeset/drakom-review.md', await read('.changeset/drakom-review.md')],
   ]);
 
   for (const [where, text] of summaries) {
