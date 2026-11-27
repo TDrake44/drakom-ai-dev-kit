@@ -72,16 +72,15 @@ fresh reviewer, or the rule that only confirmed findings are reported.
 
 With `fix`, run up to three rounds of steps 2 to 5, each with a new fresh reviewer. Stop when no
 important finding is open, and after round 3's report, saying the approach may need rethinking if
-important ones remain; otherwise the author fixes the important findings, declines any it believes
-wrong, with the reason in the report, and runs the verification commands. A nit never starts a
-round; fix one only when it is small, mechanical and on lines an important fix already touches,
-never in round 3. Other nits and bugs the change did not introduce are listed, not fixed; a declined
-finding is not raised again. The changes since the last review are the commits since its head and
-every file the fixes touched, committed or not; when they cannot be told apart or rewrite most of
-the change, review the whole change and say so. Report the last round's risk. Ask the user before
-building what the change left out, when a fix would change the scope or a decision they made, or
-when the risk rises. When a kind of finding comes back, a nit included, say where to stop it: a
-test, a lint rule or a review rule.
+important ones remain. Otherwise the author fixes the important findings, and a nit only when it is
+small, mechanical and on lines those fixes touch; declines any finding it believes wrong, with the
+reason in the report; and runs the verification commands. A nit never starts a round. Other nits and
+bugs the change did not introduce are listed, not fixed; a declined finding is not raised again. The
+changes since the last review are the commits since its head and every file the fixes touched,
+committed or not; when they cannot be told apart or rewrite most of the change, review the whole
+change and say so. Report the last round's risk. Ask the user before building what the change left
+out, when a fix would change the scope or a decision they made, or when the risk rises. When a kind
+of finding comes back, a nit included, say where to stop it: a test, a lint rule or a review rule.
 
 ## What it may do
 
