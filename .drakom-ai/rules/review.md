@@ -7,8 +7,8 @@ The review rules themselves are in `AGENTS.md` § Code Review Rules. This file a
 
 Run the blind risk check on each tool's cheap tier, named explicitly, at medium effort. Never rely
 on the tool's default model. Use only the row for the tool running the review, and never call
-another tool's CLI: Antigravity's consumer terms forbid other agents running `agy`, and the other
-providers' terms don't clearly allow it.
+another tool's CLI: Antigravity's consumer terms forbid other agents running `agy`
+(<https://antigravity.google/docs/faq/>), and the other providers' terms don't clearly allow it.
 
 | Tool | Cheap tier |
 | --- | --- |
