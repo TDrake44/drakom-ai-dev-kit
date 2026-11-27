@@ -143,7 +143,7 @@ test('the review skill states its rules in one short file, with only the GitHub 
 
   assert.deepEqual([...files.keys()].sort(), ['SKILL.md', 'references/github-review.md']);
   const lines = (files.get('SKILL.md') ?? '').replaceAll('\r\n', '\n').trimEnd().split('\n');
-  assert.ok(lines.length <= 90, `SKILL.md has ${lines.length} lines; keep it to 90`);
+  assert.ok(lines.length <= 95, `SKILL.md has ${lines.length} lines; keep it to 95`);
 });
 
 test('the review skill stands alone: it names no file in another skill or a repo file it has no default for', async () => {
@@ -849,13 +849,21 @@ test('the review skill ends every run by offering what has not run, drakom-pr am
   assert.match(skill, /Start nothing without a yes\./);
 });
 
-test('the review skill asks about open nits before offering a pull request, and keeps what the cut lines carried', async () => {
-  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+test('the review skill lets only important findings hold up a change, and keeps what the cut lines carried', async () => {
+  const files = await reviewSkillFiles();
+  const skill = oneLine(files.get('SKILL.md') ?? '');
+  const reference = oneLine(files.get('references/github-review.md') ?? '');
 
+  assert.doesNotMatch(skill, /ask the user to fix or leave each open nit/, 'a nit needs no answer before a pull request');
+  assert.doesNotMatch(skill, /count as important, even past round 3/, 'a nit never runs a round past 3');
+  assert.match(skill, /Recommendation: `Changes recommended` if an important finding is open \(not a nit, pre-existing bug or description fix\), else/);
+  assert.match(skill, /Nit, at most three: minor clarity or cleanup that changes no correctness, safety or requirement; never an uncertain bug: confirm it as important or drop it\./);
+  assert.match(skill, /for a nit, only file, line and one sentence/);
+  assert.doesNotMatch(reference, /a nit included, means Changes recommended/);
+  assert.match(reference, /Only an open important finding means Changes recommended/);
   for (const part of [
-    'Before offering to open a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as important, even past round 3: run a round.',
     '"No findings" is a valid result',
-    'Nits and bugs the change did not introduce are listed, not fixed',
+    'Other nits and bugs the change did not introduce are listed, not fixed; a declined finding is not raised again',
     'A repo can change this in `.drakom-ai/rules/review.md`',
     'not push, post, comment or edit the pull request',
   ]) {
@@ -863,7 +871,50 @@ test('the review skill asks about open nits before offering a pull request, and 
   }
 });
 
-test('every summary of drakom-review fix that caps the rounds at three names the nit exception', async () => {
+test('the review fix rounds fix a nit only when it is free, and settle without asking the user', async () => {
+  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+
+  assert.match(skill, /the author fixes the important findings, and a nit only when it is small, mechanical and on lines those fixes touch;/);
+  assert.match(skill, /declines any finding it believes wrong, with the reason in the report; and runs the verification commands\. A nit never starts a round\./);
+  assert.match(skill, /Stop without another round when every open important finding is declined with no edits\./);
+  assert.doesNotMatch(skill, /when you believe a finding is wrong/, 'the author declines a wrong finding itself');
+  assert.match(skill, /when a fix would change the scope or a decision they made/, 'a fix that changes the scope still goes to the user');
+  assert.match(skill, /when they cannot be told apart or rewrite most of the change, review the whole change and say so\./);
+  assert.match(skill, /When a kind of finding comes back, a nit included, say where to stop it: a test, a lint rule or a review rule\./);
+});
+
+test('the review skill runs each verification command unless CI passed it at the same clean head', async () => {
+  const files = await reviewSkillFiles();
+  const skill = oneLine(files.get('SKILL.md') ?? '');
+  const reference = oneLine(files.get('references/github-review.md') ?? '');
+
+  assert.match(skill, /Run the verification commands, skipping one only when CI passed it on this exact head commit with no uncommitted changes\./);
+  assert.match(skill, /Verification: each command: passed, failed, not run, or passed in CI at this head/);
+  assert.match(reference, /Checks opens itself \(`<details open>`\) on a failed or not-run check\./);
+});
+
+test('the review skill keeps nits out of re-reviews and out of GitHub threads', async () => {
+  const files = await reviewSkillFiles();
+  const skill = oneLine(files.get('SKILL.md') ?? '');
+  const reference = oneLine(files.get('references/github-review.md') ?? '');
+
+  assert.match(skill, /the user's answers, the author's declines and the last report's findings but its nits, copied as they were with no notes/);
+  assert.doesNotMatch(reference, /nits included/, 'a nit is not carried into a re-review');
+  assert.match(reference, /its findings, nits excepted, are the earlier findings for step 3/);
+  assert.match(reference, /collapsed `N nits` section/);
+  assert.match(reference, /A nit gets no comment/);
+  assert.doesNotMatch(reference, /Important findings and nits go in the open section/);
+  assert.match(reference, /also on a first review when a fix round declined a finding/);
+  assert.match(reference, /no link when declined in a fix round with no thread/);
+});
+
+test('the review skill lets an unposted fix round leave out exact replacement lines', async () => {
+  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+
+  assert.match(skill, /as exact replacement lines for a small edit \(optional in an unposted fix round\),/);
+});
+
+test('every summary of drakom-review fix, the workflow diagram included, caps the rounds at three with no nit exception', async () => {
   const read = async (/** @type {string} */ file) => (await readFile(path.join(repositoryRoot, file), 'utf8')).replaceAll('\r\n', '\n');
   const summaries = new Map([
     ['the skill frontmatter', String((await readFrontmatter('skills/drakom-review/SKILL.md')).description)],
@@ -873,13 +924,11 @@ test('every summary of drakom-review fix that caps the rounds at three names the
 
   for (const [where, text] of summaries) {
     assert.match(text, /up to three/, `${where} no longer summarizes drakom-review fix`);
-    for (const [cap] of text.matchAll(/up to three[^,.]*/g)) {
-      assert.ok(
-        text.includes(`${cap}, more only for nits you choose to fix`),
-        `${where} says "${cap}" without the nit exception`,
-      );
-    }
+    assert.doesNotMatch(text, /nits you choose to fix/, `${where} still lets chosen nits run rounds past three`);
   }
+  const diagram = await read('docs/skills-flow.svg');
+  assert.match(diagram, /up to 3 rounds/, 'the workflow diagram no longer shows drakom-review fix');
+  assert.doesNotMatch(diagram, /chosen nits|fix or leave nits/, 'the workflow diagram still lets nits run rounds or wait on the user');
 });
 
 const SETUP_STEP = /^## Setting up `\.drakom-ai\/`\n([\s\S]*?)(?=\n## |(?![\s\S]))/m;

@@ -1,6 +1,6 @@
 ---
 name: drakom-review
-description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes, more only for nits you choose to fix, and `post` to post the report to the pull request as one review.
+description: Review a pull request or local branch before it opens or merges, with a risk check from the diff alone, a bug review by a reviewer that did not write the change, and a report of confirmed findings. Pass `fix` for up to three rounds of review and fixes, and `post` to post the report to the pull request as one review.
 ---
 
 # Review
@@ -38,53 +38,58 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    a full model that never saw your conversation. Give it the tool and model it runs on, the base
    and head, the uncommitted paths, the description or the plan in `.drakom-ai/plans/`, where the
    rules are, the risk result and, on a re-review, the round number, the changes since the last
-   review, the user's answers so far and every finding of the last report, copied as they were with
-   no notes. Nothing else. Without subagents, offer a fresh session, with `drakom-handoff` writing
-   its prompt when installed; if declined, review it yourself and say so.
+   review, the user's answers, the author's declines and the last report's findings but its nits,
+   copied as they were with no notes. Nothing else. Without subagents, offer a fresh session, with
+   `drakom-handoff` writing its prompt when installed; if declined, review it yourself and say so.
 4. **Review.** Read the description or plan, apply the rules, and read the callers and tests around
    each change; on a re-review, only the changes since the last review, the behavior they affect and
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
    skill, a test or CI, judge it against the base branch's version too. Run the verification
-   commands. Keep only findings you confirmed by reading the code or reproducing them; "No findings"
+   commands, skipping one only when CI passed it on this exact head commit with no uncommitted
+   changes. Keep only findings you confirmed by reading the code or reproducing them; "No findings"
    is a valid result. Important: anything to fix before merging: wrong behavior, lost files, a false
    claim, a broken build, a stated risk below the risk result, or a gap against the plan or
-   description, unless they or the user's answers say why. Any other wrong or missing claim in the
-   description, or a broken template rule, is a description fix. Nits may stay; at most three. No
-   style. The reviewer never edits.
+   description, unless they or the user's answers say why. Nit, at most three: minor clarity or
+   cleanup that changes no correctness, safety or requirement; never an uncertain bug: confirm it as
+   important or drop it. Any other wrong or missing claim in the description, or a broken template
+   rule, is a description fix. No style. The reviewer never edits.
 5. **Report:**
-   - Recommendation: `Changes recommended` if an important finding or nit is open, not counting
-     pre-existing bugs or description fixes; else `Needs a closer look` if something did not run,
-     was not read or needs a person (say what); else `Approval recommended`
+   - Recommendation: `Changes recommended` if an important finding is open (not a nit, pre-existing
+     bug or description fix), else `Needs a closer look` if something did not run, was not read or
+     needs a person (say what), else `Approval recommended`
    - Goal: what the change is for, in one sentence from the description or plan
    - Reviewed: base, head and the uncommitted paths, and each changed file not read, with why
    - Risk: level and labels, against the risk the description states
    - Review: fresh, or by the author
    - Reviewer: the model's family and tier, from the tool's output, not the model's word
    - Findings: a short title, file and line range, what breaks and the fix, as exact replacement
-     lines for a small edit, checked against every input the code must still accept; description
-     fixes apart, each with the corrected text
-   - Verification: each command and whether it passed, failed or did not run
+     lines for a small edit (optional in an unposted fix round), checked against every input the
+     code must still accept; for a nit, only file, line and one sentence; description fixes apart,
+     with the corrected text
+   - Verification: each command: passed, failed, not run, or passed in CI at this head
 
 ## Fix rounds
 
-With `fix`, run up to three rounds. Each round runs steps 2 to 5 with a new fresh reviewer. Stop
-when no important finding is open, and after round 3's report, saying the approach may need
-rethinking if important ones remain; otherwise the author fixes the important findings and runs the
-verification commands. The changes since the last review are the commits since its head and every
-file the fixes touched, committed or not; when they cannot be told apart, review the whole change
-and say so. Nits and bugs the change did not introduce are listed, not fixed. Report the last
-round's risk. Ask the user before building what the change left out, when a fix would change
-the scope or a decision they made, when you believe a finding is wrong, or when the risk rises. When
-a kind of finding comes back, say where to stop it: a test, a lint rule or a review rule.
+With `fix`, run up to three rounds of steps 2 to 5, each with a new fresh reviewer. Stop when no
+important finding is open, and after round 3's report, saying the approach may need rethinking if
+important ones remain. Otherwise the author fixes the important findings, and a nit only when it is
+small, mechanical and on lines those fixes touch; declines any finding it believes wrong, with the
+reason in the report; and runs the verification commands. A nit never starts a round. Stop without
+another round when every open important finding is declined with no edits. Other nits and bugs the
+change did not introduce are listed, not fixed; a declined finding is not raised again. The changes
+since the last review are the commits since its head and every file the fixes touched, committed or
+not; when they cannot be told apart or rewrite most of the change, review the whole change and say
+so. Report the last round's risk. Ask the user before building what the change left out, when a fix
+would change the scope or a decision they made, or when the risk rises. When a kind of finding comes
+back, a nit included, say where to stop it: a test, a lint rule or a review rule.
 
 ## What it may do
 
 Fix rounds may commit their fixes, but not push, post, comment or edit the pull request. `post` adds
 posting the final report as one review, laid out as `references/github-review.md` says, and
 resolving the threads it confirmed fixed, its own and bots', never a person's. A repo can change
-this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. Before offering to open
-a pull request, ask the user to fix or leave each open nit, recommending one; those to fix count as
-important, even past round 3: run a round. At the end of every run, offer what fits and has not run:
-fix rounds for important findings, posting for a pull request, or `drakom-pr` when nothing important
-is open and there is no pull request yet, here or in a fresh session started from a `drakom-handoff`
-prompt, each when installed, and recommend one in a few words. Start nothing without a yes.
+this in `.drakom-ai/rules/review.md`. A recommendation is never an approval. At the end of every
+run, offer what fits and has not run: fix rounds for important findings, posting for a pull request,
+or `drakom-pr` when nothing important is open and there is no pull request yet, here or in a fresh
+session started from a `drakom-handoff` prompt, each when installed, and recommend one in a few
+words. Start nothing without a yes.

@@ -16,8 +16,8 @@ review and give its report in chat.
 - Post once per run: the final report, after any fix rounds.
 - The last review is the latest one the signed-in account posted with the `drakom-review` marker,
   if its `head` is an ancestor of the pull request's head; ignore marked reviews from anyone else.
-  The changes since that `head` are the changes since the last review, and its findings are the
-  earlier findings for step 3, nits included. The user's answers are the signed-in account's
+  The changes since that `head` are the changes since the last review, and its findings, nits
+  excepted, are the earlier findings for step 3. The user's answers are the signed-in account's
   replies in their threads and the threads it resolved; other people's are discussion. With no
   such review, review it all.
 - An earlier finding is resolved when a later commit fixes it, whatever its thread says. Otherwise
@@ -27,11 +27,11 @@ review and give its report in chat.
   confirmed fixed, under the same account. Anything else, an unclear reply included, stays open.
 - Never post a secret. Check every line, command output included, for tokens, keys and passwords,
   and leave them out.
-- Anchor each finding to a line of the pull request's diff (`gh pr diff`). A finding with no such
-  line (the description, a missing requirement, an untouched file) gets no comment. A finding
-  still open from the last review, or one an unresolved thread already raises (Other threads,
-  below), keeps that thread: link its comment and post no new one, so a review can have no
-  comments.
+- Anchor each finding to a line of the pull request's diff (`gh pr diff`). A nit gets no comment
+  (The review, below). A finding with no such line (the description, a missing requirement, an
+  untouched file) gets no comment. A finding still open from the last review, or one an unresolved
+  thread already raises (Other threads, below), keeps that thread: link its comment and post no new
+  one, so a review can have no comments.
 
 ## Other threads
 
@@ -53,11 +53,11 @@ Only once the review's own findings are settled, so other reviewers don't steer 
 
 ## The review
 
-Post one review with one comment per finding: create it pending, link the summary to its comments,
-then submit it with the `COMMENT` event. A review with no comments is posted in one call, with its
-body and the `COMMENT` event (Commands). Never use `APPROVE` or `REQUEST_CHANGES`: open comments
-block a merge where the repo requires conversations to be resolved, and a recommendation is never
-an approval.
+Post one review with one comment per finding but nits: create it pending, link the summary to its
+comments, then submit it with the `COMMENT` event. A review with no comments is posted in one call,
+with its body and the `COMMENT` event (Commands). Never use `APPROVE` or `REQUEST_CHANGES`: open
+comments block a merge where the repo requires conversations to be resolved, and a recommendation is
+never an approval.
 
 ```markdown
 ### 🟡 Changes recommended
@@ -65,10 +65,16 @@ an approval.
 One sentence on why.
 
 <details open>
-<summary><b>2 open issues</b></summary>
+<summary><b>1 open issue</b></summary>
 
 - <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
-- <sub><sub>![Nit](https://img.shields.io/badge/Nit-blue?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line`
+
+</details>
+
+<details>
+<summary><b>1 nit</b></summary>
+
+- <sub><sub>![Nit](https://img.shields.io/badge/Nit-blue?style=flat)</sub></sub> `path:line` · One sentence on the nit.
 
 </details>
 
@@ -106,9 +112,10 @@ The later-review sections, after the open issues:
 </details>
 
 <details>
-<summary><b>1 declined</b></summary>
+<summary><b>2 declined</b></summary>
 
 - <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line` · [“the user's reply, in full”](link to the reply)
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> **Title of the finding** · `path:line` · author's reason (no link when declined in a fix round with no thread)
 
 </details>
 
@@ -141,15 +148,18 @@ last review is listed under `N resolved since last review` with its chip, its bo
 `fixed in the description`, since no commit fixed it.
 
 - **Status:** 🟡 Changes recommended, 🔵 Needs a closer look or 🟢 Approval recommended, from the
-  report's recommendation. As on Copilot's reviews, any open finding, a nit included, means Changes
-  recommended, and Approval recommended comes only with `No open issues 🎉`; pre-existing bugs and
-  description fixes don't count. After a third round
-  with important findings open, the sentence on why says the approach may need rethinking.
+  report's recommendation. Only an open important finding means Changes recommended; nits,
+  pre-existing bugs and description fixes don't count, so Approval recommended can come with nits
+  listed. After a third round with important findings open, the sentence on why says the approach
+  may need rethinking.
 - **Findings:** each is led by its chip, a shields.io badge wrapped in `<sub><sub>` so it sits at
   text height: orange `Important`, blue `Nit` or lightgrey `Pre-existing` (written
-  `Pre--existing` in the badge's address). Important findings and nits go in the open section; the
-  status heading doesn't repeat counts or risk. None open: write `No open issues 🎉` in place of
+  `Pre--existing` in the badge's address). Important findings go in the open section; the status
+  heading doesn't repeat counts or risk. None open: write `No open issues 🎉` in place of
   the section. A finding with no line in the diff ends its list, with where it applies and no link.
+- **Nits:** in their own collapsed `N nits` section after the open issues, each as its chip,
+  `path:line` and one sentence, not in the open count. A nit gets no comment, so it opens no
+  thread: open threads block a merge where the repo requires conversations to be resolved.
 - **Pre-existing:** bugs the change did not introduce go in their own collapsed `N pre-existing`
   section after the open issues, not in its count, since they don't hold up this pull request.
 - **Description fixes:** a wrong or missing claim in the pull request's description, or a part that
@@ -160,17 +170,18 @@ last review is listed under `N resolved since last review` with its chip, its bo
   description again and lists the ones fixed under `N resolved since last review`. One exception: a
   stated risk that claims too little stays an important finding, since the risk level decides how
   closely a person reads.
-- **Order:** the status and its sentence, then the open issues (or `No open issues 🎉`), description
-  fixes, resolved since last review, declined, threads that look fixed, pre-existing, files not
-  reviewed, What changed and Checks. Leave out any section with nothing in it.
-- **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
+- **Order:** the status and its sentence, then the open issues (or `No open issues 🎉`), nits,
+  description fixes, resolved since last review, declined, threads that look fixed, pre-existing,
+  files not reviewed, What changed and Checks. Leave out any section with nothing in it.
+- **Sections:** Checks opens itself (`<details open>`) on a failed or not-run check. The risk level
   isn't shown: it is checked against the risk the description states (the `## Risk` section, in
   the kit's template), and one that claims too little is a finding. `N files not reviewed`, with why, appears only when some were not read.
-- **Later reviews:** after the open issues, collapsed `N resolved since last review` and
-  `N declined`, laid out as below. A declined finding quotes the user's reply in full, or says
-  `resolved without a reply`, and isn't raised again. What changed counts only the changes since
-  the last review's head. ` · New` ends a finding's line only when new and carried ones are mixed.
-  No round numbers.
+- **Later reviews:** after the open issues, collapsed `N resolved since last review` and `N
+  declined` (also on a first review when a fix round declined a finding), laid out as above. A
+  declined finding quotes the user's reply in full, gives the author's reason when a fix round
+  declined it, or says `resolved without a reply`, and isn't raised again. What changed counts only
+  the changes since the last review's head. ` · New` ends a finding's line only when new and carried
+  ones are mixed. No round numbers.
 - **Model:** the reviewer's family and tier, read from its tool's output (a startup header, for
   one), not the model's own answer, which can be vaguer or wrong. No effort, provider or tool name.
   Leave out what the tool doesn't report; never write "not reported". A footer link to the run log
