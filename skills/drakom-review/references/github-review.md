@@ -112,9 +112,10 @@ The later-review sections, after the open issues:
 </details>
 
 <details>
-<summary><b>1 declined</b></summary>
+<summary><b>2 declined</b></summary>
 
 - <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> [Title of the finding](link to its comment) · `path:line` · [“the user's reply, in full”](link to the reply)
+- <sub><sub>![Important](https://img.shields.io/badge/Important-orange?style=flat)</sub></sub> **Title of the finding** · `path:line` · author's reason (no link when declined in a fix round with no thread)
 
 </details>
 
@@ -172,14 +173,15 @@ last review is listed under `N resolved since last review` with its chip, its bo
 - **Order:** the status and its sentence, then the open issues (or `No open issues 🎉`), nits,
   description fixes, resolved since last review, declined, threads that look fixed, pre-existing,
   files not reviewed, What changed and Checks. Leave out any section with nothing in it.
-- **Sections:** Checks opens itself (`<details open>`) on a failed or skipped check. The risk level
+- **Sections:** Checks opens itself (`<details open>`) on a failed or not-run check. The risk level
   isn't shown: it is checked against the risk the description states (the `## Risk` section, in
   the kit's template), and one that claims too little is a finding. `N files not reviewed`, with why, appears only when some were not read.
 - **Later reviews:** after the open issues, collapsed `N resolved since last review` and `N
-  declined`, laid out as below. A declined finding quotes the user's reply in full, gives the
-  author's reason when a fix round declined it, or says `resolved without a reply`, and isn't raised
-  again. What changed counts only the changes since the last review's head. ` · New` ends a
-  finding's line only when new and carried ones are mixed. No round numbers.
+  declined` (also on a first review when a fix round declined a finding), laid out as above. A
+  declined finding quotes the user's reply in full, gives the author's reason when a fix round
+  declined it, or says `resolved without a reply`, and isn't raised again. What changed counts only
+  the changes since the last review's head. ` · New` ends a finding's line only when new and carried
+  ones are mixed. No round numbers.
 - **Model:** the reviewer's family and tier, read from its tool's output (a startup header, for
   one), not the model's own answer, which can be vaguer or wrong. No effort, provider or tool name.
   Leave out what the tool doesn't report; never write "not reported". A footer link to the run log

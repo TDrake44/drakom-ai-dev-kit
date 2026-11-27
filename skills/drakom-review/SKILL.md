@@ -45,14 +45,14 @@ fresh reviewer, or the rule that only confirmed findings are reported.
    each change; on a re-review, only the changes since the last review, the behavior they affect and
    the earlier findings. When the diff changes `AGENTS.md`, `CLAUDE.md`, `.drakom-ai/rules/`, a
    skill, a test or CI, judge it against the base branch's version too. Run the verification
-   commands, skipping one only when CI passed it on this exact head commit. Keep only findings you
-   confirmed by reading the code or reproducing them; "No findings" is a valid result. Important:
-   anything to fix before merging: wrong behavior, lost files, a false claim, a broken build, a
-   stated risk below the risk result, or a gap against the plan or description, unless they or the
-   user's answers say why. Nit, at most three: minor clarity or cleanup that changes no correctness,
-   safety or requirement; never an uncertain bug: confirm it as important or drop it. Any other
-   wrong or missing claim in the description, or a broken template rule, is a description fix. No
-   style. The reviewer never edits.
+   commands, skipping one only when CI passed it on this exact head commit with no uncommitted
+   changes. Keep only findings you confirmed by reading the code or reproducing them; "No findings"
+   is a valid result. Important: anything to fix before merging: wrong behavior, lost files, a false
+   claim, a broken build, a stated risk below the risk result, or a gap against the plan or
+   description, unless they or the user's answers say why. Nit, at most three: minor clarity or
+   cleanup that changes no correctness, safety or requirement; never an uncertain bug: confirm it as
+   important or drop it. Any other wrong or missing claim in the description, or a broken template
+   rule, is a description fix. No style. The reviewer never edits.
 5. **Report:**
    - Recommendation: `Changes recommended` if an important finding is open (not a nit, pre-existing
      bug or description fix), else `Needs a closer look` if something did not run, was not read or
@@ -74,13 +74,14 @@ With `fix`, run up to three rounds of steps 2 to 5, each with a new fresh review
 important finding is open, and after round 3's report, saying the approach may need rethinking if
 important ones remain. Otherwise the author fixes the important findings, and a nit only when it is
 small, mechanical and on lines those fixes touch; declines any finding it believes wrong, with the
-reason in the report; and runs the verification commands. A nit never starts a round. Other nits and
-bugs the change did not introduce are listed, not fixed; a declined finding is not raised again. The
-changes since the last review are the commits since its head and every file the fixes touched,
-committed or not; when they cannot be told apart or rewrite most of the change, review the whole
-change and say so. Report the last round's risk. Ask the user before building what the change left
-out, when a fix would change the scope or a decision they made, or when the risk rises. When a kind
-of finding comes back, a nit included, say where to stop it: a test, a lint rule or a review rule.
+reason in the report; and runs the verification commands. A nit never starts a round. Stop without
+another round when every open important finding is declined with no edits. Other nits and bugs the
+change did not introduce are listed, not fixed; a declined finding is not raised again. The changes
+since the last review are the commits since its head and every file the fixes touched, committed or
+not; when they cannot be told apart or rewrite most of the change, review the whole change and say
+so. Report the last round's risk. Ask the user before building what the change left out, when a fix
+would change the scope or a decision they made, or when the risk rises. When a kind of finding comes
+back, a nit included, say where to stop it: a test, a lint rule or a review rule.
 
 ## What it may do
 

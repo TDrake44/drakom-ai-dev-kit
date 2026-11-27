@@ -876,17 +876,21 @@ test('the review fix rounds fix a nit only when it is free, and settle without a
 
   assert.match(skill, /the author fixes the important findings, and a nit only when it is small, mechanical and on lines those fixes touch;/);
   assert.match(skill, /declines any finding it believes wrong, with the reason in the report; and runs the verification commands\. A nit never starts a round\./);
+  assert.match(skill, /Stop without another round when every open important finding is declined with no edits\./);
   assert.doesNotMatch(skill, /when you believe a finding is wrong/, 'the author declines a wrong finding itself');
   assert.match(skill, /when a fix would change the scope or a decision they made/, 'a fix that changes the scope still goes to the user');
   assert.match(skill, /when they cannot be told apart or rewrite most of the change, review the whole change and say so\./);
   assert.match(skill, /When a kind of finding comes back, a nit included, say where to stop it: a test, a lint rule or a review rule\./);
 });
 
-test('the review skill runs each verification command unless CI passed it at the same head', async () => {
-  const skill = oneLine((await reviewSkillFiles()).get('SKILL.md') ?? '');
+test('the review skill runs each verification command unless CI passed it at the same clean head', async () => {
+  const files = await reviewSkillFiles();
+  const skill = oneLine(files.get('SKILL.md') ?? '');
+  const reference = oneLine(files.get('references/github-review.md') ?? '');
 
-  assert.match(skill, /Run the verification commands, skipping one only when CI passed it on this exact head commit\./);
+  assert.match(skill, /Run the verification commands, skipping one only when CI passed it on this exact head commit with no uncommitted changes\./);
   assert.match(skill, /Verification: each command: passed, failed, not run, or passed in CI at this head/);
+  assert.match(reference, /Checks opens itself \(`<details open>`\) on a failed or not-run check\./);
 });
 
 test('the review skill keeps nits out of re-reviews and out of GitHub threads', async () => {
@@ -900,6 +904,8 @@ test('the review skill keeps nits out of re-reviews and out of GitHub threads', 
   assert.match(reference, /collapsed `N nits` section/);
   assert.match(reference, /A nit gets no comment/);
   assert.doesNotMatch(reference, /Important findings and nits go in the open section/);
+  assert.match(reference, /also on a first review when a fix round declined a finding/);
+  assert.match(reference, /no link when declined in a fix round with no thread/);
 });
 
 test('the review skill lets an unposted fix round leave out exact replacement lines', async () => {
